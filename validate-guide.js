@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v6") fail("キャッシュ名が ff7r-guide-v6 ではない");
+  if (GAME.cache !== "ff7r-guide-v7") fail("キャッシュ名が ff7r-guide-v7 ではない");
 
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
@@ -59,6 +59,12 @@ function validateGuide(guide) {
   const cardEdit = fs.readFileSync(path.join(root, "card-edit.js"), "utf8");
   if (!cardEdit.includes("GAME.storage.cardEdits") || !cardEdit.includes("カード編集を終了")) {
     fail("カード編集がゲーム設定と繋がっていない");
+  }
+  if (cardEdit.includes("event.target === dialog) dialog.hidden = true") || !cardEdit.includes("保存していない変更があります")) {
+    fail("カード編集が外側のクリックで閉じる");
+  }
+  if (!edit.includes("保存していない変更があります") || edit.includes('if (event.key === "Escape" && dialogOpen) { event.preventDefault(); closeDialog(); }')) {
+    fail("表示文の編集がEscで破棄される");
   }
   if (!cardEdit.includes("pointerdown") || !cardEdit.includes("card-drop-line") || !cardEdit.includes("orderWithMove") || !app.includes("data-card-drag")) {
     fail("カード移動がポインタのドラッグになっていない");
@@ -175,7 +181,7 @@ function validateGuide(guide) {
       const storySteps = [];
       for (const item of row.items || []) {
         if (item && item.trophy && !trophyIds.has(item.trophy)) fail(item.id + " の trophy が台帳にない: " + item.trophy);
-        if (item && item.map && !mapIds.has(item.map)) fail(item.id + " の地図が未定義: " + item.map);
+        if (item && item.map && !mapIds.has(item.map) && !/^https:\/\//i.test(item.map) && !/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(item.map)) fail(item.id + " の地図が未定義: " + item.map);
         if (item && item.parent) {
           const parent = (row.items || []).find(other => other && other.id === item.parent);
           if (!parent) fail(item.id + " の親がない");

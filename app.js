@@ -205,11 +205,8 @@
     return "chapter:" + ui.trackId + ":" + id;
   }
 
-  function sourceLine(source) {
-    if (!source) return "";
-    const url = String(source);
-    if (!/^https?:\/\//i.test(url)) return `<p class="source">出典: ${esc(url)}</p>`;
-    return `<p class="source">出典: <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></p>`;
+  function sourceLine() {
+    return "";
   }
 
   function flagTag(flagId) {
@@ -328,11 +325,20 @@
     return `<p class="item-links">${links}</p>`;
   }
 
+  function mapParts(map, id, label) {
+    const preset = (GAME.maps || []).find(entry => entry.id === map);
+    const src = !map ? "" : (preset ? "https://finalfantasy-jun-site.com/ff7_remake/field/images/" + map + ".png" : map);
+    const href = preset
+      ? "https://finalfantasy-jun-site.com/ff7_remake/field/" + map + ".html"
+      : (/^https:\/\//i.test(map) ? map : "");
+    return { key: preset ? map : (id || "custom"), src, href, label: preset ? preset.label : (label || "地図") };
+  }
+
   function mapButton(item) {
     if (!item.map) return "";
-    const map = (GAME.maps || []).find(entry => entry.id === item.map);
-    const label = map ? map.label : item.map;
-    return `<button type="button" class="map-open" data-map="${esc(item.map)}" data-map-label="${esc(label)}">MAP</button>`;
+    const parts = mapParts(item.map, item.id, "地図");
+    const href = parts.href ? ` data-map-href="${esc(parts.href)}"` : "";
+    return `<button type="button" class="map-open" data-map="${esc(parts.key)}" data-map-src="${esc(parts.src)}"${href} data-map-label="${esc(parts.label)}">MAP</button>`;
   }
 
   function routeCard(item, ord, children, numbers) {
@@ -565,9 +571,8 @@
     return `<td>${got ? '<span class="tag tone-item">入手済み</span> ' : ""}${html}</td>`;
   }
 
-  function sourceNote(url) {
-    if (!url) return "";
-    return `<p class="source">出典: <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></p>`;
+  function sourceNote() {
+    return "";
   }
 
   function renderItems() {
@@ -740,11 +745,14 @@
     const actions = ((item.enemies && item.enemies.actions) || []).map(row => `<tr><td>${esc(row.name)}</td><td>${esc(row.type)}</td></tr>`).join("");
     const reports = (item.reports || []).map(report => `<tr><td>${esc(report.no)}</td><td>${esc(report.title)}</td><td>${esc(report.topic)}</td><td>${esc(report.condition)}</td><td>${esc(report.materia)}</td></tr>`).join("");
     const card = item.card ? `<button type="button" class="linkish" data-open-hit="${esc(item.card)}">進行カードを開く</button>` : "";
-    const map = item.map ? `<button type="button" class="map-open" data-map-src="${esc(item.map)}" data-map-href="${esc(item.source || item.map)}" data-map-label="${esc(item.name)}">MAP</button>` : "";
+    const parts = item.map ? mapParts(item.map, item.id, item.name) : null;
+    const map = parts ? `<button type="button" class="map-open" data-map="${esc(parts.key)}" data-map-src="${esc(parts.src)}"${parts.href ? ` data-map-href="${esc(parts.href)}"` : ""} data-map-label="${esc(parts.label)}">MAP</button>` : "";
+    const edit = cardEditing() ? `<p class="card-edit-tools"><button type="button" data-card-edit="${esc(item.id)}">編集</button></p>` : "";
     return `<article class="quest" id="quest-${esc(item.id)}" data-id="${esc(item.id)}">
       <button type="button" class="quest-toggle" data-toggle-quest="${esc(item.id)}" aria-expanded="${open ? "true" : "false"}"><span class="caret" aria-hidden="true">▼</span>${esc(item.name)}</button>
       <div class="quest-body"${open ? "" : " hidden"}>
         <p>${esc(item.detail || "")} ${card} ${map}</p>
+        ${edit}
         <div class="table-scroll"><table class="sheet"><tbody>
           ${item.client ? `<tr><th>依頼人</th><td>${esc(item.client)}</td></tr>` : ""}
           ${item.place ? `<tr><th>受注場所</th><td>${esc(item.place)}</td></tr>` : ""}
@@ -1433,7 +1441,7 @@
     const image = mapPop.querySelector("img");
     const link = mapPop.querySelector("a");
     const src = button.getAttribute("data-map-src") || ("https://finalfantasy-jun-site.com/ff7_remake/field/images/" + id + ".png");
-    const href = button.getAttribute("data-map-href") || ("https://finalfantasy-jun-site.com/ff7_remake/field/" + id + ".html");
+    const href = button.getAttribute("data-map-href") || "";
     mapPop.dataset.map = id;
     mapPop.dataset.src = src;
     mapPop.dataset.href = href;
@@ -1442,8 +1450,14 @@
     mapPop.querySelector(".map-fallback").hidden = true;
     image.alt = label + "の地図";
     image.src = src;
-    link.href = href;
-    link.textContent = label + "の地図ページを開く";
+    if (href) {
+      link.hidden = false;
+      link.href = href;
+      link.textContent = label + "の地図ページを開く";
+    } else {
+      link.hidden = true;
+      link.removeAttribute("href");
+    }
     mapPop.hidden = false;
     const rect = button.getBoundingClientRect();
     const width = Math.min(480, window.innerWidth - 16);
@@ -1479,7 +1493,13 @@
     zoomImg.alt = (label || "地図") + "の拡大";
     mapZoom.querySelector("#map-zoom-label").textContent = label || "地図";
     const link = mapZoom.querySelector("#map-zoom-link");
-    link.href = href || src;
+    if (href && /^https?:\/\//i.test(href)) {
+      link.hidden = false;
+      link.href = href;
+    } else {
+      link.hidden = true;
+      link.removeAttribute("href");
+    }
     mapZoom.hidden = false;
     applyZoom();
   }

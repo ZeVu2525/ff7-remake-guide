@@ -123,6 +123,8 @@
     "#text-edit-dialog,#text-edit-sheet{position:fixed;z-index:270;left:0;right:0;bottom:0;top:var(--text-edit-bar-h,0px);display:flex;align-items:flex-end;justify-content:center;padding:12px;background:rgba(2,10,18,.55);box-sizing:border-box}",
     "#text-edit-dialog[hidden],#text-edit-sheet[hidden],#text-edit-bar[hidden]{display:none}",
     "#text-edit-dialog form,#text-edit-sheet .sheet{width:min(640px,100%);max-height:min(80vh,640px);overflow:auto;box-sizing:border-box;padding:14px;border-radius:12px;background:#fff;color:#10202c}",
+    ".text-edit-head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
+    "#text-edit-close{min-width:44px;min-height:44px;border:1px solid #c9d4de;border-radius:8px;background:#fff;color:#10202c;font:700 20px/1 inherit;cursor:pointer}",
     "#text-edit-input{width:100%;min-height:120px;box-sizing:border-box;font:16px/1.45 sans-serif;padding:8px}",
     "#text-edit-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}",
     "#text-edit-actions button,.text-edit-mini{min-height:40px;padding:8px 12px;border-radius:8px;border:1px solid #8aa;background:#f4f7f8;font:inherit}",
@@ -144,7 +146,7 @@
     '<button type="button" id="text-edit-reset">すべて元に戻す</button>',
     '<span id="text-edit-count"></span></div>',
     '<div id="text-edit-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="text-edit-title">',
-    '<form><h2 id="text-edit-title">この文を直す</h2>',
+    '<form><div class="text-edit-head"><h2 id="text-edit-title">この文を直す</h2><button type="button" id="text-edit-close" aria-label="閉じる">×</button></div>',
     '<textarea id="text-edit-input"></textarea>',
     '<p id="text-edit-where"></p>',
     '<div id="text-edit-actions"><button type="submit">保存</button><button type="button" id="text-edit-cancel">キャンセル</button></div>',
@@ -188,8 +190,13 @@
     editOn = !!on;
     rememberMode(editOn);
     if (!editOn) {
+      if ((textDirty() || sheetDirty()) && !window.confirm("保存していない変更があります。破棄して閉じますか。")) {
+        editOn = true;
+        rememberMode(true);
+        return;
+      }
       closeDialog();
-      closeSheet();
+      closeSheet(true);
       stripEditParam();
     }
     syncBar();
@@ -200,7 +207,21 @@
     dialog.hidden = true;
     activeNode = null;
   }
-  function closeSheet() { sheet.hidden = true; }
+  function textDirty() {
+    return dialogOpen && input.value !== (activeFrom || "");
+  }
+  function sheetDirty() {
+    const area = document.getElementById("text-edit-import-text");
+    return !!(area && area.value.trim());
+  }
+  function closeTextDialog() {
+    if (textDirty() && !window.confirm("保存していない変更があります。破棄して閉じますか。")) return;
+    closeDialog();
+  }
+  function closeSheet(force) {
+    if (!force && sheetDirty() && !window.confirm("保存していない変更があります。破棄して閉じますか。")) return;
+    sheet.hidden = true;
+  }
   function textNodeFrom(event) {
     const point = document.caretRangeFromPoint || document.caretPositionFromPoint;
     if (typeof document.caretRangeFromPoint === "function") {
@@ -300,10 +321,14 @@
     persist();
     applyAll();
     syncBar();
-    closeSheet();
+    closeSheet(true);
   }
 
-  document.getElementById("text-edit-cancel").addEventListener("click", closeDialog);
+  document.getElementById("text-edit-cancel").addEventListener("click", closeTextDialog);
+  document.getElementById("text-edit-close").addEventListener("click", closeTextDialog);
+  dialog.addEventListener("click", event => {
+    if (event.target === dialog) event.stopPropagation();
+  });
   dialog.querySelector("form").addEventListener("submit", event => {
     event.preventDefault();
     saveEdit(input.value);
@@ -323,7 +348,7 @@
     location.reload();
   });
   sheet.addEventListener("click", event => {
-    if (event.target === sheet || event.target.id === "text-edit-sheet-close") { closeSheet(); return; }
+    if (event.target === sheet || event.target.id === "text-edit-sheet-close") { closeSheet(false); return; }
     const drop = event.target.closest("[data-edit-drop]");
     if (drop) {
       delete edits[decodeURIComponent(drop.getAttribute("data-edit-drop"))];
@@ -346,8 +371,12 @@
     }
   });
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && dialogOpen) { event.preventDefault(); closeDialog(); }
-  });
+    if (event.key !== "Escape") return;
+    if (dialogOpen || !sheet.hidden) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
 
   function onInteract(event) {
     const el = elementFrom(event.target);

@@ -37,6 +37,13 @@
     "#item-picker select,#item-picker input{width:100%;box-sizing:border-box;min-height:44px;margin-top:6px}",
     "#item-picker-results{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow:auto;margin-top:6px}",
     "#item-picker-results button,#item-picker-selected button{min-height:36px;text-align:left}",
+    "#card-edit-head{display:flex;align-items:center;justify-content:space-between;gap:8px}",
+    "#card-edit-close{min-width:44px;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:700 20px/1 inherit;cursor:pointer}",
+    "#map-preview{display:block;max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:8px;background:#fff}",
+    "#map-preview[hidden]{display:none}",
+    "#map-file-note{margin:6px 0;color:var(--fg3);font-size:13px}",
+    "#map-size-warn{margin:6px 0;color:#8a5a00;font-weight:700}",
+    "#map-clear{min-height:44px;margin-top:8px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:var(--fg);font:inherit;cursor:pointer}",
     "#card-edit-error{min-height:1.3em;margin:8px 0 0;color:var(--red);font-weight:700}",
     "#card-edit-toggle{min-height:32px;margin-left:8px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font-size:12px;cursor:pointer}",
     "@media(max-width:640px){#card-edit-bar button{flex:1 1 calc(50% - 6px)}#card-edit-exit{flex-basis:100%}}"
@@ -58,7 +65,7 @@
     '</div>',
     '<div id="card-edit-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="card-edit-title">',
     '<form id="card-edit-form">',
-    '<h2 id="card-edit-title">カード</h2>',
+    '<div id="card-edit-head"><h2 id="card-edit-title">カード</h2><button type="button" id="card-edit-close" aria-label="閉じる">×</button></div>',
     '<p id="card-edit-id"></p>',
     '<div id="card-edit-fields"></div>',
     '<p id="card-edit-error" role="alert"></p>',
@@ -113,6 +120,9 @@
   }
 
   function setOn(on) {
+    if (!on && !dialog.hidden && formDirty()) {
+      if (!window.confirm("保存していない変更があります。破棄して閉じますか。")) return;
+    }
     document.body.classList.toggle("is-card-edit", !!on);
     bar.hidden = !on;
     try { localStorage.setItem(MODE_KEY, on ? "1" : "0"); } catch (e) {}
@@ -147,6 +157,130 @@
     return "<label>" + label + "</label>" + html;
   }
 
+  const MAP_FILE_MAX = Math.round(1.2 * 1024 * 1024);
+  let formBaseline = "";
+
+  function formSnapshot() {
+    const data = new FormData(form);
+    const parts = [];
+    for (const pair of data.entries()) {
+      parts.push(pair[0] + "=" + (typeof pair[1] === "string" ? pair[1] : pair[1].name));
+    }
+    parts.push("links=" + JSON.stringify((editing && editing.links) || []));
+    return parts.join("\n");
+  }
+
+  function captureBaseline() {
+    formBaseline = formSnapshot();
+  }
+
+  function formDirty() {
+    return formSnapshot() !== formBaseline;
+  }
+
+  function chosenMap() {
+    if (!form.elements.mapUrl && !form.elements.mapPreset) return editing && editing.map ? editing.map : "";
+    const url = String((form.elements.mapUrl && form.elements.mapUrl.value) || "").trim();
+    if (url) return url;
+    return String((form.elements.mapPreset && form.elements.mapPreset.value) || "").trim();
+  }
+
+  function mapPreviewSrc(value) {
+    if (!value) return "";
+    if (/^chapter[0-9-]+$/.test(value)) return "https://finalfantasy-jun-site.com/ff7_remake/field/images/" + value + ".png";
+    return value;
+  }
+
+  function paintMapPreview() {
+    const image = document.getElementById("map-preview");
+    const warn = document.getElementById("map-size-warn");
+    if (!image) return;
+    const value = chosenMap();
+    if (!value) {
+      image.hidden = true;
+      image.removeAttribute("src");
+      if (warn) warn.hidden = true;
+      return;
+    }
+    image.hidden = false;
+    image.alt = "地図のプレビュー";
+    image.src = mapPreviewSrc(value);
+    if (warn) {
+      if (/^data:/i.test(value) && value.length > 400 * 1024) {
+        warn.hidden = false;
+        warn.textContent = "この画像は約" + Math.round(value.length / 1024) + "KBです。ブラウザの保存容量を使います。";
+      } else warn.hidden = true;
+    }
+  }
+
+  function mapFields(current) {
+    const maps = GAME.maps || [];
+    const preset = maps.some(map => map.id === current);
+    const options = ['<option value="">地図なし</option>'].concat(maps.map(map => `<option value="${map.id}"${map.id === current ? " selected" : ""}>${escapeText(map.label)}</option>`)).join("");
+    const custom = preset || !current ? "" : current;
+    return [
+      field("地図", `<select name="mapPreset">${options}</select>`),
+      field("地図の画像", `<input name="mapUrl" value="${escapeAttr(custom)}" placeholder="https:// の画像URL。空なら上の地図">`),
+      '<label class="map-file">画像ファイル<input id="map-file" name="mapFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp"></label>',
+      '<p id="map-file-note">ファイルはこのブラウザにだけ残します。400KBを超えると警告し、1.2MBを超える画像は入れられません。</p>',
+      '<p id="map-size-warn" hidden></p>',
+      '<img id="map-preview" alt="地図のプレビュー" hidden>',
+      '<button type="button" id="map-clear">地図を外す</button>'
+    ].join("");
+  }
+
+  function bindMapField() {
+    const preset = form.elements.mapPreset;
+    const url = form.elements.mapUrl;
+    const file = document.getElementById("map-file");
+    const clear = document.getElementById("map-clear");
+    const image = document.getElementById("map-preview");
+    if (preset) preset.addEventListener("change", () => {
+      if (url && preset.value) url.value = "";
+      paintMapPreview();
+    });
+    if (url) url.addEventListener("input", () => {
+      if (url.value.trim() && preset) preset.value = "";
+      paintMapPreview();
+    });
+    if (image) image.addEventListener("error", () => {
+      image.alt = "この画像は表示できません";
+    });
+    if (clear) clear.addEventListener("click", () => {
+      if (preset) preset.value = "";
+      if (url) url.value = "";
+      if (file) file.value = "";
+      error.textContent = "";
+      paintMapPreview();
+    });
+    if (file) file.addEventListener("change", () => {
+      const picked = file.files && file.files[0];
+      if (!picked) return;
+      if (!/^image\/(png|jpeg|gif|webp)$/.test(picked.type)) {
+        error.textContent = "PNG、JPEG、GIF、WebPの画像にしてください。";
+        file.value = "";
+        return;
+      }
+      if (picked.size > MAP_FILE_MAX) {
+        error.textContent = "画像が大きすぎます。1.2MBまでにしてください。";
+        file.value = "";
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || "");
+        if (!url) return;
+        url.value = result;
+        if (preset) preset.value = "";
+        error.textContent = "";
+        paintMapPreview();
+      };
+      reader.onerror = () => { error.textContent = "画像を読めませんでした。"; };
+      reader.readAsDataURL(picked);
+    });
+    paintMapPreview();
+  }
+
   function openRouteForm(seed) {
     editing = seed;
     error.textContent = "";
@@ -154,7 +288,6 @@
     document.getElementById("card-edit-id").textContent = seed.id ? "ID: " + seed.id : "IDは保存時に付きます。あとから変わりません。";
     const flags = GAME.flags.map(flag => `<option value="${flag.id}"${flag.id === seed.flag ? " selected" : ""}>${flag.label}</option>`).join("");
     const trophies = ['<option value="">選ばない</option>'].concat(GuideApp.trophyChoices().map(item => `<option value="${item.id}"${item.id === seed.trophy ? " selected" : ""}>${item.name}</option>`)).join("");
-    const maps = ['<option value="">地図なし</option>'].concat((GAME.maps || []).map(map => `<option value="${map.id}"${map.id === seed.map ? " selected" : ""}>${map.label}</option>`)).join("");
     const chapterRows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[seed.trackId] || [], book(), seed.trackId) || [];
     const chapterRow = chapterRows.find(row => row.chapterId === seed.chapterId);
     const parents = ((chapterRow && chapterRow.items) || []).filter(item => item.id !== seed.id && !item.parent);
@@ -165,15 +298,16 @@
       field("本文", `<textarea name="detail" required>${escapeText(seed.detail || "")}</textarea>`),
       field("タグ", `<select name="flag">${flags}</select>`),
       field("期限", `<input name="deadline" value="${escapeAttr(seed.deadline || "")}" placeholder="期限・取り逃しのとき">`),
-      field("出典", `<input name="source" value="${escapeAttr(seed.source || "")}" placeholder="https://">`),
       field("トロフィー", `<select name="trophy">${trophies}</select>`),
-      field("地図", `<select name="map">${maps}</select>`),
+      mapFields(seed.map || ""),
       field("親カード", `<select name="parent">${parentOptions}</select>`),
       '<div id="item-picker"></div>'
     ].join("");
     paintItemPicker();
     form.elements.flag.addEventListener("change", paintItemPicker);
+    bindMapField();
     dialog.hidden = false;
+    captureBaseline();
     form.elements.title.focus();
   }
 
@@ -221,14 +355,17 @@
     error.textContent = "";
     document.getElementById("card-edit-title").textContent = seed.id ? "台帳を直す" : "台帳に追加";
     document.getElementById("card-edit-id").textContent = seed.id ? "ID: " + seed.id : "IDは保存時に付きます。";
+    const mapEditor = seed.catalogId === "quests" || seed.map ? mapFields(seed.map || "") : "";
     fields.innerHTML = [
       field("名前", `<input name="name" required value="${escapeAttr(seed.name || "")}">`),
       field("説明", `<textarea name="detail" required>${escapeText(seed.detail || "")}</textarea>`),
       field("場所・種別", `<input name="area" value="${escapeAttr(seed.area || "")}">`),
-      field("出典", `<input name="source" value="${escapeAttr(seed.source || "")}" placeholder="https://">`),
+      mapEditor,
       `<label><input type="checkbox" name="missable"${seed.missable ? " checked" : ""}> 取り逃し</label>`
     ].join("");
+    if (mapEditor) bindMapField();
     dialog.hidden = false;
+    captureBaseline();
     form.elements.name.focus();
   }
 
@@ -256,9 +393,9 @@
       detail: data.get("detail"),
       flag: data.get("flag"),
       deadline: data.get("deadline"),
-      source: data.get("source"),
+      source: editing.source || "",
       trophy: data.get("trophy"),
-      map: data.get("map"),
+      map: chosenMap(),
       parent: data.get("parent"),
       quest: editing.quest || "",
       items: editing.links || []
@@ -297,7 +434,8 @@
       name: data.get("name"),
       detail: data.get("detail"),
       area: data.get("area"),
-      source: data.get("source"),
+      source: editing.source || "",
+      map: chosenMap(),
       missable: data.get("missable") === "on"
     });
     if (checked.error) {
@@ -401,6 +539,12 @@
     fill();
     error.textContent = "";
     dialog.hidden = false;
+    captureBaseline();
+  }
+
+  function requestClose() {
+    if (formDirty() && !window.confirm("保存していない変更があります。破棄して閉じますか。")) return;
+    dialog.hidden = true;
   }
 
   form.addEventListener("submit", event => {
@@ -413,8 +557,16 @@
     if (editing && editing.kind === "catalog") saveCatalog();
     else saveRoute();
   });
-  document.getElementById("card-edit-cancel").addEventListener("click", () => { dialog.hidden = true; });
-  dialog.addEventListener("click", event => { if (event.target === dialog) dialog.hidden = true; });
+  document.getElementById("card-edit-cancel").addEventListener("click", requestClose);
+  document.getElementById("card-edit-close").addEventListener("click", requestClose);
+  dialog.addEventListener("click", event => {
+    if (event.target === dialog) event.stopPropagation();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape" || dialog.hidden) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
 
   document.addEventListener("click", event => {
     if (!document.body.classList.contains("is-card-edit")) return;
