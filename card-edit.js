@@ -21,6 +21,9 @@
     "article.it.is-dragging{opacity:.4}",
     "section.ch.is-chapter-drop{box-shadow:inset 0 0 0 3px #39c9ff}",
     "#card-drop-line{position:fixed;z-index:260;height:6px;margin-top:-3px;border-radius:3px;background:#39c9ff;box-shadow:0 0 0 1px #10202c;pointer-events:none}",
+    "#card-drop-line.is-nest{height:4px}",
+    "#card-drop-line.is-blocked{background:#c44949}",
+    "article.it.is-nest-blocked{box-shadow:inset 0 0 0 3px #c44949}",
     "#card-drop-label{position:fixed;z-index:262;padding:2px 8px;border-radius:999px;background:#39c9ff;color:#10202c;font:700 12px/1.4 sans-serif;pointer-events:none}",
     "#card-drag-ghost{position:fixed;z-index:261;max-width:min(280px,70vw);padding:8px 12px;border-radius:8px;background:#14324a;color:#fff;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.35);pointer-events:none}",
     "#card-edit-dialog{position:fixed;z-index:270;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:12px;background:rgba(2,10,18,.55);box-sizing:border-box}",
@@ -178,15 +181,27 @@
     return formSnapshot() !== formBaseline;
   }
 
+  function repoMaps() {
+    return globalThis.MAP_FILES || [];
+  }
+
   function chosenMap() {
-    if (!form.elements.mapUrl && !form.elements.mapPreset) return editing && editing.map ? editing.map : "";
+    if (!form.elements.mapUrl && !form.elements.mapPreset && !form.elements.mapRepo) return editing && editing.map ? editing.map : "";
     const url = String((form.elements.mapUrl && form.elements.mapUrl.value) || "").trim();
     if (url) return url;
+    const repoId = String((form.elements.mapRepo && form.elements.mapRepo.value) || "").trim();
+    if (repoId) {
+      const found = repoMaps().find(item => item.id === repoId);
+      return found ? found.file : repoId;
+    }
     return String((form.elements.mapPreset && form.elements.mapPreset.value) || "").trim();
   }
 
   function mapPreviewSrc(value) {
     if (!value) return "";
+    const repo = repoMaps().find(item => item.id === value || item.file === value);
+    if (repo) return repo.file;
+    if (/^maps\//.test(value)) return value;
     if (/^chapter[0-9-]+$/.test(value)) return "https://finalfantasy-jun-site.com/ff7_remake/field/images/" + value + ".png";
     return value;
   }
@@ -215,14 +230,18 @@
 
   function mapFields(current) {
     const maps = GAME.maps || [];
-    const preset = maps.some(map => map.id === current);
-    const options = ['<option value="">地図なし</option>'].concat(maps.map(map => `<option value="${map.id}"${map.id === current ? " selected" : ""}>${escapeText(map.label)}</option>`)).join("");
-    const custom = preset || !current ? "" : current;
+    const saved = repoMaps();
+    const repo = saved.find(item => item.id === current || item.file === current);
+    const presetId = !repo && maps.some(map => map.id === current) ? current : "";
+    const options = ['<option value="">掲載元の地図は使わない</option>'].concat(maps.map(map => `<option value="${map.id}"${map.id === presetId ? " selected" : ""}>${escapeText(map.label)}</option>`)).join("");
+    const repoOptions = ['<option value="">保存した地図は使わない</option>'].concat(saved.map(item => `<option value="${escapeAttr(item.id)}"${repo && item.id === repo.id ? " selected" : ""}>${escapeText(item.label || item.file)}</option>`)).join("");
+    const custom = presetId || repo ? "" : (current || "");
     return [
-      field("地図", `<select name="mapPreset">${options}</select>`),
+      field("掲載元の地図", `<select name="mapPreset">${options}</select>`),
+      field("保存した地図", `<select name="mapRepo">${repoOptions}</select>`),
       field("地図の画像", `<input name="mapUrl" value="${escapeAttr(custom)}" placeholder="https:// の画像URL。空なら上の地図">`),
       '<label class="map-file">画像ファイル<input id="map-file" name="mapFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp"></label>',
-      '<p id="map-file-note">ファイルはこのブラウザにだけ残します。400KBを超えると警告し、1.2MBを超える画像は入れられません。</p>',
+      '<p id="map-file-note">新しい画像は、書き出しのときに maps/ 用のファイルとして保存します。同じ中身は同じファイルを使います。400KBを超えると警告し、1.2MBを超える画像は入れられません。</p>',
       '<p id="map-size-warn" hidden></p>',
       '<img id="map-preview" alt="地図のプレビュー" hidden>',
       '<button type="button" id="map-clear">地図を外す</button>'
@@ -235,12 +254,26 @@
     const file = document.getElementById("map-file");
     const clear = document.getElementById("map-clear");
     const image = document.getElementById("map-preview");
+    const repo = form.elements.mapRepo;
     if (preset) preset.addEventListener("change", () => {
-      if (url && preset.value) url.value = "";
+      if (preset.value) {
+        if (url) url.value = "";
+        if (repo) repo.value = "";
+      }
+      paintMapPreview();
+    });
+    if (repo) repo.addEventListener("change", () => {
+      if (repo.value) {
+        if (url) url.value = "";
+        if (preset) preset.value = "";
+      }
       paintMapPreview();
     });
     if (url) url.addEventListener("input", () => {
-      if (url.value.trim() && preset) preset.value = "";
+      if (url.value.trim()) {
+        if (preset) preset.value = "";
+        if (repo) repo.value = "";
+      }
       paintMapPreview();
     });
     if (image) image.addEventListener("error", () => {
@@ -248,6 +281,7 @@
     });
     if (clear) clear.addEventListener("click", () => {
       if (preset) preset.value = "";
+      if (form.elements.mapRepo) form.elements.mapRepo.value = "";
       if (url) url.value = "";
       if (file) file.value = "";
       error.textContent = "";
@@ -272,6 +306,7 @@
         if (!url) return;
         url.value = result;
         if (preset) preset.value = "";
+        if (form.elements.mapRepo) form.elements.mapRepo.value = "";
         error.textContent = "";
         paintMapPreview();
       };
@@ -295,7 +330,7 @@
     editing.links = (seed.items || []).map(link => ({ id: link.id, qty: link.qty || 1 }));
     fields.innerHTML = [
       field("見出し", `<input name="title" required value="${escapeAttr(seed.title || "")}">`),
-      field("本文", `<textarea name="detail" required>${escapeText(seed.detail || "")}</textarea>`),
+      field("本文", `<textarea name="detail">${escapeText(seed.detail || "")}</textarea>`),
       field("タグ", `<select name="flag">${flags}</select>`),
       field("期限", `<input name="deadline" value="${escapeAttr(seed.deadline || "")}" placeholder="期限・取り逃しのとき">`),
       field("トロフィー", `<select name="trophy">${trophies}</select>`),
@@ -406,13 +441,8 @@
     }
     const place = currentRoute(editing);
     const id = editing.id || GuideProgress.createCardId(usedIds());
-    let order = place.ids.indexOf(id) >= 0 ? place.ids.slice() : place.ids.concat(id);
     const parentId = checked.value.parent;
-    if (parentId && parentId !== id) {
-      order = order.filter(item => item !== id);
-      const at = order.indexOf(parentId);
-      order.splice(at < 0 ? order.length : at + 1, 0, id);
-    }
+    const order = GuideProgress.orderForSave(place.ids, id, parentId, editing.parent || "", editing.insertAfter || "");
     const base = editing.id ? GuideApp.findBaseRoute(editing.id) : null;
     const next = GuideProgress.upsertRouteCard(
       book(),
@@ -570,6 +600,27 @@
 
   document.addEventListener("click", event => {
     if (!document.body.classList.contains("is-card-edit")) return;
+    const addAfter = event.target.closest("[data-card-add-after]");
+    if (addAfter) {
+      const id = addAfter.getAttribute("data-card-add-after");
+      const place = locate(id);
+      const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
+      if (!place || !item) return;
+      openRouteForm({
+        kind: "route",
+        trackId: place.trackId,
+        chapterId: place.chapterId,
+        flag: item.flag || "story",
+        parent: item.parent || "",
+        insertAfter: id,
+        title: "",
+        detail: "",
+        deadline: "",
+        source: "",
+        trophy: ""
+      });
+      return;
+    }
     const add = event.target.closest("[data-card-add]");
     if (add) {
       openRouteForm({
@@ -653,7 +704,7 @@
   }
 
   function paintDrop(target) {
-    document.querySelectorAll("section.ch.is-chapter-drop, article.it.is-nest-drop").forEach(node => node.classList.remove("is-chapter-drop", "is-nest-drop"));
+    document.querySelectorAll("section.ch.is-chapter-drop, article.it.is-nest-drop, article.it.is-nest-blocked").forEach(node => node.classList.remove("is-chapter-drop", "is-nest-drop", "is-nest-blocked"));
     let line = document.getElementById("card-drop-line");
     let label = document.getElementById("card-drop-label");
     if (!target) {
@@ -666,8 +717,10 @@
       : target.element;
     if (target.type === "chapter") target.element.classList.add("is-chapter-drop");
     if (target.type === "nest") target.element.classList.add("is-nest-drop");
+    if (target.type === "blocked") target.element.classList.add("is-nest-blocked");
     const rect = anchor.getBoundingClientRect();
-    const top = target.type === "chapter" || target.after ? rect.bottom : rect.top;
+    const indented = target.type === "nest" || target.type === "blocked";
+    const top = target.type === "chapter" || target.after ? rect.bottom : (indented ? rect.bottom - 4 : rect.top);
     if (!line) {
       line = document.createElement("div");
       line.id = "card-drop-line";
@@ -678,10 +731,12 @@
       label.id = "card-drop-label";
       document.body.appendChild(label);
     }
+    const inset = indented ? 36 : 0;
+    line.className = target.type === "blocked" ? "is-blocked" : (target.type === "nest" ? "is-nest" : "");
     line.style.top = top + "px";
-    line.style.left = rect.left + "px";
-    line.style.width = rect.width + "px";
-    label.textContent = target.type === "nest" ? "このカードの中へ" : target.type === "chapter" ? "この章の末尾へ" : "ここに置く";
+    line.style.left = (rect.left + inset) + "px";
+    line.style.width = Math.max(48, rect.width - inset) + "px";
+    label.textContent = target.type === "nest" ? "このカードの中へ" : target.type === "blocked" ? "入れ子にできません" : target.type === "chapter" ? "この章の末尾へ" : (target.unnest ? "外に出す" : "ここに置く");
     label.style.left = (rect.left + 12) + "px";
     label.style.top = Math.max(8, top - 22) + "px";
   }
@@ -699,10 +754,24 @@
       if (sameList) {
         const rect = card.getBoundingClientRect();
         const ratio = rect.height ? (y - rect.top) / rect.height : 1;
-        if (from.kind === "route" && ratio > 0.3 && ratio < 0.7) {
-          return { type: "nest", id: card.getAttribute("data-id"), element: card };
+        const targetId = card.getAttribute("data-id");
+        if (from.kind !== "route") {
+          return { type: "card", id: targetId, after: ratio >= 0.5, element: card };
         }
-        return { type: "card", id: card.getAttribute("data-id"), after: ratio >= 0.5, element: card };
+        const edge = ratio < 0.22 || ratio > 0.78;
+        const draggedRight = drag.x - drag.startX > 28;
+        const draggedLeft = drag.startX - drag.x > 28;
+        const indented = !draggedLeft && (draggedRight || x >= rect.left + 48);
+        const targetItem = routeRecord(to.trackId, to.chapterId, targetId);
+        const targetIsChild = !!(targetItem && targetItem.parent);
+        const movingHasChildren = cardHasChildren(from.trackId, from.chapterId, drag.id);
+        if (!edge && indented) {
+          if (targetIsChild || movingHasChildren || targetId === drag.id) {
+            return { type: "blocked", id: targetId, element: card };
+          }
+          return { type: "nest", id: targetId, element: card };
+        }
+        return { type: "card", id: targetId, after: ratio >= 0.5, unnest: draggedLeft, element: card };
       }
     }
     if (from.kind !== "route") return null;
@@ -775,7 +844,7 @@
     if (!to || to.kind !== "route" || targetId === id) return;
     const moving = routeRecord(from.trackId, from.chapterId, id);
     const target = routeRecord(to.trackId, to.chapterId, targetId);
-    if (!moving || !target) return;
+    if (!moving || !target || target.parent) return;
     const homeRows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[from.trackId] || [], book(), from.trackId) || [];
     const home = homeRows.find(row => row.chapterId === from.chapterId);
     if (home && (home.items || []).some(item => item.parent === id)) return;
@@ -816,6 +885,30 @@
     revealCard(to.trackId, to.chapterId, id);
   }
 
+  function cardHasChildren(trackId, chapterId, id) {
+    const rows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[trackId] || [], book(), trackId) || [];
+    const row = rows.find(item => item.chapterId === chapterId);
+    return !!row && (row.items || []).some(item => item.parent === id);
+  }
+
+  function setParent(id, parentId) {
+    const place = locate(id);
+    if (!place || place.kind !== "route") return;
+    const moving = routeRecord(place.trackId, place.chapterId, id);
+    if (!moving || (moving.parent || "") === (parentId || "")) return;
+    const base = GuideApp.findBaseRoute(id);
+    GuideApp.setCardBook(GuideProgress.upsertRouteCard(
+      book(),
+      base && base.item,
+      id,
+      cardFields(moving, parentId),
+      place.trackId,
+      place.chapterId,
+      GuideApp.currentIds(place.trackId, place.chapterId),
+      GuideApp.baseItems(place.trackId, place.chapterId).map(item => item.id)
+    ));
+  }
+
   function alignParent(id, neighborId) {
     const place = locate(id);
     const neighborPlace = locate(neighborId);
@@ -844,6 +937,7 @@
     const id = current.id;
     const from = locate(id);
     if (!from) return;
+    if (target.type === "blocked") return;
     if (target.type === "nest" && from.kind === "route") {
       nestRoute(id, from, target.id);
       return;
@@ -863,7 +957,8 @@
         return;
       }
       commitRoute(id, from, to.trackId, to.chapterId, target.id, target.after);
-      alignParent(id, target.id);
+      if (target.unnest) setParent(id, "");
+      else alignParent(id, target.id);
       return;
     }
     if (from.kind !== "route" || !target.trackId || !target.chapterId) return;
@@ -967,11 +1062,7 @@
   });
 
   document.getElementById("card-edit-exit").addEventListener("click", () => setOn(false));
-  document.getElementById("card-edit-export-route").addEventListener("click", () => {
-    const route = GuideProgress.mergedRoute(ROUTE, GAME.chapters, book());
-    download("data-route.js", GuideProgress.routeModuleSource(route), "text/javascript");
-  });
-  document.getElementById("card-edit-export-catalog").addEventListener("click", () => {
+  function mergedCatalogs() {
     const catalogs = {};
     for (const hub of GAME.hubs) {
       if (hub.kind !== "catalog") continue;
@@ -984,7 +1075,91 @@
         })
       });
     }
-    download("data-catalogs.js", GuideProgress.catalogsModuleSource(catalogs), "text/javascript");
+    return catalogs;
+  }
+
+  function collectDataUrls(route, catalogs) {
+    const urls = [];
+    const seen = new Set();
+    const take = value => {
+      if (value && /^data:image\//i.test(value) && !seen.has(value)) {
+        seen.add(value);
+        urls.push(value);
+      }
+    };
+    for (const trackId of Object.keys(route || {})) {
+      for (const row of route[trackId] || []) {
+        for (const item of row.items || []) take(item && item.map);
+      }
+    }
+    for (const name of Object.keys(catalogs || {})) {
+      for (const item of (catalogs[name].items || [])) take(item && item.map);
+    }
+    return urls;
+  }
+
+  async function hashDataUrl(dataUrl) {
+    const payload = String(dataUrl).split(",")[1] || "";
+    const binary = atob(payload);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest)).map(part => part.toString(16).padStart(2, "0")).join("");
+  }
+
+  function dataUrlBlob(dataUrl) {
+    const match = String(dataUrl).match(/^data:(image\/(?:png|jpeg|gif|webp));base64,([\s\S]*)$/i);
+    if (!match) return null;
+    const binary = atob(match[2]);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: match[1] });
+  }
+
+  function mapExt(dataUrl) {
+    const type = (String(dataUrl).match(/^data:image\/(png|jpeg|gif|webp)/i) || [])[1] || "png";
+    return type.toLowerCase() === "jpeg" ? "jpg" : type.toLowerCase();
+  }
+
+  async function exportWithMaps(kind) {
+    const route = GuideProgress.mergedRoute(ROUTE, GAME.chapters, book());
+    const catalogs = mergedCatalogs();
+    const urls = collectDataUrls(route, catalogs);
+    let manifest = repoMaps().map(item => Object.assign({}, item));
+    const lookup = {};
+    const fresh = [];
+    for (const url of urls) {
+      const hash = await hashDataUrl(url);
+      const assigned = GuideProgress.assignMapFile(hash, mapExt(url), manifest);
+      manifest = assigned.manifest;
+      lookup[url] = assigned.file;
+      if (assigned.added) fresh.push({ file: assigned.file, blob: dataUrlBlob(url) });
+    }
+    const replaced = GuideProgress.replaceMapValues(route, catalogs, lookup);
+    if (kind === "route") download("data-route.js", GuideProgress.routeModuleSource(replaced.route), "text/javascript");
+    else download("data-catalogs.js", GuideProgress.catalogsModuleSource(replaced.catalogs), "text/javascript");
+    if (!fresh.length && manifest.length === repoMaps().length) return;
+    const changed = fresh.length || JSON.stringify(manifest) !== JSON.stringify(repoMaps());
+    if (!changed) return;
+    download("maps.js", "const MAP_FILES = " + JSON.stringify(manifest, null, 2) + ";\n\nglobalThis.MAP_FILES = MAP_FILES;\n", "text/javascript");
+    fresh.forEach(item => {
+      if (!item.blob) return;
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(item.blob);
+      link.download = item.file.split("/").pop();
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+    });
+    window.alert("新しい地図は maps/ に置いてください。ダウンロードした画像を GitHub の Add file → Upload files で maps/ に上げ、maps.js は data/maps.js と置き換えます。同じ画像は同じファイル名になります。掲載元の地図はそのまま参照します。");
+  }
+
+  document.getElementById("card-edit-export-route").addEventListener("click", () => {
+    exportWithMaps("route").catch(() => window.alert("書き出しに失敗しました。"));
+  });
+  document.getElementById("card-edit-export-catalog").addEventListener("click", () => {
+    exportWithMaps("catalog").catch(() => window.alert("書き出しに失敗しました。"));
   });
   document.getElementById("card-edit-export-json").addEventListener("click", () => {
     download("ff7r-card-edits.json", JSON.stringify({ app: GuideProgress.APP, cards: book() }, null, 2), "application/json");

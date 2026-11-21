@@ -11,10 +11,10 @@ function loadGuide() {
   const sandbox = { console };
   sandbox.globalThis = sandbox;
   const context = vm.createContext(sandbox);
-  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js"]) {
+  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js"]) {
     vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context, { filename: file });
   }
-  return { GAME: sandbox.GAME, ROUTE: sandbox.ROUTE, CATALOGS: sandbox.CATALOGS };
+  return { GAME: sandbox.GAME, ROUTE: sandbox.ROUTE, CATALOGS: sandbox.CATALOGS, MAP_FILES: sandbox.MAP_FILES };
 }
 
 function validateGuide(guide) {
@@ -29,21 +29,28 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v7") fail("キャッシュ名が ff7r-guide-v7 ではない");
+  if (GAME.cache !== "ff7r-guide-v8") fail("キャッシュ名が ff7r-guide-v8 ではない");
+  const mapFiles = guide.MAP_FILES;
+  if (!Array.isArray(mapFiles)) fail("data/maps.js の MAP_FILES が配列ではない");
+  else mapFiles.forEach(entry => {
+    if (!entry || !/^maps\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(entry.file || "")) fail("地図ファイルのパスが不正");
+    else if (!fs.existsSync(path.join(root, entry.file))) fail("地図ファイルがない: " + entry.file);
+  });
+  if (!fs.existsSync(path.join(root, "maps", "README.md"))) fail("maps/README.md がない");
 
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   if (!sw.includes(GAME.cache)) fail("sw.js のキャッシュ名が GAME.cache と違う");
   if (sw.includes("importScripts(")) fail("sw.js が importScripts で古いキャッシュ名を引き戻せる");
-  if (!sw.includes("async function networkFirst") || /return cached \|\|/.test(sw)) fail("sw.js が network-first ではない");
+  if (!sw.includes("async function networkFirst") || /return cached \|\|/.test(sw) || !sw.includes("async function cacheFirstImage")) fail("sw.js が network-first ではない");
   if (!sw.includes('cache: "reload"') || !sw.includes("skipWaiting") || !sw.includes("clients.claim") || !sw.includes("client.navigate") || !sw.includes("ff7r-sw")) {
     fail("sw.js が更新時に古い画面を置き換えない");
   }
   for (const file of GAME.cacheFiles) {
     if (!sw.includes(file)) fail("sw.js の対象に " + file + " がない");
   }
-  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
+  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
     if (!html.includes(file + "?v=" + GAME.cache)) fail("index.html の " + file + " に版のクエリがない");
   }
   if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw") || !app.includes("すべて表示") || !app.includes("data-map") || !app.includes("data-open-item") || !app.includes("data-item-section") || !app.includes("map-zoom") || !app.includes("中のカード") || !app.includes("data-open-weapon")) {
@@ -181,7 +188,7 @@ function validateGuide(guide) {
       const storySteps = [];
       for (const item of row.items || []) {
         if (item && item.trophy && !trophyIds.has(item.trophy)) fail(item.id + " の trophy が台帳にない: " + item.trophy);
-        if (item && item.map && !mapIds.has(item.map) && !/^https:\/\//i.test(item.map) && !/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(item.map)) fail(item.id + " の地図が未定義: " + item.map);
+        if (item && item.map && !mapIds.has(item.map) && !/^https:\/\//i.test(item.map) && !/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(item.map) && !/^maps\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(item.map)) fail(item.id + " の地図が未定義: " + item.map);
         if (item && item.parent) {
           const parent = (row.items || []).find(other => other && other.id === item.parent);
           if (!parent) fail(item.id + " の親がない");

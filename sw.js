@@ -1,6 +1,6 @@
 /* 版は data/game.js の GAME.cache と同じ文字列にする。importScripts は使わない。
    古いサービスワーカーが data/game.js を横取りすると、新しい戦略まで古い版に戻る。 */
-const CACHE = "ff7r-guide-v7";
+const CACHE = "ff7r-guide-v8";
 const CORE = [
   "./",
   "./index.html",
@@ -12,7 +12,8 @@ const CORE = [
   "./card-edit.js",
   "./data/game.js",
   "./data/route.js",
-  "./data/catalogs.js"
+  "./data/catalogs.js",
+  "./data/maps.js"
 ];
 
 self.addEventListener("install", event => {
@@ -56,8 +57,21 @@ self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  if (/\/maps\/[^/]+\.(?:png|jpe?g|gif|webp)$/i.test(url.pathname)) {
+    event.respondWith(cacheFirstImage(event.request));
+    return;
+  }
   event.respondWith(networkFirst(event.request));
 });
+
+async function cacheFirstImage(request) {
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const response = await fetch(request.url, { cache: "reload", credentials: "same-origin" });
+  if (response && response.ok) await cache.put(request, response.clone());
+  return response;
+}
 
 async function networkFirst(request) {
   const cache = await caches.open(CACHE);
