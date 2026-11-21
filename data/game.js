@@ -54,7 +54,10 @@ const GAME = {
     { id: "deadline", label: "期限", chip: true, tone: "deadline", band: true },
     { id: "missable", label: "取り逃し", chip: true, tone: "missable", band: true },
     { id: "request", label: "依頼", chip: true, tone: "request" },
-    { id: "optional", label: "任意", chip: true, tone: "optional" }
+    { id: "optional", label: "任意", chip: true, tone: "optional" },
+    { id: "trophy", label: "トロフィー", chip: true, tone: "trophy" },
+    { id: "item", label: "アイテム入手", chip: true, tone: "item" },
+    { id: "tips", label: "Tips", chip: true, tone: "tips" }
   ],
   hubs: [
     { id: "route", label: "ルート", kind: "route" },

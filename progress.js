@@ -38,6 +38,41 @@
     return normalizeState(state);
   }
 
+  function reconcileChecks(checks, meta) {
+    const next = Object.assign({}, checks && typeof checks === "object" ? checks : {});
+    const trophyToCards = meta && meta.trophyToCards || {};
+    for (const trophyId of Object.keys(trophyToCards)) {
+      const cards = trophyToCards[trophyId] || [];
+      if (cards.some(cardId => next[cardId] === true)) next[trophyId] = true;
+    }
+    const platinumId = meta && meta.platinumId;
+    const trophyIds = meta && meta.trophyIds || [];
+    if (platinumId) {
+      const rest = trophyIds.filter(id => id !== platinumId);
+      if (rest.length && rest.every(id => next[id] === true)) next[platinumId] = true;
+      else delete next[platinumId];
+    }
+    return next;
+  }
+
+  function applyToggle(checks, id, on, meta) {
+    const next = Object.assign({}, checks && typeof checks === "object" ? checks : {});
+    const cardToTrophy = meta && meta.cardToTrophy || {};
+    const trophyToCards = meta && meta.trophyToCards || {};
+    if (on) next[id] = true;
+    else delete next[id];
+    const trophyId = cardToTrophy[id];
+    if (!on && trophyId) {
+      const cards = trophyToCards[trophyId] || [];
+      if (!cards.some(cardId => next[cardId] === true)) delete next[trophyId];
+    }
+    const linkedCards = trophyToCards[id];
+    if (!on && linkedCards) {
+      for (const cardId of linkedCards) delete next[cardId];
+    }
+    return reconcileChecks(next, meta);
+  }
+
   function summarize(items, checks, bandFlags) {
     const list = (items || []).filter(item => item && item.id);
     const doneMap = checks && typeof checks === "object" ? checks : {};
@@ -52,5 +87,5 @@
     return { total: list.length, done, openBand };
   }
 
-  return { APP, emptyState, normalizeState, acceptImport, summarize };
+  return { APP, emptyState, normalizeState, acceptImport, summarize, reconcileChecks, applyToggle };
 });

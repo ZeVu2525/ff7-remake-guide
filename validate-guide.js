@@ -45,6 +45,9 @@ function validateGuide(guide) {
   const flagIds = new Set((GAME.flags || []).map(flag => flag.id));
   const band = new Set((GAME.flags || []).filter(flag => flag.band).map(flag => flag.id));
   if (!band.has("deadline") || !band.has("missable")) fail("期限と取り逃しが帯の対象になっていない");
+  for (const id of ["trophy", "item", "tips"]) {
+    if (!flagIds.has(id)) fail("フラグがない: " + id);
+  }
 
   const tracks = new Set((GAME.tracks || []).map(track => track.id));
   for (const name of ["main", "hard", "intermission"]) {
@@ -98,6 +101,8 @@ function validateGuide(guide) {
         if (item.example === true && !String(item.title).includes("例")) fail(item.id + " は仮データなのに「例」がない");
         if (String(item.title).includes("例") && item.example !== true) fail(item.id + " は「例」なのに example がない");
         if (item.source && !/^https?:\/\//i.test(item.source)) fail(item.id + " の source は http のURLか空にする");
+        if (item.flag === "trophy" && !item.trophy) fail(item.id + " はトロフィーなのに trophy がない");
+        if (item.trophy && item.flag !== "trophy") fail(item.id + " の trophy はトロフィーカードだけに付ける");
       }
     }
     if (trackId === "main") {
@@ -124,6 +129,19 @@ function validateGuide(guide) {
       }
       if (item.example === true && !String(item.name).includes("例")) fail(item.id + " は仮データなのに「例」がない");
       if (item.source && !/^https?:\/\//i.test(item.source)) fail(item.id + " の source は http のURLか空にする");
+    }
+  }
+
+  const trophyItems = (CATALOGS.trophies && CATALOGS.trophies.items) || [];
+  const trophyIds = new Set(trophyItems.map(item => item && item.id));
+  if (trophyItems.length !== 54) fail("トロフィーは54件である必要がある");
+  const autos = trophyItems.filter(item => item && item.auto === "rest");
+  if (autos.length !== 1) fail("残りのトロフィーでオンになる項目は1件である必要がある");
+  for (const trackId of ["main", "hard", "intermission"]) {
+    for (const row of ROUTE[trackId] || []) {
+      for (const item of row.items || []) {
+        if (item && item.trophy && !trophyIds.has(item.trophy)) fail(item.id + " の trophy が台帳にない: " + item.trophy);
+      }
     }
   }
 

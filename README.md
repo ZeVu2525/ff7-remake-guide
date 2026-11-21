@@ -36,13 +36,18 @@
 ```js
 {
   id: "ch03-02",
-  flag: "missable",       // story / deadline / missable / request / optional
+  flag: "missable",       // story / deadline / missable / request / optional / trophy / item / tips
   title: "カードの見出し",
   detail: "自分の言葉で書いた手順。",
   deadline: "次の章に入る前",  // 期限・取り逃しのとき
+  trophy: "trophy-ch03",      // flag が trophy のとき。台帳の id
   source: "https://example.com/page"
 }
 ```
+
+フラグは `data/game.js` の `flags` と揃える。本編は進行、期限と取り逃しは帯に出る。依頼、任意、トロフィー、アイテム入手、Tips は絞り込みのチップになる。
+
+トロフィーのカードは `trophy` に台帳の id を書く。そのカードをオンにすると、トロフィー画面の同じ項目もオンになる。カードを外したとき、同じトロフィーを指す別のカードがまだオンなら、台帳はオンのまま残る。台帳を直接オンにしても進行カードは動かない。台帳を直接オフにすると、結んである進行カードも外れる。運命の覇者は、ほかのトロフィーがすべてオンのときだけオンになる。書き出した JSON には、カードとトロフィーの両方が入る。
 
 仮のまま残すカードは `example: true` にし、見出しに「例」と書きます。本番のカードでは両方を外します。
 

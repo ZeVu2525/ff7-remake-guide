@@ -93,8 +93,47 @@
       title: item.title,
       detail: item.detail,
       deadline: item.deadline,
-      source: item.source
+      source: item.source,
+      trophy: item.trophy || ""
     })));
+  }
+
+  function trophyItems() {
+    return (CATALOGS.trophies && CATALOGS.trophies.items) || [];
+  }
+
+  function trophyById(id) {
+    return trophyItems().find(item => item.id === id) || null;
+  }
+
+  function trophyMeta() {
+    const cardToTrophy = Object.create(null);
+    const trophyToCards = Object.create(null);
+    for (const track of GAME.tracks) {
+      for (const item of routeItems(track.id)) {
+        if (!item.trophy) continue;
+        cardToTrophy[item.id] = item.trophy;
+        if (!trophyToCards[item.trophy]) trophyToCards[item.trophy] = [];
+        trophyToCards[item.trophy].push(item.id);
+      }
+    }
+    const platinum = trophyItems().find(item => item.auto === "rest");
+    return {
+      cardToTrophy,
+      trophyToCards,
+      trophyIds: trophyItems().map(item => item.id),
+      platinumId: platinum ? platinum.id : null
+    };
+  }
+
+  function cardsForTrophy(trophyId) {
+    const found = [];
+    for (const track of GAME.tracks) {
+      for (const item of routeItems(track.id)) {
+        if (item.trophy === trophyId) found.push(item);
+      }
+    }
+    return found;
   }
 
   function catalogItems(catalogId) {
@@ -115,7 +154,7 @@
 
   function matchesQuery(item, query) {
     if (!query) return true;
-    const hay = [item.title, item.name, item.detail, item.deadline, item.area, item.id, item.chapterTitle]
+    const hay = [item.title, item.name, item.detail, item.deadline, item.area, item.id, item.chapterTitle, item.trophy]
       .filter(Boolean)
       .join("\n")
       .toLowerCase();
@@ -215,6 +254,7 @@
         <div class="ihead">
           <label for="check-${esc(item.id)}">${flagTag(item.flag)}${exampleMark(item)}<span class="it-title">${esc(item.title || item.id)}</span></label>
           <div class="imeta">
+            ${item.trophy && trophyById(item.trophy) ? `<span class="tag tone-trophy">${esc(trophyById(item.trophy).name)}</span>` : ""}
             ${item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
             <button type="button" class="route-item-toggle" data-toggle-item="${esc(item.id)}" aria-expanded="${collapsed ? "false" : "true"}">詳細</button>
           </div>
@@ -287,10 +327,22 @@
           </div>
           ${item.area ? `<p class="area">${esc(item.area)}</p>` : ""}
           ${item.detail ? `<div class="det">${esc(item.detail)}</div>` : ""}
+          ${trophyLinkLine(item)}
           ${sourceLine(item.source)}
         </div>
       </article>`;
     }).join("") || '<p class="empty-chapter">一致する項目がありません。</p>';
+  }
+
+  function trophyLinkLine(item) {
+    if (!item || item.id == null || !(CATALOGS.trophies && CATALOGS.trophies.items.some(entry => entry.id === item.id))) return "";
+    if (item.auto === "rest") {
+      return `<p class="area">ほかのトロフィーがすべてオンになると、ここもオンになる。</p>`;
+    }
+    const cards = cardsForTrophy(item.id);
+    if (!cards.length) return `<p class="area">進行カードとは結んでいない。この画面で直接チェックする。</p>`;
+    const links = cards.map(card => `<button type="button" class="linkish" data-open-hit="${esc(card.id)}">${esc(card.chapterTitle)}「${esc(card.title)}」</button>`).join("、");
+    return `<p class="area">進行: ${links}</p>`;
   }
 
   function renderCatalogs() {
@@ -412,6 +464,15 @@
     if (location.hash !== next) history.replaceState(null, "", next);
   }
 
+  function paintChecks() {
+    document.querySelectorAll("input[data-check]").forEach(input => {
+      const on = checked(input.getAttribute("data-check"));
+      input.checked = on;
+      const card = input.closest(".it");
+      if (card) card.classList.toggle("done", on);
+    });
+  }
+
   function refreshVisibleCounts() {
     if (ui.hub === "route") {
       document.querySelectorAll("#route section.ch").forEach(section => {
@@ -457,6 +518,7 @@
       if (!imported) throw new Error("rejected");
       backup();
       state = imported;
+      state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
       save();
       renderRoute();
       renderCatalogs();
@@ -471,6 +533,7 @@
       const raw = localStorage.getItem(storage.backup);
       if (!raw) throw new Error("empty");
       state = GuideProgress.normalizeState(JSON.parse(raw));
+      state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
       save();
       renderRoute();
       renderCatalogs();
@@ -527,7 +590,8 @@
     const needle = query.toLowerCase();
     for (const track of GAME.tracks) {
       for (const item of routeItems(track.id)) {
-        const text = [item.title, item.detail, item.deadline, item.id, item.chapterTitle].join("\n");
+        const linked = item.trophy && trophyById(item.trophy);
+        const text = [item.title, item.detail, item.deadline, item.id, item.chapterTitle, linked && linked.name].join("\n");
         if (!text.toLowerCase().includes(needle)) continue;
         hits.push({ id: item.id, label: item.title || item.id, where: track.label + " · " + item.chapterTitle });
       }
@@ -597,13 +661,12 @@
     const box = event.target.closest("input[data-check]");
     if (!box) return;
     const id = box.getAttribute("data-check");
-    if (box.checked) state.checks[id] = true;
-    else delete state.checks[id];
+    state.checks = GuideProgress.applyToggle(state.checks, id, box.checked, trophyMeta());
     save();
-    const card = box.closest(".it");
-    if (card) card.classList.toggle("done", box.checked);
-    if (ui.hub === "route" && box.checked && (ui.flag === "todo" || ui.flag === "band")) renderRoute();
+    paintChecks();
+    if (ui.hub === "route" && (ui.flag === "todo" || ui.flag === "band")) renderRoute();
     else refreshVisibleCounts();
+    if (ui.hub !== "trophies") renderCatalog(GAME.hubs.find(hub => hub.id === "trophies"));
   });
 
   document.getElementById("dash").addEventListener("click", () => {
@@ -694,6 +757,7 @@
     }
   });
 
+  state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
   renderHeader();
   let savedTheme = GAME.themes[0].id;
   try { savedTheme = localStorage.getItem(storage.theme) || savedTheme; } catch (error) {}
