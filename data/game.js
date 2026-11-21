@@ -17,10 +17,11 @@ const GAME = {
     textEditMode: "ff7r-text-edit-mode",
     cardEdits: "ff7r-card-edits-v1",
     cardEditMode: "ff7r-card-edit-mode",
+    chapterFilter: "ff7r-guide-chapter-filter",
     theme: "ff7r-guide-theme",
     backup: "ff7r-guide-state-v1-last-backup"
   },
-  cache: "ff7r-guide-v3",
+  cache: "ff7r-guide-v4",
   cacheFiles: [
     "./",
     "./index.html",
@@ -66,10 +67,33 @@ const GAME = {
     { id: "route", label: "ルート", kind: "route" },
     { id: "quests", label: "依頼", kind: "catalog", catalog: "quests" },
     { id: "trophies", label: "トロフィー", kind: "catalog", catalog: "trophies" },
-    { id: "summons", label: "召喚獣", kind: "catalog", catalog: "summons" },
-    { id: "skills", label: "敵の技", kind: "catalog", catalog: "skills" },
+    { id: "keyitems", label: "だいじなもの", kind: "catalog", catalog: "keyItems" },
+    { id: "consumables", label: "消費アイテム", kind: "catalog", catalog: "consumables" },
+    { id: "accessories", label: "アクセサリー", kind: "catalog", catalog: "accessories" },
+    { id: "weapons", label: "武器", kind: "catalog", catalog: "weapons" },
+    { id: "armor", label: "防具", kind: "catalog", catalog: "armor" },
     { id: "materia", label: "マテリア", kind: "catalog", catalog: "materia" },
-    { id: "weapons", label: "武器", kind: "catalog", catalog: "weapons" }
+    { id: "summons", label: "召喚獣", kind: "catalog", catalog: "summons" },
+    { id: "skills", label: "敵の技", kind: "catalog", catalog: "skills" }
+  ],
+  maps: [
+    { id: "chapter01", label: "壱番魔晄炉" },
+    { id: "chapter02", label: "八番街" },
+    { id: "chapter03", label: "七番街スラム" },
+    { id: "chapter04", label: "七番街" },
+    { id: "chapter05", label: "螺旋トンネル" },
+    { id: "chapter06", label: "四番街プレート内部" },
+    { id: "chapter07", label: "伍番魔晄炉" },
+    { id: "chapter08", label: "伍番街スラム" },
+    { id: "chapter09-03", label: "陥没道路" },
+    { id: "chapter09", label: "六番街スラム" },
+    { id: "chapter10", label: "地下下水道" },
+    { id: "chapter11", label: "列車墓場" },
+    { id: "chapter12", label: "七番街支柱" },
+    { id: "chapter13", label: "地下実験場" },
+    { id: "chapter15", label: "七番街プレート断面" },
+    { id: "chapter16", label: "神羅ビル外周" },
+    { id: "chapter17", label: "神羅ビル特殊研究施設" }
   ]
 };
 

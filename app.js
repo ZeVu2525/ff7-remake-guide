@@ -7,10 +7,20 @@
     trackId: "main",
     flag: "all",
     query: "",
+    chapterId: "",
     catalogQuery: Object.create(null),
+    catalogFacet: Object.create(null),
     collapsed: Object.create(null),
     hub: "route"
   };
+  let chapterFilter = {};
+  try {
+    const saved = JSON.parse(localStorage.getItem(storage.chapterFilter) || "{}");
+    if (saved && typeof saved === "object") chapterFilter = saved;
+  } catch (error) {
+    chapterFilter = {};
+  }
+  if (typeof chapterFilter.main === "string") ui.chapterId = chapterFilter.main;
 
   let state = GuideProgress.emptyState();
   let cardBook = GuideProgress.emptyCardBook();
@@ -120,7 +130,10 @@
       detail: item.detail,
       deadline: item.deadline,
       source: item.source,
-      trophy: item.trophy || ""
+      trophy: item.trophy || "",
+      step: item.step || 0,
+      map: item.map || "",
+      items: Array.isArray(item.items) ? item.items : []
     })));
   }
 
@@ -175,7 +188,8 @@
       area: item.area,
       source: item.source,
       missable: item.missable,
-      auto: item.auto
+      auto: item.auto,
+      intermission: item.intermission === true
     }));
   }
 
@@ -272,6 +286,47 @@
     document.getElementById("ptxt").textContent = progress.done + " / " + progress.total;
   }
 
+  function saveChapterFilter() {
+    chapterFilter[ui.trackId] = ui.chapterId || "";
+    try { localStorage.setItem(storage.chapterFilter, JSON.stringify(chapterFilter)); } catch (error) {}
+  }
+
+  function catalogRecordById(id) {
+    for (const hub of GAME.hubs) {
+      if (hub.kind !== "catalog") continue;
+      const found = catalogItems(hub.catalog).find(item => item.id === id);
+      if (found) return Object.assign({ hubId: hub.id, hubLabel: hub.label }, found);
+    }
+    return null;
+  }
+
+  function cardsForItem(itemId) {
+    const found = [];
+    for (const track of GAME.tracks) {
+      for (const item of routeItems(track.id)) {
+        if ((item.items || []).some(link => link.id === itemId)) found.push(item);
+      }
+    }
+    return found;
+  }
+
+  function itemLine(item) {
+    if (!item.items || !item.items.length) return "";
+    const links = item.items.map(link => {
+      const found = catalogRecordById(link.id);
+      const name = found ? found.name : link.id;
+      return `<button type="button" class="linkish" data-open-item="${esc(link.id)}">${esc(name)} ×${esc(String(link.qty || 1))}</button>`;
+    }).join("");
+    return `<p class="item-links">${links}</p>`;
+  }
+
+  function mapButton(item) {
+    if (!item.map) return "";
+    const map = (GAME.maps || []).find(entry => entry.id === item.map);
+    const label = map ? map.label : item.map;
+    return `<button type="button" class="map-open" data-map="${esc(item.map)}" data-map-label="${esc(label)}">MAP</button>`;
+  }
+
   function routeCard(item) {
     const on = checked(item.id);
     const collapsed = ui.collapsed[item.id] === true;
@@ -280,7 +335,7 @@
       <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
       <div class="ibody">
         <div class="ihead">
-          <label for="check-${esc(item.id)}">${flagTag(item.flag)}${exampleMark(item)}<span class="it-title">${esc(item.title || item.id)}</span></label>
+          <label for="check-${esc(item.id)}">${flagTag(item.flag)}${item.step ? `<span class="step-no">${esc(String(item.step))}</span>` : ""}${exampleMark(item)}<span class="it-title">${esc(item.title || item.id)}</span></label>
           <div class="imeta">
             ${item.trophy && trophyById(item.trophy) ? `<span class="tag tone-trophy">${esc(trophyById(item.trophy).name)}</span>` : ""}
             ${item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
@@ -289,8 +344,10 @@
         </div>
         <div class="route-item-content"${collapsed ? " hidden" : ""}>
           ${item.detail ? `<div class="det">${esc(item.detail)}</div>` : ""}
+          ${itemLine(item)}
           ${sourceLine(item.source)}
           ${cardTools(item)}
+          ${mapButton(item)}
         </div>
       </div>
     </article>`;
@@ -314,16 +371,18 @@
 
   function renderRoute() {
     const chapters = chaptersFor(ui.trackId);
+    if (ui.chapterId && !chapters.some(chapter => chapter.id === ui.chapterId)) ui.chapterId = "";
+    const shown = ui.chapterId ? chapters.filter(chapter => chapter.id === ui.chapterId) : chapters;
     const filtering = ui.flag !== "all" || !!ui.query;
     let visible = 0;
     let total = 0;
     const host = document.getElementById("route");
-    host.innerHTML = chapters.map(chapter => {
+    host.innerHTML = shown.map(chapter => {
       total += chapter.items.length;
       const items = chapter.items.filter(itemVisible);
       visible += items.length;
       const done = chapter.items.filter(item => checked(item.id)).length;
-      const closed = ui.collapsed[chapterKey(chapter.id)] === true;
+      const closed = ui.chapterId ? false : ui.collapsed[chapterKey(chapter.id)] === true;
       const hide = filtering && items.length === 0;
       return `<section class="ch${closed ? " closed" : ""}${hide ? " hide" : ""}" id="chapter-${esc(ui.trackId)}-${esc(chapter.id)}" data-chapter="${esc(chapter.id)}">
         <h2 class="chapter-heading"><button type="button" class="chh" data-toggle-chapter="${esc(chapter.id)}" aria-expanded="${closed ? "false" : "true"}">
@@ -337,10 +396,11 @@
     document.getElementById("route-count").textContent = visible + " / " + total + " 件を表示";
     const jump = document.getElementById("chapter-jump");
     const previous = jump.value;
-    jump.innerHTML = '<option value="">章を選ぶ</option>' + chapters
+    jump.innerHTML = '<option value="">すべて表示</option>' + chapters
       .map(chapter => `<option value="${esc(chapter.id)}">${esc(chapter.title)}</option>`)
       .join("");
-    if ([...jump.options].some(option => option.value === previous)) jump.value = previous;
+    jump.value = [...jump.options].some(option => option.value === ui.chapterId) ? ui.chapterId : "";
+    if (previous && previous !== jump.value && !ui.chapterId) jump.value = "";
     const anyOpen = chapters.some(chapter => ui.collapsed[chapterKey(chapter.id)] !== true);
     const expand = document.getElementById("expand");
     expand.textContent = anyOpen ? "すべて折りたたむ" : "すべて開く";
@@ -353,7 +413,13 @@
     const count = document.getElementById("count-" + hub.id);
     const items = catalogItems(hub.catalog);
     const query = ui.catalogQuery[hub.id] || "";
-    const visible = items.filter(item => matchesQuery(item, query));
+    const facet = ui.catalogFacet[hub.id] || "";
+    const visible = items.filter(item => {
+      if (!matchesQuery(item, query)) return false;
+      if (!facet) return true;
+      if (facet === "INTERmission") return item.intermission === true || item.area === "INTERmission";
+      return item.area === facet;
+    });
     const done = items.filter(item => checked(item.id)).length;
     if (count) count.textContent = done + " / " + items.length;
     if (!host) return;
@@ -361,8 +427,14 @@
       host.innerHTML = `<p class="empty-chapter">まだ項目がありません。<code>data/catalogs.js</code> の ${esc(hub.catalog)} に足してください。</p>`;
       return;
     }
+    const areas = [...new Set(items.map(item => item.area).filter(Boolean))];
+    const facetButtons = areas.length ? `<div class="facet-switch" role="group" aria-label="絞り込み">${["", ...areas].map(area => {
+      const on = facet === area;
+      const label = area || "すべて";
+      return `<button type="button" class="chip${on ? " on" : ""}" data-facet="${esc(area)}" data-facet-hub="${esc(hub.id)}" aria-pressed="${on ? "true" : "false"}">${esc(label)}</button>`;
+    }).join("")}</div>` : "";
     const adder = cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-catalog-add="${esc(hub.catalog)}">項目を追加</button></p>` : "";
-    host.innerHTML = adder + (visible.map(item => {
+    host.innerHTML = facetButtons + adder + (visible.map(item => {
       const on = checked(item.id);
       return `<article class="it${item.example ? " is-example" : ""}${on ? " done" : ""}" data-id="${esc(item.id)}" data-catalog="${esc(hub.catalog)}">
         ${dragHandle(item.id)}
@@ -371,14 +443,29 @@
           <div class="ihead">
             <label for="check-${esc(item.id)}">${exampleMark(item)}${item.missable ? '<span class="tag tone-missable">取り逃し</span>' : ""}<span class="it-title">${esc(item.name || item.id)}</span></label>
           </div>
-          ${item.area ? `<p class="area">${esc(item.area)}</p>` : ""}
+          ${item.area ? `<p class="area">${esc(item.area)}${item.intermission && item.area !== "INTERmission" ? " · INTERmission" : ""}</p>` : (item.intermission ? '<p class="area">INTERmission</p>' : "")}
+          ${itemObtained(item)}
           ${item.detail ? `<div class="det">${esc(item.detail)}</div>` : ""}
+          ${itemSourceLine(item)}
           ${trophyLinkLine(item)}
           ${sourceLine(item.source)}
           ${cardTools(item)}
         </div>
       </article>`;
     }).join("") || '<p class="empty-chapter">一致する項目がありません。</p>');
+  }
+
+  function itemObtained(item) {
+    const cards = cardsForItem(item.id);
+    if (!cards.length) return "";
+    return cards.some(card => checked(card.id)) ? '<p class="area"><span class="tag tone-item">入手済み</span></p>' : "";
+  }
+
+  function itemSourceLine(item) {
+    const cards = cardsForItem(item.id);
+    if (!cards.length) return "";
+    const links = cards.map(card => `<button type="button" class="linkish" data-open-hit="${esc(card.id)}">${esc(card.chapterTitle)}「${esc(card.title)}」</button>`).join("、");
+    return `<p class="area">入手: ${links}</p>`;
   }
 
   function trophyLinkLine(item) {
@@ -465,11 +552,11 @@
       renderRoute();
     });
     document.getElementById("chapter-jump").addEventListener("change", event => {
-      const id = event.target.value;
-      if (!id) return;
-      ui.collapsed[chapterKey(id)] = false;
+      ui.chapterId = event.target.value;
+      saveChapterFilter();
+      if (ui.chapterId) ui.collapsed[chapterKey(ui.chapterId)] = false;
       renderRoute();
-      const section = document.getElementById("chapter-" + ui.trackId + "-" + id);
+      const section = ui.chapterId && document.getElementById("chapter-" + ui.trackId + "-" + ui.chapterId);
       if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
     });
     document.getElementById("q").addEventListener("input", event => {
@@ -612,6 +699,8 @@
       ui.trackId = entry.trackId;
       ui.flag = "all";
       ui.query = "";
+      ui.chapterId = entry.chapterId || "";
+      saveChapterFilter();
       ui.collapsed[chapterKey(entry.chapterId)] = false;
     }
     if (entry.hub !== "route") {
@@ -668,6 +757,7 @@
     const track = event.target.closest("[data-track]");
     if (track) {
       ui.trackId = track.dataset.track;
+      ui.chapterId = typeof chapterFilter[ui.trackId] === "string" ? chapterFilter[ui.trackId] : "";
       paintTracks();
       renderRoute();
       return;
@@ -707,6 +797,39 @@
     }
     const hit = event.target.closest("[data-open-hit]");
     if (hit) openHit(hit.getAttribute("data-open-hit"));
+    const facet = event.target.closest("[data-facet]");
+    if (facet) {
+      ui.catalogFacet[facet.getAttribute("data-facet-hub")] = facet.getAttribute("data-facet") || "";
+      const hub = GAME.hubs.find(item => item.id === facet.getAttribute("data-facet-hub"));
+      if (hub) renderCatalog(hub);
+      return;
+    }
+    const itemLink = event.target.closest("[data-open-item]");
+    if (itemLink) {
+      const record = catalogRecordById(itemLink.getAttribute("data-open-item"));
+      if (!record) return;
+      ui.catalogFacet[record.hubId] = "";
+      ui.catalogQuery[record.hubId] = "";
+      const input = document.querySelector('[data-catalog-search="' + record.hubId + '"]');
+      if (input) input.value = "";
+      const hub = GAME.hubs.find(entry => entry.id === record.hubId);
+      if (hub) renderCatalog(hub);
+      showHub(record.hubId);
+      const card = cardElement(record.id);
+      if (card) {
+        card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.classList.add("is-target");
+      }
+      return;
+    }
+    const map = event.target.closest("[data-map]");
+    if (map) {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleMap(map);
+      return;
+    }
+    if (!event.target.closest("#map-pop")) hideMap(true);
   });
 
   document.addEventListener("change", event => {
@@ -719,6 +842,8 @@
     if (ui.hub === "route" && (ui.flag === "todo" || ui.flag === "band")) renderRoute();
     else refreshVisibleCounts();
     if (ui.hub !== "trophies") renderCatalog(GAME.hubs.find(hub => hub.id === "trophies"));
+    const currentHub = GAME.hubs.find(hub => hub.id === ui.hub);
+    if (currentHub && currentHub.kind === "catalog" && currentHub.id !== "trophies") renderCatalog(currentHub);
   });
 
   document.getElementById("dash").addEventListener("click", () => {
@@ -881,8 +1006,82 @@
     },
     trophyChoices() {
       return trophyItems().map(item => ({ id: item.id, name: item.name }));
+    },
+    itemChoices() {
+      const choices = [];
+      for (const hub of GAME.hubs) {
+        if (!hub.catalog || !["keyItems", "consumables", "accessories", "weapons", "armor", "materia"].includes(hub.catalog)) continue;
+        for (const item of catalogItems(hub.catalog)) {
+          choices.push({ id: item.id, name: item.name, area: item.area || "", hubId: hub.id, hubLabel: hub.label, intermission: item.intermission === true });
+        }
+      }
+      return choices;
     }
   };
+
+  const mapPop = document.createElement("div");
+  mapPop.id = "map-pop";
+  mapPop.hidden = true;
+  mapPop.innerHTML = '<img alt=""><p class="map-fallback" hidden>画像を表示できないので、下のリンクから開いてください。</p><p><a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p>';
+  document.body.appendChild(mapPop);
+  mapPop.querySelector("img").addEventListener("error", () => {
+    mapPop.querySelector("img").hidden = true;
+    mapPop.querySelector(".map-fallback").hidden = false;
+  });
+
+  function hideMap(force) {
+    if (!force && mapPop.dataset.pin === "1") return;
+    mapPop.hidden = true;
+    mapPop.dataset.pin = "0";
+  }
+
+  function toggleMap(button) {
+    const id = button.getAttribute("data-map");
+    if (!mapPop.hidden && mapPop.dataset.map === id && mapPop.dataset.pin === "1") {
+      hideMap(true);
+      return;
+    }
+    const label = button.getAttribute("data-map-label") || id;
+    const image = mapPop.querySelector("img");
+    const link = mapPop.querySelector("a");
+    mapPop.dataset.map = id;
+    mapPop.dataset.pin = "1";
+    image.hidden = false;
+    mapPop.querySelector(".map-fallback").hidden = true;
+    image.alt = label + "の地図";
+    image.src = "https://finalfantasy-jun-site.com/ff7_remake/field/images/" + id + ".png";
+    link.href = "https://finalfantasy-jun-site.com/ff7_remake/field/" + id + ".html";
+    link.textContent = label + "の地図ページを開く";
+    mapPop.hidden = false;
+    const rect = button.getBoundingClientRect();
+    const width = Math.min(480, window.innerWidth - 16);
+    mapPop.style.width = width + "px";
+    mapPop.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) + "px";
+    const below = rect.bottom + 8;
+    const spaceBelow = window.innerHeight - below;
+    if (spaceBelow > 200) {
+      mapPop.style.top = below + "px";
+      mapPop.style.maxHeight = Math.max(160, spaceBelow - 8) + "px";
+    } else {
+      mapPop.style.top = "8px";
+      mapPop.style.maxHeight = Math.max(160, rect.top - 16) + "px";
+    }
+  }
+
+  document.addEventListener("mouseover", event => {
+    const button = event.target.closest && event.target.closest("[data-map]");
+    if (!button || !window.matchMedia("(hover: hover)").matches) return;
+    if (mapPop.dataset.pin === "1") return;
+    toggleMap(button);
+    mapPop.dataset.pin = "0";
+  });
+  document.addEventListener("mouseout", event => {
+    if (mapPop.dataset.pin === "1") return;
+    const fromMap = event.target.closest && (event.target.closest("[data-map]") || event.target.closest("#map-pop"));
+    if (!fromMap) return;
+    const next = event.relatedTarget && event.relatedTarget.closest && (event.relatedTarget.closest("[data-map]") || event.relatedTarget.closest("#map-pop"));
+    if (!next) hideMap(true);
+  });
 
   try {
     const current = new URL(location.href);

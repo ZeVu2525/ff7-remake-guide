@@ -100,7 +100,7 @@
     return { total: list.length, done, openBand };
   }
 
-  const CARD_FIELDS = ["title", "detail", "flag", "deadline", "source", "trophy"];
+  const CARD_FIELDS = ["title", "detail", "flag", "deadline", "source", "trophy", "map"];
   const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable"];
 
   function emptyCardBook() {
@@ -116,6 +116,19 @@
     return value.filter(item => typeof item === "string" && item);
   }
 
+  function itemLinks(value) {
+    if (!Array.isArray(value)) return [];
+    const out = [];
+    const seen = new Set();
+    for (const entry of value) {
+      if (!entry || typeof entry.id !== "string" || !/^[a-z][a-z0-9-]+$/.test(entry.id) || seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      const qty = Math.max(1, Math.min(99, Math.round(Number(entry.qty) || 1)));
+      out.push({ id: entry.id, qty });
+    }
+    return out;
+  }
+
   function normalizeCardBook(value) {
     const src = asObject(value);
     const book = emptyCardBook();
@@ -125,12 +138,13 @@
     for (const id of Object.keys(asObject(src.patches))) {
       const patch = {};
       const raw = asObject(src.patches[id]);
-      for (const key of ["title", "detail", "flag", "deadline", "source", "trophy", "name", "area"]) {
+      for (const key of ["title", "detail", "flag", "deadline", "source", "trophy", "name", "area", "map"]) {
         if (Object.prototype.hasOwnProperty.call(raw, key) && (typeof raw[key] === "string" || raw[key] == null)) {
           patch[key] = raw[key] == null ? "" : String(raw[key]);
         }
       }
       if (Object.prototype.hasOwnProperty.call(raw, "missable")) patch.missable = raw.missable === true;
+      if (Array.isArray(raw.items)) patch.items = itemLinks(raw.items);
       if (Object.keys(patch).length) book.patches[id] = patch;
     }
     for (const id of Object.keys(asObject(src.custom))) {
@@ -141,6 +155,8 @@
         for (const key of CARD_FIELDS) card[key] = raw[key] == null ? "" : String(raw[key]);
         card.trackId = typeof raw.trackId === "string" ? raw.trackId : "";
         card.chapterId = typeof raw.chapterId === "string" ? raw.chapterId : "";
+        card.map = typeof raw.map === "string" ? raw.map : "";
+        card.items = itemLinks(raw.items);
       } else {
         card.catalogId = typeof raw.catalogId === "string" ? raw.catalogId : "";
         card.name = raw.name == null ? "" : String(raw.name);
@@ -179,6 +195,9 @@
     }
     if (out.flag !== "trophy") delete out.trophy;
     else if (!out.trophy) delete out.trophy;
+    if (Object.prototype.hasOwnProperty.call(patch, "items")) out.items = itemLinks(patch.items);
+    if (out.flag !== "item") delete out.items;
+    if (!out.map) delete out.map;
     return out;
   }
 
@@ -263,6 +282,8 @@
         custom: true
       };
       if (custom.flag === "trophy" && custom.trophy) card.trophy = custom.trophy;
+      if (custom.map) card.map = custom.map;
+      if (custom.flag === "item" && custom.items && custom.items.length) card.items = itemLinks(custom.items);
       return card;
     }
     const base = routeIndex.byId.get(id);
@@ -384,7 +405,9 @@
       flag: fields.flag,
       deadline: fields.deadline || "",
       source: fields.source || "",
-      trophy: fields.flag === "trophy" ? fields.trophy || "" : ""
+      trophy: fields.flag === "trophy" ? fields.trophy || "" : "",
+      map: fields.map || "",
+      items: fields.flag === "item" ? itemLinks(fields.items) : []
     };
   }
 
@@ -394,6 +417,9 @@
       rememberRouteCustom(next, id, fields, trackId, chapterId);
     } else if (baseItem) {
       const patch = diffFields(baseItem, fields, CARD_FIELDS);
+      const nextItems = fields.flag === "item" ? itemLinks(fields.items) : [];
+      const prevItems = itemLinks(baseItem && baseItem.items);
+      if (JSON.stringify(nextItems) !== JSON.stringify(prevItems)) patch.items = nextItems;
       if (Object.keys(patch).length) next.patches[id] = patch;
       else delete next.patches[id];
     } else {
@@ -466,7 +492,10 @@
     if (flag === "trophy" && !trophy) return { error: "トロフィーを選んでください。" };
     if (trophy && trophyIds && trophyIds.indexOf(trophy) < 0) return { error: "選んだトロフィーが台帳にありません。" };
     if (flag !== "trophy" && trophy) return { error: "トロフィーの紐付けは、タグがトロフィーのときだけです。" };
-    return { value: { title, detail, flag, source, deadline, trophy: flag === "trophy" ? trophy : "" } };
+    const map = String(fields && fields.map || "").trim();
+    if (map && !/^chapter[0-9-]+$/.test(map)) return { error: "地図の指定が不正です。" };
+    const items = flag === "item" ? itemLinks(fields && fields.items) : [];
+    return { value: { title, detail, flag, source, deadline, trophy: flag === "trophy" ? trophy : "", map, items } };
   }
 
   function validateCatalogFields(fields) {
@@ -505,6 +534,8 @@
           if (!copy.trophy) delete copy.trophy;
           if (!copy.deadline) delete copy.deadline;
           if (!copy.source) delete copy.source;
+          if (!copy.map) delete copy.map;
+          if (!copy.items || !copy.items.length) delete copy.items;
           return copy;
         })
       }));
