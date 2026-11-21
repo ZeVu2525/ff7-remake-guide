@@ -1,8 +1,6 @@
 // FINAL FANTASY VII REMAKE のルート枠。
-// 本編の手順カードは finalfantasy-jun-site の章記事の番号順。説明は短く書き換えてある。
-// トロフィー、アイテム、Tips、期限、取り逃し、依頼、任意は前のIDのまま、見出しの語が合う手順の後ろに置いた。
-// 以前の本編手順カード（ch01-01 など）は番号付きの手順に置き換えたので、IDは引き継がない。
-// HARD と INTERmission は仮のまま。
+// 本編の手順は番号順。トロフィー・アイテム・Tips は直前の手順の子カード。
+// 依頼カードは台帳の quest ID と結んである。HARD と INTERmission は仮のまま。
 const ROUTE = {
   "main": [
     {
@@ -41,7 +39,8 @@ const ROUTE = {
               "id": "cons-016",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch01-s01"
         },
         {
           "id": "ch01-03",
@@ -50,7 +49,8 @@ const ROUTE = {
           "title": "はじめての勝利",
           "detail": "侵入路の最初の戦闘に勝つと、ソルジャーの肩慣らしが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter1.html",
-          "map": "chapter01"
+          "map": "chapter01",
+          "parent": "ch01-s01"
         },
         {
           "id": "ch01-04",
@@ -59,7 +59,8 @@ const ROUTE = {
           "title": "連打でバーストさせる",
           "detail": "金網の手前の戦いで、攻撃を重ねて敵をバーストさせるとバーストの一撃が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter1.html",
-          "map": "chapter01"
+          "map": "chapter01",
+          "parent": "ch01-s01"
         },
         {
           "id": "ch01-05",
@@ -67,7 +68,8 @@ const ROUTE = {
           "title": "神羅ボックスは通りすがりに壊す",
           "detail": "木箱は同じ見た目でも中身が毎回違う。赤く光って消えるものは回復なので、戦闘の直前に使うとポーションを温存できる。配置がない部屋もある。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter1.html",
-          "map": "chapter01"
+          "map": "chapter01",
+          "parent": "ch01-s01"
         },
         {
           "id": "ch01-07",
@@ -89,7 +91,8 @@ const ROUTE = {
               "id": "cons-004",
               "qty": 2
             }
-          ]
+          ],
+          "parent": "ch01-s01"
         },
         {
           "id": "ch01-s02",
@@ -268,7 +271,8 @@ const ROUTE = {
           "title": "ガードスコーピオンは雷で崩す",
           "detail": "バレットのサンダーが弱点。当たったら攻撃を重ね、飛んでくる弾はガードで受ける。弱点を突いた瞬間に、弱点への一撃が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter1.html",
-          "map": "chapter01"
+          "map": "chapter01",
+          "parent": "ch01-s19"
         },
         {
           "id": "ch01-10",
@@ -277,7 +281,8 @@ const ROUTE = {
           "title": "はじめて弱点を突く",
           "detail": "ガードスコーピオンに雷を当てると、弱点への一撃が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter1.html",
-          "map": "chapter01"
+          "map": "chapter01",
+          "parent": "ch01-s19"
         },
         {
           "id": "ch01-12",
@@ -291,7 +296,8 @@ const ROUTE = {
               "id": "cons-001",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch01-s19"
         },
         {
           "id": "ch01-13",
@@ -300,7 +306,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "エレベーターで炉を出ると、壱番魔晄炉爆破が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter1.html",
-          "map": "chapter01"
+          "map": "chapter01",
+          "parent": "ch01-s19"
         },
         {
           "id": "ch01-s20",
@@ -410,7 +417,8 @@ const ROUTE = {
               "id": "cons-016",
               "qty": 2
             }
-          ]
+          ],
+          "parent": "ch02-s01"
         },
         {
           "id": "ch02-03",
@@ -418,7 +426,8 @@ const ROUTE = {
           "title": "花の返事と、部隊長ゴンガ",
           "detail": "通りの女性への返事はいくらだといらないのどちらでも、黄色い花が手に入る。住宅地の先は中ボスなので、ほのおを付けておく。部隊長ゴンガは魔法が通りやすく、なければ手榴弾で崩せる。盾を持つ鎮圧兵も魔法かブレイバーで崩す。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter2.html",
-          "map": "chapter02"
+          "map": "chapter02",
+          "parent": "ch02-s01"
         },
         {
           "id": "ch02-05",
@@ -427,7 +436,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "列車の先頭の会話のあと、八番街の逃走が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter2.html",
-          "map": "chapter02"
+          "map": "chapter02",
+          "parent": "ch02-s01"
         },
         {
           "id": "ch02-s02",
@@ -520,7 +530,8 @@ const ROUTE = {
               "id": "mat-ma-005",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch03-s01"
         },
         {
           "id": "ch03-03",
@@ -529,7 +540,8 @@ const ROUTE = {
           "title": "ディスクを3枚そろえる",
           "detail": "この街のディスクを3枚手にした時点で、音楽愛好家が付く。4枚あるので、店を出る前に数を確認する。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter3.html",
-          "map": "chapter03"
+          "map": "chapter03",
+          "parent": "ch03-s01"
         },
         {
           "id": "ch03-05",
@@ -537,7 +549,8 @@ const ROUTE = {
           "title": "拘束されたら交代する",
           "detail": "ガレキ通りで誰かが掴まれたら、操作を替えてその敵を叩く。はじめて助け出すと、拘束への一撃が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter3.html",
-          "map": "chapter03"
+          "map": "chapter03",
+          "parent": "ch03-s01"
         },
         {
           "id": "ch03-06",
@@ -546,7 +559,8 @@ const ROUTE = {
           "title": "はじめて仲間を助ける",
           "detail": "ガレキ通りで拘束を解くと、拘束への一撃が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter3.html",
-          "map": "chapter03"
+          "map": "chapter03",
+          "parent": "ch03-s01"
         },
         {
           "id": "ch03-s02",
@@ -680,7 +694,8 @@ const ROUTE = {
           "title": "チャドリーレポート",
           "detail": "チャドリーからみやぶるをもらい、モンスターを2種類調べて報告する。どれか1件終えると話は先へ進める。6件すべて終えると、追加のふたりきりの時間が開く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter3.html",
-          "map": "chapter03"
+          "map": "chapter03",
+          "quest": "quest-chadley"
         },
         {
           "id": "ch03-09",
@@ -688,7 +703,8 @@ const ROUTE = {
           "title": "化けネズミの軍団",
           "detail": "アイテム屋から受ける。ウェアラットを片付けて報告する。このあとにワイマーからさまよう軍犬が出る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter3.html",
-          "map": "chapter03"
+          "map": "chapter03",
+          "quest": "quest-doomrat"
         },
         {
           "id": "ch03-10",
@@ -696,7 +712,8 @@ const ROUTE = {
           "title": "廃工場の羽根トカゲ",
           "detail": "ジャンク屋から受ける。廃工場の羽根トカゲを2組倒す。このあとに墓場からの異物が出る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter3.html",
-          "map": "chapter03"
+          "map": "chapter03",
+          "quest": "quest-lesser-drake"
         },
         {
           "id": "ch03-11",
@@ -704,7 +721,8 @@ const ROUTE = {
           "title": "消えたトモダチ",
           "detail": "ベティから受ける。スラムの猫を3匹見つけて報告する。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter3.html",
-          "map": "chapter03"
+          "map": "chapter03",
+          "quest": "quest-lost-friends"
         },
         {
           "id": "ch03-12",
@@ -712,7 +730,8 @@ const ROUTE = {
           "title": "さまよう軍犬",
           "detail": "化けネズミの軍団のあと、ワイマーから出る追加の依頼。ガレキ通りの軍犬を追って倒す。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter3.html",
-          "map": "chapter03"
+          "map": "chapter03",
+          "quest": "quest-wrath-hound"
         },
         {
           "id": "ch03-13",
@@ -720,7 +739,8 @@ const ROUTE = {
           "title": "墓場からの異物",
           "detail": "廃工場の依頼のあと、ジャンク屋から出る追加の依頼。工場の奥の敵を倒して報告する。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter3.html",
-          "map": "chapter03"
+          "map": "chapter03",
+          "quest": "quest-cerulean-drake"
         },
         {
           "id": "ch03-14",
@@ -729,7 +749,8 @@ const ROUTE = {
           "title": "はじめて依頼を終える",
           "detail": "上の6件のどれか1件を報告すると、なんでも屋の初仕事が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter3.html",
-          "map": "chapter03"
+          "map": "chapter03",
+          "parent": "ch03-s14"
         },
         {
           "id": "ch03-15",
@@ -881,7 +902,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "ジェシーと出発すると、なんでも屋の仕事が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter3.html",
-          "map": "chapter03"
+          "map": "chapter03",
+          "parent": "ch03-s28"
         },
         {
           "id": "ch03-s29",
@@ -957,7 +979,8 @@ const ROUTE = {
           "title": "ジェシーにほめられる走り方",
           "detail": "最後に採点され、冗談ではなくほめられるとバイクソルジャーが付く。残りHPを7割以上残した状態で確認できる。途中で回復してもらったり、失敗してやり直したりすると付かない。そのときは最後のセーブからやり直す。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter4.html",
-          "map": "chapter04"
+          "map": "chapter04",
+          "parent": "ch04-s02"
         },
         {
           "id": "ch04-03",
@@ -966,7 +989,8 @@ const ROUTE = {
           "title": "バイクでほめられる",
           "detail": "採点でほめられたら、バイクソルジャーが付く。条件は上のTipsのとおり。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter4.html",
-          "map": "chapter04"
+          "map": "chapter04",
+          "parent": "ch04-s02"
         },
         {
           "id": "ch04-s03",
@@ -1020,7 +1044,8 @@ const ROUTE = {
               "id": "mat-ma-003",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch04-s06"
         },
         {
           "id": "ch04-s07",
@@ -1074,7 +1099,8 @@ const ROUTE = {
           "title": "ダーツでランキングを取る",
           "detail": "セブンスヘブンのダーツで、7本以内にスコアを0にするとランキング1位になり、ダーツエキスパートが付く。1位のあとウェッジに近づくとラッキーがもらえる。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter4.html",
-          "map": "chapter04"
+          "map": "chapter04",
+          "parent": "ch04-s10"
         },
         {
           "id": "ch04-09",
@@ -1083,7 +1109,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "列車に乗ると、アバランチとの絆が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter4.html",
-          "map": "chapter04"
+          "map": "chapter04",
+          "parent": "ch04-s10"
         },
         {
           "id": "ch04-s11",
@@ -1221,7 +1248,8 @@ const ROUTE = {
               "id": "cons-008",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch05-s07"
         },
         {
           "id": "ch05-s08",
@@ -1310,7 +1338,8 @@ const ROUTE = {
           "title": "ダストドーザーはコアを狙う",
           "detail": "弱点は雷。部位を壊すとバーストが溜まり、ジェネレーターコアが出る。コアを弱点で叩き、雑魚が増えたら先に片付ける。レールに電流が走るので、線の上では戦わない。変形したあとも装甲を壊してコアを叩く。召喚のゲージが溜まったらここで使うと、盾にもなる。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter5.html",
-          "map": "chapter05"
+          "map": "chapter05",
+          "parent": "ch05-s16"
         },
         {
           "id": "ch05-04",
@@ -1319,7 +1348,8 @@ const ROUTE = {
           "title": "はじめて召喚する",
           "detail": "ダストドーザー戦で召喚を出すと、みならい召喚士が付く。ゲージは強敵との戦いで溜まる。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter5.html",
-          "map": "chapter05"
+          "map": "chapter05",
+          "parent": "ch05-s16"
         },
         {
           "id": "ch05-05",
@@ -1337,7 +1367,8 @@ const ROUTE = {
               "id": "wpn-ti-002",
               "qty": 2
             }
-          ]
+          ],
+          "parent": "ch05-s16"
         },
         {
           "id": "ch05-07",
@@ -1346,7 +1377,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "エレベーターに乗ると、プランＥ展開が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter5.html",
-          "map": "chapter05"
+          "map": "chapter05",
+          "parent": "ch05-s16"
         },
         {
           "id": "ch05-s17",
@@ -1424,7 +1456,8 @@ const ROUTE = {
               "id": "cons-014",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch06-s01"
         },
         {
           "id": "ch06-s02",
@@ -1495,7 +1528,8 @@ const ROUTE = {
           "title": "ぞくせいの使い方",
           "detail": "ぞくせいは、組んだ属性を武器なら攻撃、防具なら耐性に足す。ほのお、れいき、いかずち、かぜが対象で、複数付けたときは最初の属性だけ効く。星が増えると、武器の追加ダメが上がり、防具は半減から無効、吸収へ変わる。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter6ex1.html",
-          "map": "chapter06"
+          "map": "chapter06",
+          "parent": "ch06-s07"
         },
         {
           "id": "ch06-05",
@@ -1504,7 +1538,8 @@ const ROUTE = {
           "title": "チョコボ＆モーグリを拾う",
           "detail": "換気口の奥のマテリアを拾うと、凄腕の整備士が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter6ex2.html",
-          "map": "chapter06"
+          "map": "chapter06",
+          "parent": "ch06-s07"
         },
         {
           "id": "ch06-07",
@@ -1513,7 +1548,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "隔壁の先の会話のあと、スラムの太陽が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter6.html",
-          "map": "chapter06"
+          "map": "chapter06",
+          "parent": "ch06-s07"
         },
         {
           "id": "ch06-s08",
@@ -1728,7 +1764,8 @@ const ROUTE = {
               "id": "mat-ma-006",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch07-s07"
         },
         {
           "id": "ch07-s08",
@@ -1853,7 +1890,8 @@ const ROUTE = {
           "title": "カッターマシンとエアバスター",
           "detail": "カッターマシンは雷。腕を壊すかダメージを積むと倒れるが、一度起きると暴走して倒れにくくなる。エアバスターも雷。大砲は直線なので横へ避け、腕が分離したら本体より先に腕を叩く。掴まれたらバレットに替える。飛ぶようになったらバレットか魔法。手を合わせたら炎、近づいたら近接。制限は30分。勝つとチタンバングル。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter7.html",
-          "map": "chapter07"
+          "map": "chapter07",
+          "parent": "ch07-s20"
         },
         {
           "id": "ch07-04",
@@ -1915,7 +1953,8 @@ const ROUTE = {
           "title": "最上級のロックを開ける",
           "detail": "廃棄物の部屋の入力を最後まで成功させると、大泥棒三人組が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter7ex.html",
-          "map": "chapter07"
+          "map": "chapter07",
+          "parent": "ch07-s25"
         },
         {
           "id": "ch07-06",
@@ -1923,7 +1962,8 @@ const ROUTE = {
           "title": "爆破ミッション",
           "detail": "ロックを開けた扉の先の自販機で、爆破ミッションが買える。ボスの前にベンチで全回復しておく。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter7.html",
-          "map": "chapter07"
+          "map": "chapter07",
+          "parent": "ch07-s25"
         },
         {
           "id": "ch07-07",
@@ -1932,7 +1972,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "エアバスターを倒すと、罠に落ちたネズミが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter7.html",
-          "map": "chapter07"
+          "map": "chapter07",
+          "parent": "ch07-s25"
         },
         {
           "id": "ch07-s26",
@@ -1989,7 +2030,8 @@ const ROUTE = {
               "id": "cons-014",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch08-s01"
         },
         {
           "id": "ch08-03",
@@ -1997,7 +2039,8 @@ const ROUTE = {
           "title": "スモッグファクトは倒したあと離れる",
           "detail": "弱点は雷。倒した直後に自爆するので、距離を取る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch08-s01"
         },
         {
           "id": "ch08-s02",
@@ -2251,7 +2294,8 @@ const ROUTE = {
               "id": "cons-004",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch08-s25"
         },
         {
           "id": "ch08-07",
@@ -2260,7 +2304,8 @@ const ROUTE = {
           "title": "リーフハウスに花を飾る",
           "detail": "依頼が開いたあとリーフハウスへ戻ると、アートフラワーが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8-2.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch08-s25"
         },
         {
           "id": "ch08-08",
@@ -2277,7 +2322,8 @@ const ROUTE = {
           "title": "極秘開店モーグリショップ",
           "detail": "秘密基地のモーグリの着ぐるみから受ける。会員になると、メダルでディスクや武器と交換できる。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8-2.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "quest": "quest-moguya"
         },
         {
           "id": "ch08-s26",
@@ -2303,7 +2349,8 @@ const ROUTE = {
           "title": "見回りの子供たち",
           "detail": "中心街の子どもを探してから、未開発地区の敵を倒す。クラウドの武器が報酬。このあと英雄の証明と、噂のスラムエンジェルが出る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8-2.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "quest": "quest-hedgehog-pie-king"
         },
         {
           "id": "ch08-11",
@@ -2311,7 +2358,8 @@ const ROUTE = {
           "title": "暴走兵器",
           "detail": "街の入口付近の機械を片付ける。このあと墓参りの報酬が出る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8-2.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "quest": "quest-mark-li-monodrive"
         },
         {
           "id": "ch08-12",
@@ -2319,7 +2367,8 @@ const ROUTE = {
           "title": "英雄の証明",
           "detail": "見回りのあと、秘密基地で箱を壊す。ノーマルの課題をすべて終えると、クラッシュヒーローが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8-2.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "quest": "quest-crush-box"
         },
         {
           "id": "ch08-13",
@@ -2328,7 +2377,8 @@ const ROUTE = {
           "title": "クラッシュボックスのノーマルを終える",
           "detail": "ノーマルの課題をすべて終えたら、このカードをオンにする。クラッシュヒーローが一緒にオンになる。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8-2.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch08-s27"
         },
         {
           "id": "ch08-14",
@@ -2336,7 +2386,8 @@ const ROUTE = {
           "title": "噂のスラムエンジェル",
           "detail": "見回りのあと、聞き込みをして対象を倒す。チャプター14のコルネオの隠し財産は、この依頼を終えている必要がある。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8-2.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "quest": "quest-chromogger"
         },
         {
           "id": "ch08-15",
@@ -2344,7 +2395,8 @@ const ROUTE = {
           "title": "墓参りの報酬",
           "detail": "暴走兵器のあと、墓地の敵を倒して報告する。墓地の鍵はモーグリ店で交換する。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8-2.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "quest": "quest-venomantis"
         },
         {
           "id": "ch08-16",
@@ -2361,7 +2413,8 @@ const ROUTE = {
           "title": "はじめて召喚獣バトルに勝つ",
           "detail": "チャドリーの模擬戦に勝ったらオンにする。たたかう召喚士が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8-2.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch08-s27"
         },
         {
           "id": "ch08-s28",
@@ -2396,7 +2449,8 @@ const ROUTE = {
           "title": "ルードは風で、掴みに注意",
           "detail": "弱点は風。かかと落としは範囲の蹴り。近づくと掴まれる。HPが減ると地走りと、足元を3回爆発させる攻撃が出る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8-2.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch08-s30"
         },
         {
           "id": "ch08-20",
@@ -2405,7 +2459,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "六番街への道で、再会が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter8-2.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch08-s30"
         },
         {
           "id": "ch08-s31",
@@ -2548,7 +2603,8 @@ const ROUTE = {
               "id": "mat-im-002",
               "qty": 2
             }
-          ]
+          ],
+          "parent": "ch09-s08"
         },
         {
           "id": "ch09-03",
@@ -2582,7 +2638,8 @@ const ROUTE = {
           "title": "ヘルハウスは色で弱点が変わる",
           "detail": "受付のあと、炎、氷、雷、風を持っておく。燃えていれば氷、凍っていれば炎、吸い込んでいれば雷、青ければ風。無敵のときは両手を物理で叩く。HPが低いと空から落ちてくるので、大きくダッシュして離れる。勝つと虎のフリーバトルが開く。アイテムは使えず、戦うたびに少し回復する。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter9-2.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "parent": "ch09-s08"
         },
         {
           "id": "ch09-08",
@@ -2590,7 +2647,8 @@ const ROUTE = {
           "title": "白熱スクワット",
           "detail": "ジム男男男で受ける。サム側でもマム側でも出る。初級を終えると依頼は終わる。残りの難度も、この街にいるあいだに続けられる。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter9-2.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "quest": "quest-dandandan"
         },
         {
           "id": "ch09-09",
@@ -2598,7 +2656,8 @@ const ROUTE = {
           "title": "あくなき夜",
           "detail": "サムのリストのときだけ。服屋のひらめきを取り戻すと、次の闘技場の依頼が出る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter9-2.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "quest": "quest-inspiration"
         },
         {
           "id": "ch09-10",
@@ -2606,7 +2665,8 @@ const ROUTE = {
           "title": "爆裂ダイナマイトナイスバディ",
           "detail": "白熱スクワットとあくなき夜のあと、コロッセオの追加試合になる。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter9-2.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "quest": "quest-bomb"
         },
         {
           "id": "ch09-11",
@@ -2614,7 +2674,8 @@ const ROUTE = {
           "title": "盗みの代償",
           "detail": "マムのリストのときだけ。盗賊を倒すと、次の闘技場の依頼が出る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter9-2.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "quest": "quest-grungy-bandit"
         },
         {
           "id": "ch09-12",
@@ -2622,7 +2683,8 @@ const ROUTE = {
           "title": "逆襲の刃",
           "detail": "白熱スクワットと盗みの代償のあと、コロッセオの追加試合になる。報酬の武器は、サム側の追加試合と同じ系統。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter9-2.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "quest": "quest-jury-rigged-cutter"
         },
         {
           "id": "ch09-13",
@@ -2631,7 +2693,8 @@ const ROUTE = {
           "title": "スクワットをすべて勝つ",
           "detail": "初級だけでなく、残っている勝負もすべて終えたらオンにする。マッスルキングが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter9-2.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "parent": "ch09-s08"
         },
         {
           "id": "ch09-s09",
@@ -2802,7 +2865,8 @@ const ROUTE = {
           "title": "ダンスでピアスをもらう",
           "detail": "本番の高評価でアニヤンのピアスを受け取ると、ダンシングクイーンが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter9-2.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "parent": "ch09-s25"
         },
         {
           "id": "ch09-17",
@@ -2811,7 +2875,8 @@ const ROUTE = {
           "title": "三人の衣装を見る",
           "detail": "蜜蜂の館の外でクラウドに話しかけると、この周回で三人の衣装が揃って見える。新米ドレッサーが付く。すべての衣装は、別の選択で章をやり直さないと揃わない。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter9-2.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "parent": "ch09-s25"
         },
         {
           "id": "ch09-s26",
@@ -2878,7 +2943,8 @@ const ROUTE = {
               "id": "acc-017",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch09-s30"
         },
         {
           "id": "ch09-19",
@@ -2887,7 +2953,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "館の奥の対決のあと、欲望の街が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter9-2.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "parent": "ch09-s30"
         },
         {
           "id": "ch09-s31",
@@ -2971,7 +3038,8 @@ const ROUTE = {
               "id": "mat-ma-008",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch10-s03"
         },
         {
           "id": "ch10-s04",
@@ -3087,7 +3155,8 @@ const ROUTE = {
           "title": "排水ポンプは3回止める",
           "detail": "エアリスでバルブを開くと針が動く。ボタンを連打して赤いゲージを伸ばし、針が右に来たところでスティックを下げて赤い範囲で止める。3回成功で終わり、失敗してもやり直せる。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter10.html",
-          "map": "chapter10"
+          "map": "chapter10",
+          "parent": "ch10-s15"
         },
         {
           "id": "ch10-06",
@@ -3096,7 +3165,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "地上へ出るイベントのあと、焦燥の迷宮が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter10.html",
-          "map": "chapter10"
+          "map": "chapter10",
+          "parent": "ch10-s15"
         },
         {
           "id": "ch10-s16",
@@ -3189,7 +3259,8 @@ const ROUTE = {
               "id": "mat-im-015",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch11-s03"
         },
         {
           "id": "ch11-03",
@@ -3197,7 +3268,8 @@ const ROUTE = {
           "title": "グロウガイストは姿で攻撃を変える",
           "detail": "通常は物理、赤く透けているときは魔法。霊体のときは回復魔法がダメージになる。フェニックスの尾は効果が薄く、エリクサーの方が通る。物を投げる攻撃は機材の陰、範囲の声はしびれる。HPが半分を切ると火の弾が出て、炎のそばはダメージになる。倒すとしょうめつが落ち、エーテルターボを盗める。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter11.html",
-          "map": "chapter11"
+          "map": "chapter11",
+          "parent": "ch11-s03"
         },
         {
           "id": "ch11-s04",
@@ -3368,7 +3440,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "エリゴルの先で、亡霊の墓場が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter11.html",
-          "map": "chapter11"
+          "map": "chapter11",
+          "parent": "ch11-s20"
         }
       ]
     },
@@ -3525,7 +3598,8 @@ const ROUTE = {
           "title": "レノとルードは役割を分ける",
           "detail": "レノに弱点はない。ブレイブでガードから反撃し、ヘリは無視してレノを削る。爆撃は進行方向へ避ける。ピラミッドに閉じ込められたら交代し、近くの機雷をアビリティか魔法で壊す。レノがしゃがんだら、ルードを風で落とす。ぞくせいと風を武器に付け、かいふくとはんいかで範囲回復にしてもよい。勝ったあとは30秒でティファのもとへ走る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter12.html",
-          "map": "chapter12"
+          "map": "chapter12",
+          "parent": "ch12-s16"
         },
         {
           "id": "ch12-04",
@@ -3543,7 +3617,8 @@ const ROUTE = {
               "id": "cons-004",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch12-s16"
         },
         {
           "id": "ch12-05",
@@ -3552,7 +3627,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "30秒のあとのイベントで、死闘が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter12.html",
-          "map": "chapter12"
+          "map": "chapter12",
+          "parent": "ch12-s16"
         },
         {
           "id": "ch12-s17",
@@ -3613,7 +3689,8 @@ const ROUTE = {
               "id": "cons-004",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch13-s01"
         },
         {
           "id": "ch13-s02",
@@ -3731,7 +3808,8 @@ const ROUTE = {
               "id": "mat-ma-005",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch13-s09"
         },
         {
           "id": "ch13-s10",
@@ -3847,7 +3925,8 @@ const ROUTE = {
           "title": "アノニマスは心臓を出す",
           "detail": "本体も雑魚のネムレスも氷。雷はネムレスに通りにくい。雑魚を先に片付け、2回目の援軍で2階へ上がれる。触手を壊すと心臓が弱点になる。放電はコンテナの裏。ジャンプはガード。武器に氷を付け、はんいかとれいきで範囲にしてもよい。シヴァがいると楽。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter13.html",
-          "map": "chapter13"
+          "map": "chapter13",
+          "parent": "ch13-s21"
         },
         {
           "id": "ch13-07",
@@ -3856,7 +3935,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "地上の会話のあと、醒めない悪夢が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter13.html",
-          "map": "chapter13"
+          "map": "chapter13",
+          "parent": "ch13-s21"
         },
         {
           "id": "ch13-s22",
@@ -3906,7 +3986,8 @@ const ROUTE = {
               "id": "mat-im-016",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch14-s01"
         },
         {
           "id": "ch14-02",
@@ -3932,7 +4013,8 @@ const ROUTE = {
           "title": "消えた子供たち",
           "detail": "伍番街の中心で受ける。子どもを探し、報告する。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "quest": "quest-phantom"
         },
         {
           "id": "ch14-05",
@@ -3940,7 +4022,8 @@ const ROUTE = {
           "title": "チョコボを探せ",
           "detail": "中心街で自動的に話が始まる。この時点でチョコボ車が使え、1回300ギル。3羽戻すと無料になる。他の依頼の前に終えると移動が短い。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "quest": "quest-quest17"
         },
         {
           "id": "ch14-06",
@@ -3948,7 +4031,8 @@ const ROUTE = {
           "title": "手下のうらみ",
           "detail": "ウォール・マーケットで受ける。コルネオの手下を片付ける。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "quest": "quest-tonberry"
         },
         {
           "id": "ch14-07",
@@ -3956,7 +4040,8 @@ const ROUTE = {
           "title": "揺れる想い",
           "detail": "ウォール・マーケットの懸垂。初級で依頼は終わり、残りの勝負もこの章のうちに続けられる。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "quest": "quest-kensui"
         },
         {
           "id": "ch14-08",
@@ -3965,7 +4050,8 @@ const ROUTE = {
           "title": "けんすい勝負をすべて勝つ",
           "detail": "残っている難度も終えたらオンにする。マッスルクイーンが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch14-s01"
         },
         {
           "id": "ch14-09",
@@ -3973,7 +4059,8 @@ const ROUTE = {
           "title": "音楽の力",
           "detail": "ウォール・マーケットで受ける。この街のディスクは、この依頼で回収する。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "quest": "quest-musicpower"
         },
         {
           "id": "ch14-10",
@@ -3981,7 +4068,8 @@ const ROUTE = {
           "title": "秘伝の薬",
           "detail": "伍番街の中心で受ける。材料の一つは、地底の咆哮で手に入る角。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "quest": "quest-hiden"
         },
         {
           "id": "ch14-11",
@@ -3989,7 +4077,8 @@ const ROUTE = {
           "title": "おてんば盗賊",
           "detail": "伍番街駅のジョニーから受ける。クリアすると宝物庫の鍵がもらえ、盗まれた財布の続きが開く。コルネオの隠し財産は、受注だけ先にして、鍵を持ってから進める。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "quest": "quest-helhound"
         },
         {
           "id": "ch14-12",
@@ -4006,7 +4095,8 @@ const ROUTE = {
           "title": "ジョニーの出来事をそろえる",
           "detail": "財布を返し、過去のジョニーの出来事が揃っていたらオンにする。ジョニーのマブダチが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14ex.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch14-s01"
         },
         {
           "id": "ch14-s02",
@@ -4023,7 +4113,8 @@ const ROUTE = {
           "title": "コルネオの隠し財産",
           "detail": "ステーション通りのY字にいる記者から受ける。おてんば盗賊で鍵を取ってから、下水道の宝物庫へ入る。モーグリメダルが足りなければ、スチールマウンテンの箱を壊しに戻る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter09"
+          "map": "chapter09",
+          "quest": "quest-sahagin-prince"
         },
         {
           "id": "ch14-15",
@@ -4031,7 +4122,8 @@ const ROUTE = {
           "title": "地底の咆哮",
           "detail": "みどり公園のワイマーから受ける。実験場の奥の大型を倒す。角は秘伝の薬に使う。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "quest": "quest-type-o-behemoth"
         },
         {
           "id": "ch14-17",
@@ -4048,7 +4140,8 @@ const ROUTE = {
           "title": "クラッシュボックスのハードを終える",
           "detail": "ハードの課題をすべて終えたらオンにする。レジェンドクラッシャーが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch14-s02"
         },
         {
           "id": "ch14-19",
@@ -4057,7 +4150,8 @@ const ROUTE = {
           "title": "フリーバトルに勝つ",
           "detail": "コロッセオのフリーバトルをはじめて勝ったらオンにする。カムバックチャンピオンが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch14-s02"
         },
         {
           "id": "ch14-20",
@@ -4066,7 +4160,8 @@ const ROUTE = {
           "title": "スラムエンジェルの手紙を拾う",
           "detail": "依頼をすべて終えた道に落ちている手紙を拾うと、天使の感謝状が付き、ぞくせいがもう1個手に入る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch14-s02"
         },
         {
           "id": "ch14-21",
@@ -4075,7 +4170,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "壁を越えたあと、希望への救済が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter14.html",
-          "map": "chapter08"
+          "map": "chapter08",
+          "parent": "ch14-s02"
         },
         {
           "id": "ch14-s03",
@@ -4247,7 +4343,8 @@ const ROUTE = {
               "id": "mat-ma-012",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch15-s01"
         },
         {
           "id": "ch15-s02",
@@ -4318,7 +4415,8 @@ const ROUTE = {
           "title": "ヘリガンナーは雷と風",
           "detail": "弱点は雷と風。倒すとマキナバングルが落ちる。上まで登ったら、残りの回復を使ってから挑む。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter15.html",
-          "map": "chapter15"
+          "map": "chapter15",
+          "parent": "ch15-s08"
         },
         {
           "id": "ch15-04",
@@ -4327,7 +4425,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "ヘリガンナーを倒すと、腐ったピザが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter15.html",
-          "map": "chapter15"
+          "map": "chapter15",
+          "parent": "ch15-s08"
         },
         {
           "id": "ch15-s09",
@@ -4411,7 +4510,8 @@ const ROUTE = {
               "id": "wpn-ti-006",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch16-s01"
         },
         {
           "id": "ch16-03",
@@ -4450,7 +4550,8 @@ const ROUTE = {
               "id": "cons-014",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch16-s01"
         },
         {
           "id": "ch16-06",
@@ -4468,7 +4569,8 @@ const ROUTE = {
           "title": "ディスクが揃っていればここで完成",
           "detail": "スカーレットのテーマを取り、それまでのディスクを残していなければ、ミュージックマエストロが付く。抜けがあるときは、その章をやり直してからここへ戻る。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter16.html",
-          "map": "chapter16"
+          "map": "chapter16",
+          "parent": "ch16-s01"
         },
         {
           "id": "ch16-09",
@@ -4477,7 +4579,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "研究フロアを抜けると、ノーアポイントメントが付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter16.html",
-          "map": "chapter16"
+          "map": "chapter16",
+          "parent": "ch16-s01"
         },
         {
           "id": "ch16-s02",
@@ -4843,7 +4946,8 @@ const ROUTE = {
               "id": "mat-ma-008",
               "qty": 1
             }
-          ]
+          ],
+          "parent": "ch17-s01"
         },
         {
           "id": "ch17-s02",
@@ -5256,7 +5360,8 @@ const ROUTE = {
           "title": "最上階の三連戦",
           "detail": "ジェノバBeatを倒すとミスティークとラッキー。ルーファウスに弱点はない。ハンドレッドガンナーは、飛んでいるあいだの攻撃を避けてから部位を狙う。次の章の仲間は、ここでよく動いた人が残りやすい。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter17-2.html",
-          "map": "chapter17"
+          "map": "chapter17",
+          "parent": "ch17-s46"
         },
         {
           "id": "ch17-05",
@@ -5265,7 +5370,8 @@ const ROUTE = {
           "title": "モルボルはクリア後のシミュレーター",
           "detail": "ドラムには出てこない。クリア後にこの章のシミュレーターでモルボルを倒すと、未知との遭遇が付く。てきのわざの最後の一つも、その相手から覚える。倒したらこのカードをオンにする。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter17-2.html",
-          "map": "chapter17"
+          "map": "chapter17",
+          "parent": "ch17-s46"
         },
         {
           "id": "ch17-06",
@@ -5274,7 +5380,8 @@ const ROUTE = {
           "title": "この章を終える",
           "detail": "ビルの外へ出ると、混沌からの脱出が付く。",
           "source": "https://blog.rebosoku.com/archives/ff7remake_chapter17-2.html",
-          "map": "chapter17"
+          "map": "chapter17",
+          "parent": "ch17-s46"
         },
         {
           "id": "ch17-s47",
@@ -5348,7 +5455,8 @@ const ROUTE = {
           "flag": "tips",
           "title": "最後の連戦は動いた仲間が残る",
           "detail": "終端に自販機とベンチがある。会話のあと、ああと答えると戦闘に入る。リミット、魔法、アイテムをよく使った仲間が、最後のパーティに残りやすい。トドメも数に入る。フィーラーは色の付いた個体を先にバーストさせ、その攻撃が本体に通る。途中でバハムートの姿になるので、重い範囲攻撃の前に倒す。",
-          "source": "https://blog.rebosoku.com/archives/ff7remake_chapter18.html"
+          "source": "https://blog.rebosoku.com/archives/ff7remake_chapter18.html",
+          "parent": "ch18-s01"
         },
         {
           "id": "ch18-04",
@@ -5356,7 +5464,8 @@ const ROUTE = {
           "trophy": "trophy-ch18",
           "title": "この章を終える",
           "detail": "エンディングに入ると、運命の断裂が付く。",
-          "source": "https://blog.rebosoku.com/archives/ff7remake_chapter18.html"
+          "source": "https://blog.rebosoku.com/archives/ff7remake_chapter18.html",
+          "parent": "ch18-s01"
         },
         {
           "id": "ch18-s02",

@@ -10,6 +10,8 @@
     chapterId: "",
     catalogQuery: Object.create(null),
     catalogFacet: Object.create(null),
+    itemSection: "keyItems",
+    itemSort: { key: "name", dir: 1 },
     collapsed: Object.create(null),
     hub: "route"
   };
@@ -133,6 +135,8 @@
       trophy: item.trophy || "",
       step: item.step || 0,
       map: item.map || "",
+      parent: item.parent || "",
+      quest: item.quest || "",
       items: Array.isArray(item.items) ? item.items : []
     })));
   }
@@ -178,19 +182,7 @@
   function catalogItems(catalogId) {
     const catalog = CATALOGS[catalogId];
     if (!catalog) return [];
-    return GuideProgress.mergeCatalog(catalog, cardBook, catalogId).map(item => ({
-      kind: "catalog",
-      catalogId,
-      id: item.id,
-      example: item.example,
-      name: item.name,
-      detail: item.detail,
-      area: item.area,
-      source: item.source,
-      missable: item.missable,
-      auto: item.auto,
-      intermission: item.intermission === true
-    }));
+    return GuideProgress.mergeCatalog(catalog, cardBook, catalogId).map(item => Object.assign({ kind: "catalog", catalogId }, item));
   }
 
   function matchesQuery(item, query) {
@@ -230,6 +222,11 @@
     return item.example ? '<span class="example-mark">例</span>' : "";
   }
 
+  function itemSections() {
+    const hub = GAME.hubs.find(item => item.kind === "items");
+    return hub && hub.sections || [];
+  }
+
   function findEntry(id) {
     for (const track of GAME.tracks) {
       for (const item of routeItems(track.id)) {
@@ -240,6 +237,11 @@
       if (hub.kind !== "catalog") continue;
       for (const item of catalogItems(hub.catalog)) {
         if (item.id === id) return { hub: hub.id };
+      }
+    }
+    for (const section of itemSections()) {
+      for (const item of catalogItems(section.catalog)) {
+        if (item.id === id) return { hub: "items", section: section.catalog };
       }
     }
     return null;
@@ -297,6 +299,10 @@
       const found = catalogItems(hub.catalog).find(item => item.id === id);
       if (found) return Object.assign({ hubId: hub.id, hubLabel: hub.label }, found);
     }
+    for (const section of itemSections()) {
+      const found = catalogItems(section.catalog).find(item => item.id === id);
+      if (found) return Object.assign({ hubId: "items", hubLabel: section.label, catalogId: section.catalog }, found);
+    }
     return null;
   }
 
@@ -327,18 +333,23 @@
     return `<button type="button" class="map-open" data-map="${esc(item.map)}" data-map-label="${esc(label)}">MAP</button>`;
   }
 
-  function routeCard(item) {
+  function routeCard(item, ord, children, numbers) {
     const on = checked(item.id);
     const collapsed = ui.collapsed[item.id] === true;
+    const kids = children || [];
+    const kidsOpen = ui.collapsed["kids:" + item.id] !== true;
+    const questLink = item.quest ? `<button type="button" class="linkish" data-open-quest="${esc(item.quest)}">依頼の詳細</button>` : "";
     return `<article class="it flag-${esc(item.flag)}${item.example ? " is-example" : ""}${on ? " done" : ""}${collapsed ? " is-collapsed" : ""}" data-id="${esc(item.id)}">
+      <span class="ord">${esc(ord || "")}</span>
       ${dragHandle(item.id)}
       <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
       <div class="ibody">
         <div class="ihead">
-          <label for="check-${esc(item.id)}">${flagTag(item.flag)}${item.step ? `<span class="step-no">${esc(String(item.step))}</span>` : ""}${exampleMark(item)}<span class="it-title">${esc(item.title || item.id)}</span></label>
+          <label for="check-${esc(item.id)}">${flagTag(item.flag)}${exampleMark(item)}<span class="it-title">${esc(item.title || item.id)}</span></label>
           <div class="imeta">
             ${item.trophy && trophyById(item.trophy) ? `<span class="tag tone-trophy">${esc(trophyById(item.trophy).name)}</span>` : ""}
             ${item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
+            ${questLink}
             <button type="button" class="route-item-toggle" data-toggle-item="${esc(item.id)}" aria-expanded="${collapsed ? "false" : "true"}">詳細</button>
           </div>
         </div>
@@ -349,8 +360,42 @@
           ${cardTools(item)}
           ${mapButton(item)}
         </div>
+        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-toggle" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}">中のカード ${kids.length}</button><div class="kids"${kidsOpen ? "" : " hidden"}>${kids.map(child => routeCard(child, numbers[child.id], [], numbers)).join("")}</div></div>` : ""}
       </div>
     </article>`;
+  }
+
+  function chapterBlocks(items) {
+    const numbers = GuideProgress.numberCards(items);
+    const ids = new Set(items.map(item => item.id));
+    const childOf = {};
+    for (const item of items) {
+      if (item.parent && ids.has(item.parent) && item.parent !== item.id) childOf[item.id] = item.parent;
+    }
+    for (const id of Object.keys(childOf)) {
+      if (childOf[childOf[id]]) delete childOf[id];
+    }
+    const kids = {};
+    const tops = [];
+    for (const item of items) {
+      const parent = childOf[item.id];
+      if (parent) {
+        if (!kids[parent]) kids[parent] = [];
+        kids[parent].push(item);
+      } else tops.push(item);
+    }
+    const filtering = ui.flag !== "all" || !!ui.query;
+    let visible = 0;
+    const html = tops.map(item => {
+      const children = kids[item.id] || [];
+      const self = !filtering || itemVisible(item);
+      const shownKids = filtering ? children.filter(itemVisible) : children;
+      if (!self && !shownKids.length) return "";
+      if (self) visible += 1;
+      visible += shownKids.length;
+      return routeCard(self ? item : item, numbers[item.id], shownKids, numbers);
+    }).join("");
+    return { html, visible, numbers };
   }
 
   function dragHandle(id) {
@@ -379,18 +424,18 @@
     const host = document.getElementById("route");
     host.innerHTML = shown.map(chapter => {
       total += chapter.items.length;
-      const items = chapter.items.filter(itemVisible);
-      visible += items.length;
+      const built = chapterBlocks(chapter.items);
+      visible += built.visible;
       const done = chapter.items.filter(item => checked(item.id)).length;
       const closed = ui.chapterId ? false : ui.collapsed[chapterKey(chapter.id)] === true;
-      const hide = filtering && items.length === 0;
+      const hide = filtering && built.visible === 0;
       return `<section class="ch${closed ? " closed" : ""}${hide ? " hide" : ""}" id="chapter-${esc(ui.trackId)}-${esc(chapter.id)}" data-chapter="${esc(chapter.id)}">
         <h2 class="chapter-heading"><button type="button" class="chh" data-toggle-chapter="${esc(chapter.id)}" aria-expanded="${closed ? "false" : "true"}">
           <span class="caret" aria-hidden="true">▼</span>
           <span class="cht">${esc(chapter.title)}</span>
           <span class="chl"><span class="cnt${chapter.items.length && done === chapter.items.length ? " done" : ""}">${done}/${chapter.items.length}</span></span>
         </button></h2>
-        <div class="chb" data-card-track="${esc(ui.trackId)}">${cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">カードを追加</button></p>` : ""}${items.length ? items.map(routeCard).join("") : '<p class="empty-chapter">項目はまだありません。</p>'}</div>
+        <div class="chb" data-card-track="${esc(ui.trackId)}">${cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">カードを追加</button></p>` : ""}${built.html || '<p class="empty-chapter">項目はまだありません。</p>'}</div>
       </section>`;
     }).join("");
     document.getElementById("route-count").textContent = visible + " / " + total + " 件を表示";
@@ -409,6 +454,11 @@
   }
 
   function renderCatalog(hub) {
+    if (!hub) return;
+    if (hub.catalog === "quests") {
+      renderQuests(hub);
+      return;
+    }
     const host = document.getElementById("list-" + hub.id);
     const count = document.getElementById("count-" + hub.id);
     const items = catalogItems(hub.catalog);
@@ -481,6 +531,98 @@
 
   function renderCatalogs() {
     GAME.hubs.filter(hub => hub.kind === "catalog").forEach(renderCatalog);
+    renderItems();
+  }
+
+  function itemColumns(catalogId) {
+    const columns = [["name", "名前"], ["detail", "概要"]];
+    if (catalogId === "weapons") columns.splice(1, 0, ["area", "キャラ"]);
+    if (catalogId === "materia") columns.splice(1, 0, ["area", "種類"]);
+    if (catalogId === "keyItems") columns.push(["obtain", "入手方法"], ["use", "用途"]);
+    else columns.push(["obtain", "入手方法"], ["buy", "買値"], ["sell", "売値"]);
+    columns.push(["cards", "入手カード"]);
+    return columns;
+  }
+
+  function renderItems() {
+    const host = document.getElementById("list-items");
+    const tabs = document.getElementById("item-subtabs");
+    const count = document.getElementById("count-items");
+    if (!host || !tabs) return;
+    const sections = itemSections();
+    if (!sections.some(section => section.catalog === ui.itemSection)) ui.itemSection = sections[0] ? sections[0].catalog : "";
+    tabs.innerHTML = sections.map(section => {
+      const on = section.catalog === ui.itemSection;
+      return `<button type="button" class="chip${on ? " on" : ""}" data-item-section="${esc(section.catalog)}" aria-pressed="${on ? "true" : "false"}">${esc(section.label)}</button>`;
+    }).join("");
+    const items = catalogItems(ui.itemSection);
+    const query = (ui.catalogQuery.items || "").toLowerCase();
+    let rows = items.filter(item => {
+      if (!query) return true;
+      return [item.name, item.detail, item.obtain, item.area, item.use, item.buy, item.sell].join("\n").toLowerCase().includes(query);
+    });
+    const sortKey = ui.itemSort.key;
+    if (sortKey && sortKey !== "cards") {
+      rows = rows.slice().sort((a, b) => String(a[sortKey] || "").localeCompare(String(b[sortKey] || ""), "ja") * ui.itemSort.dir);
+    }
+    if (count) count.textContent = rows.length + " / " + items.length;
+    const columns = itemColumns(ui.itemSection);
+    const head = columns.map(([key, label]) => `<th><button type="button" data-sort="${esc(key)}">${esc(label)}${ui.itemSort.key === key ? (ui.itemSort.dir > 0 ? " ↑" : " ↓") : ""}</button></th>`).join("");
+    const body = rows.map(item => `<tr data-id="${esc(item.id)}">${columns.map(([key]) => {
+      if (key === "cards") {
+        const links = cardsForItem(item.id);
+        const got = links.some(card => checked(card.id));
+        const html = links.map(card => `<button type="button" class="linkish" data-open-hit="${esc(card.id)}">${esc(card.chapterTitle)}「${esc(card.title)}」</button>`).join("、");
+        return `<td>${got ? '<span class="tag tone-item">入手済み</span> ' : ""}${html}</td>`;
+      }
+      return `<td>${esc(item[key] || "")}</td>`;
+    }).join("")}</tr>`).join("");
+    host.innerHTML = `<table class="sheet"><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td>一致する項目がありません。</td></tr>'}</tbody></table>`;
+  }
+
+  function renderQuestArticle(item) {
+    const open = ui.openQuest === item.id;
+    const rewards = (item.rewards || []).map(reward => `<tr><td>${esc(reward.mode || "")}</td><td>${esc(reward.reward || "")}</td></tr>`).join("");
+    const steps = (item.steps || []).map((step, index) => `<li><span class="ord">${index + 1}</span>${esc(step)}</li>`).join("");
+    const after = (item.after || []).map(line => `<li>${esc(line)}</li>`).join("");
+    const hp = ((item.enemies && item.enemies.hp) || []).map(row => `<tr><td>${esc(row.mode)}</td><td>${esc(row.hp)}</td></tr>`).join("");
+    const weak = ((item.enemies && item.enemies.weak) || []).map(line => `<li>${esc(line)}</li>`).join("");
+    const actions = ((item.enemies && item.enemies.actions) || []).map(row => `<tr><td>${esc(row.name)}</td><td>${esc(row.type)}</td></tr>`).join("");
+    const reports = (item.reports || []).map(report => `<tr><td>${esc(report.no)}</td><td>${esc(report.title)}</td><td>${esc(report.topic)}</td><td>${esc(report.condition)}</td><td>${esc(report.materia)}</td></tr>`).join("");
+    const card = item.card ? `<button type="button" class="linkish" data-open-hit="${esc(item.card)}">進行カードを開く</button>` : "";
+    const map = item.map ? `<button type="button" class="map-open" data-map-src="${esc(item.map)}" data-map-href="${esc(item.source || item.map)}" data-map-label="${esc(item.name)}">MAP</button>` : "";
+    return `<article class="quest" id="quest-${esc(item.id)}" data-id="${esc(item.id)}">
+      <button type="button" class="quest-toggle" data-toggle-quest="${esc(item.id)}" aria-expanded="${open ? "true" : "false"}"><span class="caret" aria-hidden="true">▼</span>${esc(item.name)}</button>
+      <div class="quest-body"${open ? "" : " hidden"}>
+        <p>${esc(item.detail || "")} ${card} ${map}</p>
+        <div class="table-scroll"><table class="sheet"><tbody>
+          ${item.client ? `<tr><th>依頼人</th><td>${esc(item.client)}</td></tr>` : ""}
+          ${item.place ? `<tr><th>受注場所</th><td>${esc(item.place)}</td></tr>` : ""}
+          ${item.when ? `<tr><th>時期</th><td>${esc(item.when)}</td></tr>` : ""}
+          ${item.condition ? `<tr><th>条件</th><td>${esc(item.condition)}</td></tr>` : ""}
+          ${item.clear ? `<tr><th>クリア</th><td>${esc(item.clear)}</td></tr>` : ""}
+          ${item.level ? `<tr><th>レベル</th><td>${esc(item.level)}</td></tr>` : ""}
+        </tbody></table></div>
+        ${rewards ? `<h3>報酬</h3><div class="table-scroll"><table class="sheet"><thead><tr><th>モード</th><th>報酬</th></tr></thead><tbody>${rewards}</tbody></table></div>` : ""}
+        ${steps ? `<h3>攻略手順</h3><ol class="quest-steps">${steps}</ol>` : ""}
+        ${after ? `<h3>終えたあと</h3><ul>${after}</ul>` : ""}
+        ${hp ? `<h3>対象の敵</h3><div class="table-scroll"><table class="sheet"><thead><tr><th>モード</th><th>最大HP</th></tr></thead><tbody>${hp}</tbody></table></div>` : ""}
+        ${weak ? `<p>効きやすい属性: </p><ul>${weak}</ul>` : ""}
+        ${actions ? `<div class="table-scroll"><table class="sheet"><thead><tr><th>行動</th><th>種類</th></tr></thead><tbody>${actions}</tbody></table></div>` : ""}
+        ${reports ? `<h3>バトルレポート</h3><div class="table-scroll"><table class="sheet"><thead><tr><th>No.</th><th>タイトル</th><th>調査</th><th>達成条件</th><th>マテリア</th></tr></thead><tbody>${reports}</tbody></table></div>` : ""}
+        ${sourceLine(item.source)}
+      </div>
+    </article>`;
+  }
+
+  function renderQuests(hub) {
+    const host = document.getElementById("list-" + hub.id);
+    const count = document.getElementById("count-" + hub.id);
+    const items = catalogItems(hub.catalog);
+    const query = ui.catalogQuery[hub.id] || "";
+    const visible = items.filter(item => !query || [item.name, item.place, item.client, item.clear, item.detail].join("\n").toLowerCase().includes(query.toLowerCase()));
+    if (count) count.textContent = visible.length + " / " + items.length;
+    if (host) host.innerHTML = visible.map(renderQuestArticle).join("") || '<p class="empty-chapter">一致する依頼がありません。</p>';
   }
 
   function paintTracks() {
@@ -512,6 +654,17 @@
       }))
       .concat(`<button type="button" class="chip${ui.flag === "todo" ? " on" : ""}" data-filter="todo" aria-pressed="${ui.flag === "todo" ? "true" : "false"}">未チェックのみ</button>`)
       .join("");
+    const itemsHub = GAME.hubs.find(hub => hub.kind === "items");
+    const itemsPanel = itemsHub ? `<section class="panel" id="p-items" role="tabpanel" aria-labelledby="tab-items" hidden>
+        <h2>アイテム</h2>
+        <p class="lead">名前は一覧のまま、説明は短くまとめてある。買値と売値は一覧の数値。入手カードからこの行へ移動できる。</p>
+        <div class="subtabs" id="item-subtabs" role="tablist"></div>
+        <div class="toolbar catalog-tools">
+          <input type="search" data-catalog-search="items" aria-label="アイテムを検索" placeholder="この表を検索" enterkeyhint="search">
+          <span class="lookup-count" id="count-items"></span>
+        </div>
+        <div class="table-scroll" id="list-items"></div>
+      </section>` : "";
     const catalogs = GAME.hubs.filter(hub => hub.kind === "catalog").map(hub => {
       const catalog = CATALOGS[hub.catalog] || { title: hub.label, lead: "" };
       return `<section class="panel" id="p-${esc(hub.id)}" role="tabpanel" aria-labelledby="tab-${esc(hub.id)}" hidden>
@@ -544,6 +697,7 @@
         <div class="lookup-count" id="route-count" aria-live="polite"></div>
         <div id="route"></div>
       </section>
+      ${itemsPanel}
       ${catalogs}`;
     document.getElementById("expand").addEventListener("click", () => {
       const chapters = chaptersFor(ui.trackId);
@@ -571,6 +725,10 @@
     document.querySelectorAll("[data-catalog-search]").forEach(input => {
       input.addEventListener("input", () => {
         ui.catalogQuery[input.dataset.catalogSearch] = input.value.trim();
+        if (input.dataset.catalogSearch === "items") {
+          renderItems();
+          return;
+        }
         const hub = GAME.hubs.find(item => item.id === input.dataset.catalogSearch);
         if (hub) renderCatalog(hub);
       });
@@ -703,6 +861,7 @@
       saveChapterFilter();
       ui.collapsed[chapterKey(entry.chapterId)] = false;
     }
+    if (entry.section) ui.itemSection = entry.section;
     if (entry.hub !== "route") {
       ui.catalogQuery[entry.hub] = "";
       const input = document.querySelector('[data-catalog-search="' + entry.hub + '"]');
@@ -713,6 +872,7 @@
     paintTracks();
     paintFlags();
     if (entry.hub === "route") renderRoute();
+    else if (entry.hub === "items") renderItems();
     else {
       const hub = GAME.hubs.find(item => item.id === entry.hub);
       if (hub) renderCatalog(hub);
@@ -743,6 +903,13 @@
         const text = [item.name, item.detail, item.area, item.id].join("\n");
         if (!text.toLowerCase().includes(needle)) continue;
         hits.push({ id: item.id, label: item.name || item.id, where: hub.label });
+      }
+    }
+    for (const section of itemSections()) {
+      for (const item of catalogItems(section.catalog)) {
+        const text = [item.name, item.detail, item.area, item.obtain, item.id].join("\n");
+        if (!text.toLowerCase().includes(needle)) continue;
+        hits.push({ id: item.id, label: item.name || item.id, where: "アイテム · " + section.label });
       }
     }
     return hits;
@@ -795,6 +962,29 @@
       toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
       return;
     }
+    const questToggle = event.target.closest("[data-toggle-quest]");
+    if (questToggle) {
+      const id = questToggle.getAttribute("data-toggle-quest");
+      ui.openQuest = ui.openQuest === id ? "" : id;
+      renderCatalog(GAME.hubs.find(hub => hub.id === "quests"));
+      return;
+    }
+    const kidsToggle = event.target.closest("[data-toggle-kids]");
+    if (kidsToggle) {
+      const id = kidsToggle.getAttribute("data-toggle-kids");
+      ui.collapsed["kids:" + id] = ui.collapsed["kids:" + id] !== true;
+      renderRoute();
+      return;
+    }
+    const questLink = event.target.closest("[data-open-quest]");
+    if (questLink) {
+      ui.openQuest = questLink.getAttribute("data-open-quest");
+      renderCatalog(GAME.hubs.find(hub => hub.id === "quests"));
+      showHub("quests");
+      const card = document.getElementById("quest-" + ui.openQuest);
+      if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     const hit = event.target.closest("[data-open-hit]");
     if (hit) openHit(hit.getAttribute("data-open-hit"));
     const facet = event.target.closest("[data-facet]");
@@ -808,18 +998,31 @@
     if (itemLink) {
       const record = catalogRecordById(itemLink.getAttribute("data-open-item"));
       if (!record) return;
-      ui.catalogFacet[record.hubId] = "";
-      ui.catalogQuery[record.hubId] = "";
-      const input = document.querySelector('[data-catalog-search="' + record.hubId + '"]');
+      ui.itemSection = record.catalogId || ui.itemSection;
+      ui.catalogQuery.items = "";
+      const input = document.querySelector('[data-catalog-search="items"]');
       if (input) input.value = "";
-      const hub = GAME.hubs.find(entry => entry.id === record.hubId);
-      if (hub) renderCatalog(hub);
-      showHub(record.hubId);
-      const card = cardElement(record.id);
-      if (card) {
-        card.scrollIntoView({ behavior: "smooth", block: "center" });
-        card.classList.add("is-target");
+      renderItems();
+      showHub("items");
+      const row = document.querySelector('#list-items tr[data-id="' + record.id + '"]');
+      if (row) {
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.classList.add("is-target");
       }
+      return;
+    }
+    const sectionTab = event.target.closest("[data-item-section]");
+    if (sectionTab) {
+      ui.itemSection = sectionTab.getAttribute("data-item-section");
+      renderItems();
+      return;
+    }
+    const sortHeader = event.target.closest("[data-sort]");
+    if (sortHeader) {
+      const key = sortHeader.getAttribute("data-sort");
+      if (ui.itemSort.key === key) ui.itemSort.dir *= -1;
+      else ui.itemSort = { key, dir: 1 };
+      renderItems();
       return;
     }
     const map = event.target.closest("[data-map]");
@@ -829,7 +1032,7 @@
       toggleMap(map);
       return;
     }
-    if (!event.target.closest("#map-pop")) hideMap(true);
+    if (!event.target.closest("#map-pop") && !event.target.closest("#map-zoom")) hideMap(true);
   });
 
   document.addEventListener("change", event => {
@@ -844,6 +1047,7 @@
     if (ui.hub !== "trophies") renderCatalog(GAME.hubs.find(hub => hub.id === "trophies"));
     const currentHub = GAME.hubs.find(hub => hub.id === ui.hub);
     if (currentHub && currentHub.kind === "catalog" && currentHub.id !== "trophies") renderCatalog(currentHub);
+    if (ui.hub === "items") renderItems();
   });
 
   document.getElementById("dash").addEventListener("click", () => {
@@ -1009,10 +1213,9 @@
     },
     itemChoices() {
       const choices = [];
-      for (const hub of GAME.hubs) {
-        if (!hub.catalog || !["keyItems", "consumables", "accessories", "weapons", "armor", "materia"].includes(hub.catalog)) continue;
-        for (const item of catalogItems(hub.catalog)) {
-          choices.push({ id: item.id, name: item.name, area: item.area || "", hubId: hub.id, hubLabel: hub.label, intermission: item.intermission === true });
+      for (const section of itemSections()) {
+        for (const item of catalogItems(section.catalog)) {
+          choices.push({ id: item.id, name: item.name, area: item.area || "", hubId: section.catalog, hubLabel: section.label, intermission: item.intermission === true });
         }
       }
       return choices;
@@ -1022,7 +1225,7 @@
   const mapPop = document.createElement("div");
   mapPop.id = "map-pop";
   mapPop.hidden = true;
-  mapPop.innerHTML = '<img alt=""><p class="map-fallback" hidden>画像を表示できないので、下のリンクから開いてください。</p><p><a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p>';
+  mapPop.innerHTML = '<img alt=""><p class="map-fallback" hidden>画像を表示できないので、下のリンクから開いてください。</p><p class="map-actions"><button type="button" id="map-enlarge">拡大</button> <a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p>';
   document.body.appendChild(mapPop);
   mapPop.querySelector("img").addEventListener("error", () => {
     mapPop.querySelector("img").hidden = true;
@@ -1036,21 +1239,25 @@
   }
 
   function toggleMap(button) {
-    const id = button.getAttribute("data-map");
+    const id = button.getAttribute("data-map") || button.getAttribute("data-map-src") || "";
     if (!mapPop.hidden && mapPop.dataset.map === id && mapPop.dataset.pin === "1") {
       hideMap(true);
       return;
     }
-    const label = button.getAttribute("data-map-label") || id;
+    const label = button.getAttribute("data-map-label") || "地図";
     const image = mapPop.querySelector("img");
     const link = mapPop.querySelector("a");
+    const src = button.getAttribute("data-map-src") || ("https://finalfantasy-jun-site.com/ff7_remake/field/images/" + id + ".png");
+    const href = button.getAttribute("data-map-href") || ("https://finalfantasy-jun-site.com/ff7_remake/field/" + id + ".html");
     mapPop.dataset.map = id;
+    mapPop.dataset.src = src;
+    mapPop.dataset.href = href;
     mapPop.dataset.pin = "1";
     image.hidden = false;
     mapPop.querySelector(".map-fallback").hidden = true;
     image.alt = label + "の地図";
-    image.src = "https://finalfantasy-jun-site.com/ff7_remake/field/images/" + id + ".png";
-    link.href = "https://finalfantasy-jun-site.com/ff7_remake/field/" + id + ".html";
+    image.src = src;
+    link.href = href;
     link.textContent = label + "の地図ページを開く";
     mapPop.hidden = false;
     const rect = button.getBoundingClientRect();
@@ -1067,6 +1274,82 @@
       mapPop.style.maxHeight = Math.max(160, rect.top - 16) + "px";
     }
   }
+
+  const mapZoom = document.createElement("div");
+  mapZoom.id = "map-zoom";
+  mapZoom.hidden = true;
+  mapZoom.innerHTML = '<div class="map-zoom-bar"><span id="map-zoom-label"></span><button type="button" id="map-zoom-close">閉じる</button></div><div id="map-zoom-stage"><img alt=""></div><p><a id="map-zoom-link" target="_blank" rel="noopener noreferrer">地図のページを開く</a></p>';
+  document.body.appendChild(mapZoom);
+  const zoomState = { scale: 1, x: 0, y: 0, pointers: new Map(), start: null };
+  const zoomImg = mapZoom.querySelector("#map-zoom-stage img");
+  function applyZoom() {
+    zoomImg.style.transform = "translate(" + zoomState.x + "px," + zoomState.y + "px) scale(" + zoomState.scale + ")";
+  }
+  function openZoom(src, href, label) {
+    zoomState.scale = 1;
+    zoomState.x = 0;
+    zoomState.y = 0;
+    zoomState.pointers.clear();
+    zoomImg.src = src;
+    zoomImg.alt = (label || "地図") + "の拡大";
+    mapZoom.querySelector("#map-zoom-label").textContent = label || "地図";
+    const link = mapZoom.querySelector("#map-zoom-link");
+    link.href = href || src;
+    mapZoom.hidden = false;
+    applyZoom();
+  }
+  function closeZoom() {
+    mapZoom.hidden = true;
+    zoomState.pointers.clear();
+  }
+  mapZoom.querySelector("#map-zoom-close").addEventListener("click", closeZoom);
+  mapPop.querySelector("#map-enlarge").addEventListener("click", event => {
+    event.stopPropagation();
+    openZoom(mapPop.dataset.src, mapPop.dataset.href, mapPop.querySelector("img").alt.replace(/の地図$/, ""));
+  });
+  mapPop.querySelector("img").addEventListener("click", () => {
+    openZoom(mapPop.dataset.src, mapPop.dataset.href, mapPop.querySelector("img").alt.replace(/の地図$/, ""));
+  });
+  const stage = mapZoom.querySelector("#map-zoom-stage");
+  stage.addEventListener("wheel", event => {
+    event.preventDefault();
+    const next = Math.min(6, Math.max(1, zoomState.scale * (event.deltaY < 0 ? 1.12 : 0.9)));
+    zoomState.scale = next;
+    applyZoom();
+  }, { passive: false });
+  stage.addEventListener("pointerdown", event => {
+    try { stage.setPointerCapture(event.pointerId); } catch (error) {}
+    zoomState.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (zoomState.pointers.size === 1) zoomState.start = { x: event.clientX - zoomState.x, y: event.clientY - zoomState.y, pinch: 0, scale: zoomState.scale };
+    if (zoomState.pointers.size === 2) {
+      const pts = [...zoomState.pointers.values()];
+      zoomState.start.pinch = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+      zoomState.start.scale = zoomState.scale;
+    }
+  });
+  stage.addEventListener("pointermove", event => {
+    if (!zoomState.pointers.has(event.pointerId)) return;
+    zoomState.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (zoomState.pointers.size === 1 && zoomState.start) {
+      zoomState.x = event.clientX - zoomState.start.x;
+      zoomState.y = event.clientY - zoomState.start.y;
+      applyZoom();
+    } else if (zoomState.pointers.size === 2 && zoomState.start && zoomState.start.pinch) {
+      const pts = [...zoomState.pointers.values()];
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+      zoomState.scale = Math.min(6, Math.max(1, zoomState.start.scale * (dist / zoomState.start.pinch)));
+      applyZoom();
+    }
+  });
+  function endPointer(event) {
+    zoomState.pointers.delete(event.pointerId);
+    if (zoomState.pointers.size === 1) {
+      const left = [...zoomState.pointers.values()][0];
+      zoomState.start = { x: left.x - zoomState.x, y: left.y - zoomState.y, pinch: 0, scale: zoomState.scale };
+    }
+  }
+  stage.addEventListener("pointerup", endPointer);
+  stage.addEventListener("pointercancel", endPointer);
 
   document.addEventListener("mouseover", event => {
     const button = event.target.closest && event.target.closest("[data-map]");

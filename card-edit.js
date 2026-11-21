@@ -155,6 +155,10 @@
     const flags = GAME.flags.map(flag => `<option value="${flag.id}"${flag.id === seed.flag ? " selected" : ""}>${flag.label}</option>`).join("");
     const trophies = ['<option value="">選ばない</option>'].concat(GuideApp.trophyChoices().map(item => `<option value="${item.id}"${item.id === seed.trophy ? " selected" : ""}>${item.name}</option>`)).join("");
     const maps = ['<option value="">地図なし</option>'].concat((GAME.maps || []).map(map => `<option value="${map.id}"${map.id === seed.map ? " selected" : ""}>${map.label}</option>`)).join("");
+    const chapterRows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[seed.trackId] || [], book(), seed.trackId) || [];
+    const chapterRow = chapterRows.find(row => row.chapterId === seed.chapterId);
+    const parents = ((chapterRow && chapterRow.items) || []).filter(item => item.id !== seed.id && !item.parent);
+    const parentOptions = ['<option value="">親なし（章の直下）</option>'].concat(parents.map(item => `<option value="${escapeAttr(item.id)}"${item.id === seed.parent ? " selected" : ""}>${escapeText(item.title || item.id)}</option>`)).join("");
     editing.links = (seed.items || []).map(link => ({ id: link.id, qty: link.qty || 1 }));
     fields.innerHTML = [
       field("見出し", `<input name="title" required value="${escapeAttr(seed.title || "")}">`),
@@ -164,6 +168,7 @@
       field("出典", `<input name="source" value="${escapeAttr(seed.source || "")}" placeholder="https://">`),
       field("トロフィー", `<select name="trophy">${trophies}</select>`),
       field("地図", `<select name="map">${maps}</select>`),
+      field("親カード", `<select name="parent">${parentOptions}</select>`),
       '<div id="item-picker"></div>'
     ].join("");
     paintItemPicker();
@@ -254,6 +259,8 @@
       source: data.get("source"),
       trophy: data.get("trophy"),
       map: data.get("map"),
+      parent: data.get("parent"),
+      quest: editing.quest || "",
       items: editing.links || []
     }, flagIds, GuideApp.trophyChoices().map(item => item.id));
     if (checked.error) {
@@ -262,7 +269,13 @@
     }
     const place = currentRoute(editing);
     const id = editing.id || GuideProgress.createCardId(usedIds());
-    const order = place.ids.indexOf(id) >= 0 ? place.ids : place.ids.concat(id);
+    let order = place.ids.indexOf(id) >= 0 ? place.ids.slice() : place.ids.concat(id);
+    const parentId = checked.value.parent;
+    if (parentId && parentId !== id) {
+      order = order.filter(item => item !== id);
+      const at = order.indexOf(parentId);
+      order.splice(at < 0 ? order.length : at + 1, 0, id);
+    }
     const base = editing.id ? GuideApp.findBaseRoute(editing.id) : null;
     const next = GuideProgress.upsertRouteCard(
       book(),
@@ -469,8 +482,8 @@
 
   function clearDragVisuals() {
     document.body.classList.remove("is-card-dragging");
-    document.querySelectorAll("article.it.is-dragging, section.ch.is-chapter-drop").forEach(node => {
-      node.classList.remove("is-dragging", "is-chapter-drop");
+    document.querySelectorAll("article.it.is-dragging, article.it.is-nest-drop, section.ch.is-chapter-drop").forEach(node => {
+      node.classList.remove("is-dragging", "is-chapter-drop", "is-nest-drop");
     });
     const line = document.getElementById("card-drop-line");
     if (line) line.remove();
@@ -488,7 +501,7 @@
   }
 
   function paintDrop(target) {
-    document.querySelectorAll("section.ch.is-chapter-drop").forEach(node => node.classList.remove("is-chapter-drop"));
+    document.querySelectorAll("section.ch.is-chapter-drop, article.it.is-nest-drop").forEach(node => node.classList.remove("is-chapter-drop", "is-nest-drop"));
     let line = document.getElementById("card-drop-line");
     let label = document.getElementById("card-drop-label");
     if (!target) {
@@ -500,6 +513,7 @@
       ? (target.element.querySelector(".chh") || target.element)
       : target.element;
     if (target.type === "chapter") target.element.classList.add("is-chapter-drop");
+    if (target.type === "nest") target.element.classList.add("is-nest-drop");
     const rect = anchor.getBoundingClientRect();
     const top = target.type === "chapter" || target.after ? rect.bottom : rect.top;
     if (!line) {
@@ -515,7 +529,7 @@
     line.style.top = top + "px";
     line.style.left = rect.left + "px";
     line.style.width = rect.width + "px";
-    label.textContent = target.type === "chapter" ? "この章の末尾へ" : "ここに置く";
+    label.textContent = target.type === "nest" ? "このカードの中へ" : target.type === "chapter" ? "この章の末尾へ" : "ここに置く";
     label.style.left = (rect.left + 12) + "px";
     label.style.top = Math.max(8, top - 22) + "px";
   }
@@ -532,7 +546,11 @@
       const sameList = to && from.kind === to.kind && (from.kind === "catalog" ? from.catalogId === to.catalogId : true);
       if (sameList) {
         const rect = card.getBoundingClientRect();
-        return { type: "card", id: card.getAttribute("data-id"), after: y >= rect.top + rect.height / 2, element: card };
+        const ratio = rect.height ? (y - rect.top) / rect.height : 1;
+        if (from.kind === "route" && ratio > 0.3 && ratio < 0.7) {
+          return { type: "nest", id: card.getAttribute("data-id"), element: card };
+        }
+        return { type: "card", id: card.getAttribute("data-id"), after: ratio >= 0.5, element: card };
       }
     }
     if (from.kind !== "route") return null;
@@ -585,12 +603,99 @@
     revealCard(trackId, chapterId, id);
   }
 
+  function cardFields(item, parentId) {
+    return {
+      title: item.title || "",
+      detail: item.detail || "",
+      flag: item.flag,
+      deadline: item.deadline || "",
+      source: item.source || "",
+      trophy: item.trophy || "",
+      map: item.map || "",
+      parent: parentId || "",
+      quest: item.quest || "",
+      items: item.items || []
+    };
+  }
+
+  function nestRoute(id, from, targetId) {
+    const to = locate(targetId);
+    if (!to || to.kind !== "route" || targetId === id) return;
+    const moving = routeRecord(from.trackId, from.chapterId, id);
+    const target = routeRecord(to.trackId, to.chapterId, targetId);
+    if (!moving || !target) return;
+    const homeRows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[from.trackId] || [], book(), from.trackId) || [];
+    const home = homeRows.find(row => row.chapterId === from.chapterId);
+    if (home && (home.items || []).some(item => item.parent === id)) return;
+    const parentId = target.parent || targetId;
+    if (parentId === id) return;
+    let ids = GuideApp.currentIds(to.trackId, to.chapterId).filter(item => item !== id);
+    const atParent = ids.indexOf(parentId);
+    let insertAt = atParent < 0 ? ids.length : atParent + 1;
+    const destRows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[to.trackId] || [], book(), to.trackId) || [];
+    const dest = destRows.find(row => row.chapterId === to.chapterId);
+    const siblings = ((dest && dest.items) || []).filter(item => item.parent === parentId && item.id !== id).map(item => item.id);
+    for (const sibling of siblings) {
+      const pos = ids.indexOf(sibling);
+      if (pos >= insertAt) insertAt = pos + 1;
+    }
+    ids.splice(insertAt, 0, id);
+    let next = book();
+    if (from.trackId !== to.trackId || from.chapterId !== to.chapterId) {
+      const fromIds = GuideApp.currentIds(from.trackId, from.chapterId).filter(item => item !== id);
+      next = GuideProgress.saveOrder(next, from.trackId + ":" + from.chapterId, fromIds, GuideApp.baseItems(from.trackId, from.chapterId).map(item => item.id));
+      if (next.custom[id] && next.custom[id].kind === "route") {
+        next.custom[id].trackId = to.trackId;
+        next.custom[id].chapterId = to.chapterId;
+      }
+    }
+    const base = GuideApp.findBaseRoute(id);
+    next = GuideProgress.upsertRouteCard(
+      next,
+      base && base.item,
+      id,
+      cardFields(moving, parentId),
+      to.trackId,
+      to.chapterId,
+      ids,
+      GuideApp.baseItems(to.trackId, to.chapterId).map(item => item.id)
+    );
+    GuideApp.setCardBook(next);
+    revealCard(to.trackId, to.chapterId, id);
+  }
+
+  function alignParent(id, neighborId) {
+    const place = locate(id);
+    const neighborPlace = locate(neighborId);
+    if (!place || !neighborPlace || place.kind !== "route") return;
+    const moving = routeRecord(place.trackId, place.chapterId, id);
+    const neighbor = routeRecord(neighborPlace.trackId, neighborPlace.chapterId, neighborId);
+    if (!moving || !neighbor) return;
+    const parentId = neighbor.parent || "";
+    if ((moving.parent || "") === parentId) return;
+    const base = GuideApp.findBaseRoute(id);
+    GuideApp.setCardBook(GuideProgress.upsertRouteCard(
+      book(),
+      base && base.item,
+      id,
+      cardFields(moving, parentId),
+      place.trackId,
+      place.chapterId,
+      GuideApp.currentIds(place.trackId, place.chapterId),
+      GuideApp.baseItems(place.trackId, place.chapterId).map(item => item.id)
+    ));
+  }
+
   function commitDrag(current) {
     const target = current && current.target;
     if (!target) return;
     const id = current.id;
     const from = locate(id);
     if (!from) return;
+    if (target.type === "nest" && from.kind === "route") {
+      nestRoute(id, from, target.id);
+      return;
+    }
     if (target.type === "card") {
       const to = locate(target.id);
       if (!to || from.kind !== to.kind) return;
@@ -606,6 +711,7 @@
         return;
       }
       commitRoute(id, from, to.trackId, to.chapterId, target.id, target.after);
+      alignParent(id, target.id);
       return;
     }
     if (from.kind !== "route" || !target.trackId || !target.chapterId) return;
