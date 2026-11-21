@@ -15,8 +15,14 @@
     ".card-edit-tools,.card-edit-chapter{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}",
     ".card-edit-tools button,.card-edit-chapter button{min-height:40px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:var(--fg);font:inherit;cursor:pointer}",
     ".card-edit-tools button[data-card-delete]{color:var(--red)}",
-    "article.it[draggable=true]{cursor:grab}",
-    "article.it.is-drop{outline:2px dashed var(--accent);outline-offset:-2px}",
+    ".card-drag-handle{flex:0 0 auto;touch-action:none;cursor:grab;width:44px;height:44px;padding:0;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:var(--fg);font:700 18px/1 sans-serif}",
+    ".card-drag-handle:active,body.is-card-dragging .card-drag-handle{cursor:grabbing}",
+    "body.is-card-dragging{user-select:none;cursor:grabbing}",
+    "article.it.is-dragging{opacity:.4}",
+    "section.ch.is-chapter-drop{box-shadow:inset 0 0 0 3px #39c9ff}",
+    "#card-drop-line{position:fixed;z-index:260;height:6px;margin-top:-3px;border-radius:3px;background:#39c9ff;box-shadow:0 0 0 1px #10202c;pointer-events:none}",
+    "#card-drop-label{position:fixed;z-index:262;padding:2px 8px;border-radius:999px;background:#39c9ff;color:#10202c;font:700 12px/1.4 sans-serif;pointer-events:none}",
+    "#card-drag-ghost{position:fixed;z-index:261;max-width:min(280px,70vw);padding:8px 12px;border-radius:8px;background:#14324a;color:#fff;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.35);pointer-events:none}",
     "#card-edit-dialog{position:fixed;z-index:270;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:12px;background:rgba(2,10,18,.55);box-sizing:border-box}",
     "#card-edit-dialog[hidden]{display:none}",
     "#card-edit-dialog form{width:min(640px,100%);max-height:min(88vh,760px);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;padding:14px;border-radius:12px 12px 0 0;background:var(--bg2);color:var(--fg)}",
@@ -63,7 +69,8 @@
   const fields = document.getElementById("card-edit-fields");
   const error = document.getElementById("card-edit-error");
   let editing = null;
-  let dragId = "";
+  let drag = null;
+  let suppressClick = false;
 
   function book() {
     return GuideApp.getBook();
@@ -409,53 +416,227 @@
     return GuideProgress.mergeCatalog(CATALOGS[catalogId], book(), catalogId).find(item => item.id === id);
   }
 
-  document.addEventListener("dragstart", event => {
-    if (!document.body.classList.contains("is-card-edit")) return;
-    const card = event.target.closest("article.it[data-id]");
-    if (!card) return;
-    dragId = card.getAttribute("data-id");
-    event.dataTransfer.effectAllowed = "move";
-    try { event.dataTransfer.setData("text/plain", dragId); } catch (e) {}
-  });
-  document.addEventListener("dragover", event => {
-    if (!dragId) return;
-    const card = event.target.closest("article.it[data-id]");
-    if (!card || card.getAttribute("data-id") === dragId) return;
-    event.preventDefault();
-    card.classList.add("is-drop");
-  });
-  document.addEventListener("dragleave", event => {
-    const card = event.target.closest && event.target.closest("article.it");
-    if (card) card.classList.remove("is-drop");
-  });
-  document.addEventListener("drop", event => {
-    const card = event.target.closest && event.target.closest("article.it[data-id]");
-    document.querySelectorAll("article.it.is-drop").forEach(node => node.classList.remove("is-drop"));
-    if (!dragId || !card) return;
-    event.preventDefault();
-    const beforeId = card.getAttribute("data-id");
-    const from = locate(dragId);
-    const to = locate(beforeId);
-    if (!from || !to || from.kind !== to.kind) { dragId = ""; return; }
-    if (from.kind === "catalog" && from.catalogId === to.catalogId) {
-      const ids = GuideApp.currentCatalogIds(from.catalogId).filter(id => id !== dragId);
-      const at = ids.indexOf(beforeId);
-      ids.splice(at < 0 ? ids.length : at, 0, dragId);
-      GuideApp.setCardBook(GuideProgress.saveOrder(book(), "catalog:" + from.catalogId, ids, GuideApp.baseCatalogItems(from.catalogId).map(item => item.id)));
-    } else if (from.kind === "route" && from.trackId === to.trackId && from.chapterId === to.chapterId) {
-      const ids = GuideApp.currentIds(from.trackId, from.chapterId).filter(id => id !== dragId);
-      const at = ids.indexOf(beforeId);
-      ids.splice(at < 0 ? ids.length : at, 0, dragId);
-      GuideApp.setCardBook(GuideProgress.saveOrder(book(), from.trackId + ":" + from.chapterId, ids, GuideApp.baseItems(from.trackId, from.chapterId).map(item => item.id)));
-    } else if (from.kind === "route") {
-      moveRoute(dragId, to.trackId, to.chapterId);
-      const ids = GuideApp.currentIds(to.trackId, to.chapterId).filter(id => id !== dragId);
-      const at = ids.indexOf(beforeId);
-      ids.splice(at < 0 ? ids.length : at, 0, dragId);
-      GuideApp.setCardBook(GuideProgress.saveOrder(GuideApp.getBook(), to.trackId + ":" + to.chapterId, ids, GuideApp.baseItems(to.trackId, to.chapterId).map(item => item.id)));
+  function clearDragVisuals() {
+    document.body.classList.remove("is-card-dragging");
+    document.querySelectorAll("article.it.is-dragging, section.ch.is-chapter-drop").forEach(node => {
+      node.classList.remove("is-dragging", "is-chapter-drop");
+    });
+    const line = document.getElementById("card-drop-line");
+    if (line) line.remove();
+    const label = document.getElementById("card-drop-label");
+    if (label) label.remove();
+    const ghost = document.getElementById("card-drag-ghost");
+    if (ghost) ghost.remove();
+  }
+
+  function placeGhost(x, y) {
+    const ghost = document.getElementById("card-drag-ghost");
+    if (!ghost) return;
+    ghost.style.left = Math.max(8, Math.min(x + 14, window.innerWidth - 48)) + "px";
+    ghost.style.top = Math.max(8, Math.min(y + 14, window.innerHeight - 48)) + "px";
+  }
+
+  function paintDrop(target) {
+    document.querySelectorAll("section.ch.is-chapter-drop").forEach(node => node.classList.remove("is-chapter-drop"));
+    let line = document.getElementById("card-drop-line");
+    let label = document.getElementById("card-drop-label");
+    if (!target) {
+      if (line) line.remove();
+      if (label) label.remove();
+      return;
     }
-    dragId = "";
+    const anchor = target.type === "chapter"
+      ? (target.element.querySelector(".chh") || target.element)
+      : target.element;
+    if (target.type === "chapter") target.element.classList.add("is-chapter-drop");
+    const rect = anchor.getBoundingClientRect();
+    const top = target.type === "chapter" || target.after ? rect.bottom : rect.top;
+    if (!line) {
+      line = document.createElement("div");
+      line.id = "card-drop-line";
+      document.body.appendChild(line);
+    }
+    if (!label) {
+      label = document.createElement("div");
+      label.id = "card-drop-label";
+      document.body.appendChild(label);
+    }
+    line.style.top = top + "px";
+    line.style.left = rect.left + "px";
+    line.style.width = rect.width + "px";
+    label.textContent = target.type === "chapter" ? "この章の末尾へ" : "ここに置く";
+    label.style.left = (rect.left + 12) + "px";
+    label.style.top = Math.max(8, top - 22) + "px";
+  }
+
+  function dropTarget(x, y) {
+    const el = document.elementFromPoint(x, y);
+    if (!el || !drag) return null;
+    const from = locate(drag.id);
+    if (!from) return null;
+    const card = el.closest("article.it[data-id]");
+    if (card && card.getAttribute("data-id") === drag.id) return null;
+    if (card) {
+      const to = locate(card.getAttribute("data-id"));
+      const sameList = to && from.kind === to.kind && (from.kind === "catalog" ? from.catalogId === to.catalogId : true);
+      if (sameList) {
+        const rect = card.getBoundingClientRect();
+        return { type: "card", id: card.getAttribute("data-id"), after: y >= rect.top + rect.height / 2, element: card };
+      }
+    }
+    if (from.kind !== "route") return null;
+    const chapter = el.closest("section.ch[data-chapter]");
+    if (!chapter) return null;
+    const track = chapter.querySelector("[data-card-track]");
+    if (!track) return null;
+    return {
+      type: "chapter",
+      chapterId: chapter.getAttribute("data-chapter"),
+      trackId: track.getAttribute("data-card-track"),
+      element: chapter
+    };
+  }
+
+  function revealCard(trackId, chapterId, id) {
+    const section = document.getElementById("chapter-" + trackId + "-" + chapterId);
+    if (section && section.classList.contains("closed")) {
+      const button = section.querySelector("[data-toggle-chapter]");
+      if (button) button.click();
+    }
+    const placed = document.querySelector('article.it[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (placed) placed.scrollIntoView({ block: "nearest" });
+  }
+
+  function commitRoute(id, from, trackId, chapterId, beforeId, after) {
+    const same = from.trackId === trackId && from.chapterId === chapterId;
+    const destIds = GuideProgress.orderWithMove(GuideApp.currentIds(trackId, chapterId), id, beforeId, after);
+    let next = book();
+    if (!same) {
+      const fromIds = GuideApp.currentIds(from.trackId, from.chapterId).filter(item => item !== id);
+      next = GuideProgress.saveOrder(
+        next,
+        from.trackId + ":" + from.chapterId,
+        fromIds,
+        GuideApp.baseItems(from.trackId, from.chapterId).map(item => item.id)
+      );
+      if (next.custom[id] && next.custom[id].kind === "route") {
+        next.custom[id].trackId = trackId;
+        next.custom[id].chapterId = chapterId;
+      }
+    }
+    next = GuideProgress.saveOrder(
+      next,
+      trackId + ":" + chapterId,
+      destIds,
+      GuideApp.baseItems(trackId, chapterId).map(item => item.id)
+    );
+    GuideApp.setCardBook(next);
+    revealCard(trackId, chapterId, id);
+  }
+
+  function commitDrag(current) {
+    const target = current && current.target;
+    if (!target) return;
+    const id = current.id;
+    const from = locate(id);
+    if (!from) return;
+    if (target.type === "card") {
+      const to = locate(target.id);
+      if (!to || from.kind !== to.kind) return;
+      if (from.kind === "catalog") {
+        if (from.catalogId !== to.catalogId) return;
+        const ids = GuideProgress.orderWithMove(GuideApp.currentCatalogIds(from.catalogId), id, target.id, target.after);
+        GuideApp.setCardBook(GuideProgress.saveOrder(
+          book(),
+          "catalog:" + from.catalogId,
+          ids,
+          GuideApp.baseCatalogItems(from.catalogId).map(item => item.id)
+        ));
+        return;
+      }
+      commitRoute(id, from, to.trackId, to.chapterId, target.id, target.after);
+      return;
+    }
+    if (from.kind !== "route" || !target.trackId || !target.chapterId) return;
+    commitRoute(id, from, target.trackId, target.chapterId, null, false);
+  }
+
+  function endDrag(commit) {
+    const current = drag;
+    drag = null;
+    if (current && commit && current.moved) commitDrag(current);
+    clearDragVisuals();
+    if (current && current.moved) suppressClick = true;
+  }
+
+  document.addEventListener("pointerdown", event => {
+    const handle = event.target.closest && event.target.closest("[data-card-drag]");
+    if (!handle || !document.body.classList.contains("is-card-edit") || dialog.hidden === false) return;
+    if (event.button != null && event.button !== 0) return;
+    const card = handle.closest("article.it[data-id]");
+    if (!card) return;
+    event.preventDefault();
+    try { if (handle.setPointerCapture) handle.setPointerCapture(event.pointerId); } catch (error) {}
+    drag = {
+      id: card.getAttribute("data-id"),
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      target: null,
+      frame: 0
+    };
+    document.body.classList.add("is-card-dragging");
+    card.classList.add("is-dragging");
+    const ghost = document.createElement("div");
+    ghost.id = "card-drag-ghost";
+    const title = card.querySelector(".it-title");
+    ghost.textContent = title ? title.textContent : drag.id;
+    document.body.appendChild(ghost);
+    placeGhost(event.clientX, event.clientY);
+    const tick = () => {
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const edge = 72;
+      let dy = 0;
+      if (drag.y < edge) dy = -18;
+      else if (drag.y > window.innerHeight - edge) dy = 18;
+      if (dy) {
+        window.scrollBy(0, dy);
+        drag.target = dropTarget(drag.x, drag.y);
+        paintDrop(drag.target);
+      }
+      drag.frame = requestAnimationFrame(tick);
+    };
+    drag.frame = requestAnimationFrame(tick);
   });
+
+  document.addEventListener("pointermove", event => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    event.preventDefault();
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) drag.moved = true;
+    placeGhost(event.clientX, event.clientY);
+    drag.target = dropTarget(event.clientX, event.clientY);
+    paintDrop(drag.target);
+  }, { passive: false });
+
+  document.addEventListener("pointerup", event => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    endDrag(true);
+  });
+  document.addEventListener("pointercancel", event => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    endDrag(false);
+  });
+  document.addEventListener("click", event => {
+    if (!suppressClick) return;
+    suppressClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
 
   document.getElementById("card-edit-exit").addEventListener("click", () => setOn(false));
   document.getElementById("card-edit-export-route").addEventListener("click", () => {
