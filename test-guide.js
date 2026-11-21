@@ -11,7 +11,8 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v1");
+assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v2");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -116,5 +117,106 @@ for (const name of ["quests", "summons", "skills", "materia", "weapons"]) {
   assert.strictEqual(guide.CATALOGS[name].items[0].example, true);
 }
 assert.ok(Array.isArray(guide.CATALOGS.trophies.items));
+
+const baseRoute = {
+  main: [{
+    chapterId: "ch01",
+    items: [
+      { id: "a", flag: "story", title: "A", detail: "da", source: "https://example.com/a" },
+      { id: "b", flag: "item", title: "B", detail: "db" }
+    ]
+  }, {
+    chapterId: "ch02",
+    items: [
+      { id: "c", flag: "story", title: "C", detail: "dc" }
+    ]
+  }]
+};
+const baseDefs = {
+  main: [
+    { id: "ch01", title: "Chapter 1" },
+    { id: "ch02", title: "Chapter 2" }
+  ]
+};
+const plain = progress.mergeTrack(baseRoute, baseDefs.main, progress.emptyCardBook(), "main");
+assert.deepStrictEqual(plain[0].items.map(item => item.id), ["a", "b"]);
+
+let edited = progress.upsertRouteCard(
+  progress.emptyCardBook(),
+  baseRoute.main[0].items[0],
+  "a",
+  { title: "A2", detail: "da", flag: "story", deadline: "", source: "https://example.com/a", trophy: "" },
+  "main",
+  "ch01",
+  ["b", "a"],
+  ["a", "b"]
+);
+let merged = progress.mergeTrack(baseRoute, baseDefs.main, edited, "main");
+assert.deepStrictEqual(merged[0].items.map(item => item.id), ["b", "a"]);
+assert.strictEqual(merged[0].items[1].title, "A2");
+assert.strictEqual(merged[0].items[1].detail, "da");
+
+const grown = {
+  main: [{
+    chapterId: "ch01",
+    items: baseRoute.main[0].items.concat({ id: "d", flag: "tips", title: "D", detail: "dd" })
+  }, baseRoute.main[1]]
+};
+merged = progress.mergeTrack(grown, baseDefs.main, edited, "main");
+assert.deepStrictEqual(merged[0].items.map(item => item.id), ["b", "d", "a"]);
+
+edited = progress.removeCard(edited, "b");
+merged = progress.mergeTrack(baseRoute, baseDefs.main, edited, "main");
+assert.deepStrictEqual(merged[0].items.map(item => item.id), ["a"]);
+
+const newId = progress.createCardId(new Set(["a", "b"]));
+assert.match(newId, /^user-[a-z0-9]+-[a-z0-9]+$/);
+const added = progress.upsertRouteCard(
+  progress.emptyCardBook(),
+  null,
+  newId,
+  { title: "追加", detail: "本文", flag: "tips", deadline: "", source: "", trophy: "" },
+  "main",
+  "ch02",
+  ["c", newId],
+  ["c"]
+);
+merged = progress.mergeTrack(baseRoute, baseDefs.main, added, "main");
+assert.deepStrictEqual(merged[1].items.map(item => item.id), ["c", newId]);
+assert.strictEqual(merged[1].items[1].title, "追加");
+
+let moved = progress.saveOrder(added, "main:ch02", ["c"], ["c"]);
+moved = progress.saveOrder(moved, "main:ch01", ["a", "b", newId], ["a", "b"]);
+if (moved.custom[newId]) {
+  moved.custom[newId].trackId = "main";
+  moved.custom[newId].chapterId = "ch01";
+}
+merged = progress.mergeTrack(baseRoute, baseDefs.main, moved, "main");
+assert.deepStrictEqual(merged[1].items.map(item => item.id), ["c"]);
+assert.ok(merged[0].items.some(item => item.id === newId));
+
+const bad = progress.validateRouteFields({ title: "", detail: "x", flag: "story" }, ["story"], []);
+assert.ok(bad.error);
+const url = progress.validateRouteFields({ title: "t", detail: "d", flag: "story", source: "http://example.com" }, ["story"], []);
+assert.ok(url.error);
+const ok = progress.validateRouteFields({
+  title: "t",
+  detail: "d",
+  flag: "trophy",
+  source: "https://example.com",
+  trophy: "trophy-ch01"
+}, ["trophy"], ["trophy-ch01"]);
+assert.strictEqual(ok.value.trophy, "trophy-ch01");
+const bundle = progress.acceptBundle({
+  app: "ff7r-guide",
+  cards: added,
+  state: { checks: { "ch01-01": true } }
+});
+assert.strictEqual(bundle.state.checks["ch01-01"], true);
+assert.strictEqual(bundle.cards.custom[newId].title, "追加");
+const source = progress.routeModuleSource(progress.mergedRoute(baseRoute, baseDefs, added));
+assert.ok(source.startsWith("const ROUTE = "));
+assert.ok(source.includes("追加"));
+assert.ok(source.includes("globalThis.ROUTE = ROUTE;"));
 
 console.log("test-guide: ok");

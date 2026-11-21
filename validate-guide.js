@@ -28,7 +28,8 @@ function validateGuide(guide) {
 
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v1") fail("キャッシュ名が ff7r-guide-v1 ではない");
+  if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
+  if (GAME.cache !== "ff7r-guide-v2") fail("キャッシュ名が ff7r-guide-v2 ではない");
 
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   if (!sw.includes('importScripts("./data/game.js")') || !sw.includes("GAME.cache")) {
@@ -40,6 +41,13 @@ function validateGuide(guide) {
   const edit = fs.readFileSync(path.join(root, "edit-mode.js"), "utf8");
   if (!edit.includes("GAME.storage.textEdits") || !edit.includes("編集モードを終了")) {
     fail("編集モードがゲーム設定と繋がっていない");
+  }
+  const cardEdit = fs.readFileSync(path.join(root, "card-edit.js"), "utf8");
+  if (!cardEdit.includes("GAME.storage.cardEdits") || !cardEdit.includes("カード編集を終了")) {
+    fail("カード編集がゲーム設定と繋がっていない");
+  }
+  if (!fs.readFileSync(path.join(root, "index.html"), "utf8").includes("card-edit.js")) {
+    fail("index.html が card-edit.js を読んでいない");
   }
 
   const flagIds = new Set((GAME.flags || []).map(flag => flag.id));

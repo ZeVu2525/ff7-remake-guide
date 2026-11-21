@@ -15,10 +15,12 @@ const GAME = {
     state: "ff7r-guide-state-v1",
     textEdits: "ff7r-text-edits-v1",
     textEditMode: "ff7r-text-edit-mode",
+    cardEdits: "ff7r-card-edits-v1",
+    cardEditMode: "ff7r-card-edit-mode",
     theme: "ff7r-guide-theme",
     backup: "ff7r-guide-state-v1-last-backup"
   },
-  cache: "ff7r-guide-v1",
+  cache: "ff7r-guide-v2",
   cacheFiles: [
     "./",
     "./index.html",
@@ -27,6 +29,7 @@ const GAME = {
     "./app.js",
     "./edit-mode.js",
     "./progress.js",
+    "./card-edit.js",
     "./data/game.js",
     "./data/route.js",
     "./data/catalogs.js"

@@ -231,6 +231,8 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
     <p>チェックはブラウザの中に残る。別の端末へ移すときは「進行を書き出す」で JSON を保存し、向こうで「進行を読み込む」。GitHub には送られない。</p>
     <h3>編集モード</h3>
     <p>アドレスの末尾に <code>?edit=1</code> を付けるか、ページ下の「編集モード」を押す。表示されている文をクリックして直せる。直しは進行とは別の場所に残る。「編集モードを終了」で戻る。</p>
+    <h3>カード編集</h3>
+    <p><code>?cards=1</code> か、ページ下の「カード編集」で、カードの追加、修正、削除、並べ替えができる。原稿はそのままで、このブラウザの差分だけが残る。「ルートJSを書き出す」で <code>data/route.js</code> に貼れる形を保存できる。</p>
     <h3>iPhone</h3>
     <p>Safari の共有から「ホーム画面に追加」する。通信があるときに一度開くと、オフラインでもこの画面を開ける。</p>
   </div>
@@ -246,5 +248,6 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <script src="progress.js"></script>
 <script src="app.js"></script>
 <script src="edit-mode.js"></script>
+<script src="card-edit.js"></script>
 </body>
 </html>
