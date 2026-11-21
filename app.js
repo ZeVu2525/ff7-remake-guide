@@ -13,10 +13,19 @@
   };
 
   let state = GuideProgress.emptyState();
+  let cardBook = GuideProgress.emptyCardBook();
   try {
     state = GuideProgress.normalizeState(JSON.parse(localStorage.getItem(storage.state) || "null"));
   } catch (error) {
     state = GuideProgress.emptyState();
+  }
+  try {
+    cardBook = GuideProgress.normalizeCardBook(JSON.parse(localStorage.getItem(storage.cardEdits) || "null"));
+  } catch (error) {
+    cardBook = GuideProgress.emptyCardBook();
+  }
+  for (const id of Object.keys(state.checks)) {
+    if (cardBook.deleted[id]) delete state.checks[id];
   }
 
   function esc(value) {
@@ -70,15 +79,32 @@
     button.disabled = !available;
   }
 
+  function cardEditing() {
+    return document.body.classList.contains("is-card-edit");
+  }
+
+  function saveBook() {
+    try {
+      localStorage.setItem(storage.cardEdits, JSON.stringify(cardBook));
+    } catch (error) {
+      setStatus("カードの編集を保存できなかった。", true);
+    }
+  }
+
   function chaptersFor(trackId) {
     const defs = GAME.chapters[trackId] || [];
-    const rows = ROUTE[trackId] || [];
-    const itemsByChapter = new Map(rows.map(row => [row.chapterId, row.items || []]));
+    const merged = GuideProgress.mergeTrack(ROUTE, defs, cardBook, trackId);
+    const itemsByChapter = new Map(merged.map(row => [row.chapterId, row.items || []]));
     return defs.map(chapter => ({
       id: chapter.id,
       title: chapter.title,
       items: itemsByChapter.get(chapter.id) || []
     }));
+  }
+
+  function baseItems(trackId, chapterId) {
+    const row = (ROUTE[trackId] || []).find(item => item.chapterId === chapterId);
+    return row && row.items ? row.items.filter(item => item && item.id) : [];
   }
 
   function routeItems(trackId) {
@@ -93,14 +119,53 @@
       title: item.title,
       detail: item.detail,
       deadline: item.deadline,
-      source: item.source
+      source: item.source,
+      trophy: item.trophy || ""
     })));
+  }
+
+  function trophyItems() {
+    return (CATALOGS.trophies && CATALOGS.trophies.items) || [];
+  }
+
+  function trophyById(id) {
+    return trophyItems().find(item => item.id === id) || null;
+  }
+
+  function trophyMeta() {
+    const cardToTrophy = Object.create(null);
+    const trophyToCards = Object.create(null);
+    for (const track of GAME.tracks) {
+      for (const item of routeItems(track.id)) {
+        if (!item.trophy) continue;
+        cardToTrophy[item.id] = item.trophy;
+        if (!trophyToCards[item.trophy]) trophyToCards[item.trophy] = [];
+        trophyToCards[item.trophy].push(item.id);
+      }
+    }
+    const platinum = trophyItems().find(item => item.auto === "rest");
+    return {
+      cardToTrophy,
+      trophyToCards,
+      trophyIds: trophyItems().map(item => item.id),
+      platinumId: platinum ? platinum.id : null
+    };
+  }
+
+  function cardsForTrophy(trophyId) {
+    const found = [];
+    for (const track of GAME.tracks) {
+      for (const item of routeItems(track.id)) {
+        if (item.trophy === trophyId) found.push(item);
+      }
+    }
+    return found;
   }
 
   function catalogItems(catalogId) {
     const catalog = CATALOGS[catalogId];
     if (!catalog) return [];
-    return (catalog.items || []).map(item => ({
+    return GuideProgress.mergeCatalog(catalog, cardBook, catalogId).map(item => ({
       kind: "catalog",
       catalogId,
       id: item.id,
@@ -109,13 +174,14 @@
       detail: item.detail,
       area: item.area,
       source: item.source,
-      missable: item.missable
+      missable: item.missable,
+      auto: item.auto
     }));
   }
 
   function matchesQuery(item, query) {
     if (!query) return true;
-    const hay = [item.title, item.name, item.detail, item.deadline, item.area, item.id, item.chapterTitle]
+    const hay = [item.title, item.name, item.detail, item.deadline, item.area, item.id, item.chapterTitle, item.trophy]
       .filter(Boolean)
       .join("\n")
       .toLowerCase();
@@ -209,12 +275,13 @@
   function routeCard(item) {
     const on = checked(item.id);
     const collapsed = ui.collapsed[item.id] === true;
-    return `<article class="it flag-${esc(item.flag)}${item.example ? " is-example" : ""}${on ? " done" : ""}${collapsed ? " is-collapsed" : ""}" data-id="${esc(item.id)}">
+    return `<article class="it flag-${esc(item.flag)}${item.example ? " is-example" : ""}${on ? " done" : ""}${collapsed ? " is-collapsed" : ""}" data-id="${esc(item.id)}"${cardEditing() ? " draggable=\"true\"" : ""}>
       <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
       <div class="ibody">
         <div class="ihead">
           <label for="check-${esc(item.id)}">${flagTag(item.flag)}${exampleMark(item)}<span class="it-title">${esc(item.title || item.id)}</span></label>
           <div class="imeta">
+            ${item.trophy && trophyById(item.trophy) ? `<span class="tag tone-trophy">${esc(trophyById(item.trophy).name)}</span>` : ""}
             ${item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
             <button type="button" class="route-item-toggle" data-toggle-item="${esc(item.id)}" aria-expanded="${collapsed ? "false" : "true"}">詳細</button>
           </div>
@@ -222,9 +289,21 @@
         <div class="route-item-content"${collapsed ? " hidden" : ""}>
           ${item.detail ? `<div class="det">${esc(item.detail)}</div>` : ""}
           ${sourceLine(item.source)}
+          ${cardTools(item)}
         </div>
       </div>
     </article>`;
+  }
+
+  function cardTools(item) {
+    if (!cardEditing()) return "";
+    return `<div class="card-edit-tools">
+      <button type="button" data-card-up="${esc(item.id)}">上へ</button>
+      <button type="button" data-card-down="${esc(item.id)}">下へ</button>
+      <button type="button" data-card-edit="${esc(item.id)}">編集</button>
+      <button type="button" data-card-move="${esc(item.id)}">移動</button>
+      <button type="button" data-card-delete="${esc(item.id)}">削除</button>
+    </div>`;
   }
 
   function renderRoute() {
@@ -246,7 +325,7 @@
           <span class="cht">${esc(chapter.title)}</span>
           <span class="chl"><span class="cnt${chapter.items.length && done === chapter.items.length ? " done" : ""}">${done}/${chapter.items.length}</span></span>
         </button></h2>
-        <div class="chb">${items.length ? items.map(routeCard).join("") : '<p class="empty-chapter">項目はまだありません。</p>'}</div>
+        <div class="chb" data-card-track="${esc(ui.trackId)}">${cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">カードを追加</button></p>` : ""}${items.length ? items.map(routeCard).join("") : '<p class="empty-chapter">項目はまだありません。</p>'}</div>
       </section>`;
     }).join("");
     document.getElementById("route-count").textContent = visible + " / " + total + " 件を表示";
@@ -264,22 +343,22 @@
   }
 
   function renderCatalog(hub) {
-    const catalog = CATALOGS[hub.catalog] || { title: hub.label, items: [] };
     const host = document.getElementById("list-" + hub.id);
     const count = document.getElementById("count-" + hub.id);
-    const items = catalog.items || [];
+    const items = catalogItems(hub.catalog);
     const query = ui.catalogQuery[hub.id] || "";
     const visible = items.filter(item => matchesQuery(item, query));
     const done = items.filter(item => checked(item.id)).length;
     if (count) count.textContent = done + " / " + items.length;
     if (!host) return;
-    if (!items.length) {
+    if (!items.length && !cardEditing()) {
       host.innerHTML = `<p class="empty-chapter">まだ項目がありません。<code>data/catalogs.js</code> の ${esc(hub.catalog)} に足してください。</p>`;
       return;
     }
-    host.innerHTML = visible.map(item => {
+    const adder = cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-catalog-add="${esc(hub.catalog)}">項目を追加</button></p>` : "";
+    host.innerHTML = adder + (visible.map(item => {
       const on = checked(item.id);
-      return `<article class="it${item.example ? " is-example" : ""}${on ? " done" : ""}" data-id="${esc(item.id)}">
+      return `<article class="it${item.example ? " is-example" : ""}${on ? " done" : ""}" data-id="${esc(item.id)}" data-catalog="${esc(hub.catalog)}"${cardEditing() ? " draggable=\"true\"" : ""}>
         <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
         <div class="ibody">
           <div class="ihead">
@@ -287,10 +366,23 @@
           </div>
           ${item.area ? `<p class="area">${esc(item.area)}</p>` : ""}
           ${item.detail ? `<div class="det">${esc(item.detail)}</div>` : ""}
+          ${trophyLinkLine(item)}
           ${sourceLine(item.source)}
+          ${cardTools(item)}
         </div>
       </article>`;
-    }).join("") || '<p class="empty-chapter">一致する項目がありません。</p>';
+    }).join("") || '<p class="empty-chapter">一致する項目がありません。</p>');
+  }
+
+  function trophyLinkLine(item) {
+    if (!item || item.id == null || !trophyItems().some(entry => entry.id === item.id)) return "";
+    if (item.auto === "rest") {
+      return `<p class="area">ほかのトロフィーがすべてオンになると、ここもオンになる。</p>`;
+    }
+    const cards = cardsForTrophy(item.id);
+    if (!cards.length) return `<p class="area">進行カードとは結んでいない。この画面で直接チェックする。</p>`;
+    const links = cards.map(card => `<button type="button" class="linkish" data-open-hit="${esc(card.id)}">${esc(card.chapterTitle)}「${esc(card.title)}」</button>`).join("、");
+    return `<p class="area">進行: ${links}</p>`;
   }
 
   function renderCatalogs() {
@@ -412,6 +504,15 @@
     if (location.hash !== next) history.replaceState(null, "", next);
   }
 
+  function paintChecks() {
+    document.querySelectorAll("input[data-check]").forEach(input => {
+      const on = checked(input.getAttribute("data-check"));
+      input.checked = on;
+      const card = input.closest(".it");
+      if (card) card.classList.toggle("done", on);
+    });
+  }
+
   function refreshVisibleCounts() {
     if (ui.hub === "route") {
       document.querySelectorAll("#route section.ch").forEach(section => {
@@ -436,7 +537,7 @@
   }
 
   function exportProgress() {
-    const payload = { app: GuideProgress.APP, exportedAt: new Date().toISOString(), state };
+    const payload = { app: GuideProgress.APP, exportedAt: new Date().toISOString(), state, cards: cardBook };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -453,11 +554,17 @@
     event.target.value = "";
     if (!file) return;
     try {
-      const imported = GuideProgress.acceptImport(JSON.parse(await file.text()));
-      if (!imported) throw new Error("rejected");
+      const bundle = GuideProgress.acceptBundle(JSON.parse(await file.text()));
+      if (!bundle) throw new Error("rejected");
       backup();
-      state = imported;
+      if (bundle.state) state = bundle.state;
+      if (bundle.cards) cardBook = bundle.cards;
+      for (const id of Object.keys(state.checks)) {
+        if (cardBook.deleted[id]) delete state.checks[id];
+      }
+      state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
       save();
+      saveBook();
       renderRoute();
       renderCatalogs();
       setStatus("進行を読み込んだ。前の状態は「直前のリセットを戻す」で戻せる。");
@@ -471,6 +578,7 @@
       const raw = localStorage.getItem(storage.backup);
       if (!raw) throw new Error("empty");
       state = GuideProgress.normalizeState(JSON.parse(raw));
+      state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
       save();
       renderRoute();
       renderCatalogs();
@@ -527,7 +635,8 @@
     const needle = query.toLowerCase();
     for (const track of GAME.tracks) {
       for (const item of routeItems(track.id)) {
-        const text = [item.title, item.detail, item.deadline, item.id, item.chapterTitle].join("\n");
+        const linked = item.trophy && trophyById(item.trophy);
+        const text = [item.title, item.detail, item.deadline, item.id, item.chapterTitle, linked && linked.name].join("\n");
         if (!text.toLowerCase().includes(needle)) continue;
         hits.push({ id: item.id, label: item.title || item.id, where: track.label + " · " + item.chapterTitle });
       }
@@ -597,13 +706,12 @@
     const box = event.target.closest("input[data-check]");
     if (!box) return;
     const id = box.getAttribute("data-check");
-    if (box.checked) state.checks[id] = true;
-    else delete state.checks[id];
+    state.checks = GuideProgress.applyToggle(state.checks, id, box.checked, trophyMeta());
     save();
-    const card = box.closest(".it");
-    if (card) card.classList.toggle("done", box.checked);
-    if (ui.hub === "route" && box.checked && (ui.flag === "todo" || ui.flag === "band")) renderRoute();
+    paintChecks();
+    if (ui.hub === "route" && (ui.flag === "todo" || ui.flag === "band")) renderRoute();
     else refreshVisibleCounts();
+    if (ui.hub !== "trophies") renderCatalog(GAME.hubs.find(hub => hub.id === "trophies"));
   });
 
   document.getElementById("dash").addEventListener("click", () => {
@@ -694,6 +802,7 @@
     }
   });
 
+  state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
   renderHeader();
   let savedTheme = GAME.themes[0].id;
   try { savedTheme = localStorage.getItem(storage.theme) || savedTheme; } catch (error) {}
@@ -705,6 +814,68 @@
   renderTabs();
   shell();
   showHub(ui.hub);
+
+  function setCardBook(book) {
+    cardBook = GuideProgress.normalizeCardBook(book);
+    for (const id of Object.keys(state.checks)) {
+      if (cardBook.deleted[id]) delete state.checks[id];
+    }
+    state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
+    save();
+    saveBook();
+    renderRoute();
+    renderCatalogs();
+  }
+
+  function dropCard(id) {
+    if (state.checks[id]) state.checks = GuideProgress.applyToggle(state.checks, id, false, trophyMeta());
+    else delete state.checks[id];
+    cardBook = GuideProgress.removeCard(cardBook, id);
+    state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
+    save();
+    saveBook();
+    renderRoute();
+    renderCatalogs();
+  }
+
+  globalThis.GuideApp = {
+    setCardBook,
+    dropCard,
+    getBook: () => cardBook,
+    baseItems,
+    baseCatalogItems(catalogId) {
+      const catalog = CATALOGS[catalogId];
+      return catalog && catalog.items ? catalog.items.filter(item => item && item.id) : [];
+    },
+    findBaseRoute(id) {
+      for (const trackId of Object.keys(ROUTE)) {
+        for (const row of ROUTE[trackId] || []) {
+          for (const item of row.items || []) {
+            if (item && item.id === id) return { trackId, chapterId: row.chapterId, item };
+          }
+        }
+      }
+      return null;
+    },
+    findBaseCatalog(id) {
+      for (const catalogId of Object.keys(CATALOGS)) {
+        for (const item of CATALOGS[catalogId].items || []) {
+          if (item && item.id === id) return { catalogId, item };
+        }
+      }
+      return null;
+    },
+    currentIds(trackId, chapterId) {
+      const chapter = chaptersFor(trackId).find(item => item.id === chapterId);
+      return chapter ? chapter.items.map(item => item.id) : [];
+    },
+    currentCatalogIds(catalogId) {
+      return catalogItems(catalogId).map(item => item.id);
+    },
+    trophyChoices() {
+      return trophyItems().map(item => ({ id: item.id, name: item.name }));
+    }
+  };
 
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
     window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));

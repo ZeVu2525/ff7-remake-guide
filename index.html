@@ -102,6 +102,11 @@ main{padding:22px 16px 88px}
 .chip.on.tone-deadline,.chip.on.tone-missable{background:var(--red);border-color:var(--red)}
 .chip.on.tone-request{background:var(--purple);border-color:var(--purple)}
 .chip.on.tone-story{background:var(--accent2);border-color:var(--accent2)}
+.chip.on.tone-trophy{background:var(--amber);border-color:var(--amber);color:#fff}
+html[data-theme="dark"] .chip.on.tone-trophy,
+html[data-theme="accent"] .chip.on.tone-trophy{color:#1a1404}
+.chip.on.tone-item{background:var(--green);border-color:var(--green)}
+.chip.on.tone-tips{background:var(--pink);border-color:var(--pink)}
 .toolbar input[type=search],.chapter-jump select{min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--fg);font-size:16px}
 #q,.catalog-tools input[type=search]{flex:1 1 180px;min-width:0;width:100%;padding:8px 12px}
 .chapter-jump{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;color:var(--fg2);font-size:14px;font-weight:700}
@@ -142,10 +147,17 @@ section.ch.closed .chb{display:none}
 .tone-deadline,.tone-missable,.deadline-badge{color:var(--red);background:var(--redbg);border:1px solid var(--redline)}
 .tone-request{color:var(--purple);background:var(--purplebg);border:1px solid var(--purple)}
 .tone-optional{color:var(--fg2);background:var(--bg3);border:1px solid var(--line)}
+.tone-trophy{color:var(--amber);background:var(--amberbg);border:1px solid var(--amber)}
+.tone-item{color:var(--green);background:var(--greenbg);border:1px solid var(--green)}
+.tone-tips{color:var(--pink);background:var(--pinkbg);border:1px solid var(--pink)}
 .it.flag-deadline,.it.flag-missable{box-shadow:inset 4px 0 0 var(--red)}
+.it.flag-trophy{box-shadow:inset 4px 0 0 var(--amber)}
+.it.flag-item{box-shadow:inset 4px 0 0 var(--green)}
+.it.flag-tips{box-shadow:inset 4px 0 0 var(--pink)}
 .it.is-example{background:color-mix(in srgb,var(--amberbg) 55%,var(--bg2))}
 .it.done .it-title{color:var(--fg3);text-decoration:line-through}
 .det,.area,.source{max-width:75ch;margin:8px 0 0;color:var(--fg2);overflow-wrap:anywhere}
+button.linkish{display:inline;padding:0;border:0;background:transparent;color:var(--accent);font:inherit;font-weight:700;cursor:pointer;overflow-wrap:anywhere}
 .route-item-toggle{min-height:32px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:var(--fg2);cursor:pointer}
 .empty-chapter{margin:0;padding:14px;color:var(--fg3)}
 .it.is-target{outline:2px solid var(--accent);outline-offset:-2px}
@@ -219,6 +231,8 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
     <p>チェックはブラウザの中に残る。別の端末へ移すときは「進行を書き出す」で JSON を保存し、向こうで「進行を読み込む」。GitHub には送られない。</p>
     <h3>編集モード</h3>
     <p>アドレスの末尾に <code>?edit=1</code> を付けるか、ページ下の「編集モード」を押す。表示されている文をクリックして直せる。直しは進行とは別の場所に残る。「編集モードを終了」で戻る。</p>
+    <h3>カード編集</h3>
+    <p><code>?cards=1</code> か、ページ下の「カード編集」で、カードの追加、修正、削除、並べ替えができる。原稿はそのままで、このブラウザの差分だけが残る。「ルートJSを書き出す」で <code>data/route.js</code> に貼れる形を保存できる。</p>
     <h3>iPhone</h3>
     <p>Safari の共有から「ホーム画面に追加」する。通信があるときに一度開くと、オフラインでもこの画面を開ける。</p>
   </div>
@@ -234,5 +248,6 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <script src="progress.js"></script>
 <script src="app.js"></script>
 <script src="edit-mode.js"></script>
+<script src="card-edit.js"></script>
 </body>
 </html>
