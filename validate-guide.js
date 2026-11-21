@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v3") fail("キャッシュ名が ff7r-guide-v3 ではない");
+  if (GAME.cache !== "ff7r-guide-v4") fail("キャッシュ名が ff7r-guide-v4 ではない");
 
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
@@ -46,7 +46,7 @@ function validateGuide(guide) {
   for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
     if (!html.includes(file + "?v=" + GAME.cache)) fail("index.html の " + file + " に版のクエリがない");
   }
-  if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw")) {
+  if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw") || !app.includes("すべて表示") || !app.includes("data-map") || !app.includes("data-open-item")) {
     fail("画面がサービスワーカーの更新を見ていない");
   }
   if (/xc1de|xcde-guide|xenoblade/i.test(sw + fs.readFileSync(path.join(root, "app.js"), "utf8") + fs.readFileSync(path.join(root, "edit-mode.js"), "utf8"))) {
@@ -137,7 +137,7 @@ function validateGuide(guide) {
     }
   }
 
-  const catalogs = ["quests", "trophies", "summons", "skills", "materia", "weapons"];
+  const catalogs = ["quests", "trophies", "summons", "skills", "materia", "weapons", "keyItems", "consumables", "accessories", "armor"];
   const hubCatalogs = new Set((GAME.hubs || []).filter(hub => hub.kind === "catalog").map(hub => hub.catalog));
   for (const name of catalogs) {
     const catalog = CATALOGS[name];
@@ -162,13 +162,37 @@ function validateGuide(guide) {
   if (trophyItems.length !== 54) fail("トロフィーは54件である必要がある");
   const autos = trophyItems.filter(item => item && item.auto === "rest");
   if (autos.length !== 1) fail("残りのトロフィーでオンになる項目は1件である必要がある");
+  const catalogIds = new Set();
+  for (const name of Object.keys(CATALOGS)) {
+    for (const item of (CATALOGS[name] && CATALOGS[name].items) || []) {
+      if (item && item.id) catalogIds.add(item.id);
+    }
+  }
+  const mapIds = new Set((GAME.maps || []).map(map => map.id));
   for (const trackId of ["main", "hard", "intermission"]) {
     for (const row of ROUTE[trackId] || []) {
+      const storySteps = [];
       for (const item of row.items || []) {
         if (item && item.trophy && !trophyIds.has(item.trophy)) fail(item.id + " の trophy が台帳にない: " + item.trophy);
+        if (item && item.map && !mapIds.has(item.map)) fail(item.id + " の地図が未定義: " + item.map);
+        if (item && item.items) {
+          if (!Array.isArray(item.items)) fail(item.id + " の items が配列ではない");
+          else item.items.forEach(link => {
+            if (!link || !catalogIds.has(link.id) || !(link.qty >= 1)) fail(item.id + " のアイテムリンクが不正");
+          });
+        }
+        if (trackId === "main" && item && item.flag === "story") storySteps.push(item.step);
+      }
+      if (trackId === "main") {
+        if (!storySteps.length) fail(row.chapterId + " に手順カードがない");
+        storySteps.forEach(step => {
+          if (!Number.isInteger(step) || step < 1) fail(row.chapterId + " の手順番号が不正");
+        });
       }
     }
   }
+  const chapter18 = (ROUTE.main || []).find(row => row.chapterId === "ch18");
+  if (chapter18 && (chapter18.items || []).some(item => item && item.map)) fail("Chapter 18 に地図を出している");
 
   return errors;
 }

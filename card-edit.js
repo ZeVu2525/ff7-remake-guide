@@ -33,6 +33,10 @@
     "#card-edit-dialog textarea{min-height:120px}",
     "#card-edit-dialog .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}",
     "#card-edit-dialog .row button{min-height:44px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg3);color:var(--fg);font:inherit;cursor:pointer}",
+    "#item-picker[hidden]{display:none}",
+    "#item-picker select,#item-picker input{width:100%;box-sizing:border-box;min-height:44px;margin-top:6px}",
+    "#item-picker-results{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow:auto;margin-top:6px}",
+    "#item-picker-results button,#item-picker-selected button{min-height:36px;text-align:left}",
     "#card-edit-error{min-height:1.3em;margin:8px 0 0;color:var(--red);font-weight:700}",
     "#card-edit-toggle{min-height:32px;margin-left:8px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font-size:12px;cursor:pointer}",
     "@media(max-width:640px){#card-edit-bar button{flex:1 1 calc(50% - 6px)}#card-edit-exit{flex-basis:100%}}"
@@ -150,16 +154,61 @@
     document.getElementById("card-edit-id").textContent = seed.id ? "ID: " + seed.id : "IDは保存時に付きます。あとから変わりません。";
     const flags = GAME.flags.map(flag => `<option value="${flag.id}"${flag.id === seed.flag ? " selected" : ""}>${flag.label}</option>`).join("");
     const trophies = ['<option value="">選ばない</option>'].concat(GuideApp.trophyChoices().map(item => `<option value="${item.id}"${item.id === seed.trophy ? " selected" : ""}>${item.name}</option>`)).join("");
+    const maps = ['<option value="">地図なし</option>'].concat((GAME.maps || []).map(map => `<option value="${map.id}"${map.id === seed.map ? " selected" : ""}>${map.label}</option>`)).join("");
+    editing.links = (seed.items || []).map(link => ({ id: link.id, qty: link.qty || 1 }));
     fields.innerHTML = [
       field("見出し", `<input name="title" required value="${escapeAttr(seed.title || "")}">`),
       field("本文", `<textarea name="detail" required>${escapeText(seed.detail || "")}</textarea>`),
       field("タグ", `<select name="flag">${flags}</select>`),
       field("期限", `<input name="deadline" value="${escapeAttr(seed.deadline || "")}" placeholder="期限・取り逃しのとき">`),
       field("出典", `<input name="source" value="${escapeAttr(seed.source || "")}" placeholder="https://">`),
-      field("トロフィー", `<select name="trophy">${trophies}</select>`)
+      field("トロフィー", `<select name="trophy">${trophies}</select>`),
+      field("地図", `<select name="map">${maps}</select>`),
+      '<div id="item-picker"></div>'
     ].join("");
+    paintItemPicker();
+    form.elements.flag.addEventListener("change", paintItemPicker);
     dialog.hidden = false;
     form.elements.title.focus();
+  }
+
+  function paintItemPicker() {
+    const host = document.getElementById("item-picker");
+    if (!host || !form.elements.flag) return;
+    if (form.elements.flag.value !== "item") {
+      host.hidden = true;
+      host.innerHTML = "";
+      return;
+    }
+    host.hidden = false;
+    const choices = GuideApp.itemChoices();
+    const hubs = [];
+    choices.forEach(item => {
+      if (!hubs.some(hub => hub.id === item.hubId)) hubs.push({ id: item.hubId, label: item.hubLabel });
+    });
+    const selected = (editing.links || []).map(link => {
+      const found = choices.find(item => item.id === link.id);
+      return `<li><span>${escapeText((found ? found.name : link.id) + " ×" + link.qty)}</span> <button type="button" data-link-remove="${escapeAttr(link.id)}">外す</button></li>`;
+    }).join("");
+    host.innerHTML = [
+      "<p>入手するアイテムを台帳から選び、個数を付ける。</p>",
+      `<select id="item-picker-hub">${hubs.map(hub => `<option value="${escapeAttr(hub.id)}">${escapeText(hub.label)}</option>`).join("")}</select>`,
+      '<input id="item-picker-q" type="search" placeholder="名前で探す" autocomplete="off">',
+      '<label>個数 <input id="item-picker-qty" type="number" min="1" max="99" value="1"></label>',
+      '<div id="item-picker-results"></div>',
+      `<ul id="item-picker-selected">${selected}</ul>`
+    ].join("");
+    refreshItemResults();
+  }
+
+  function refreshItemResults() {
+    const host = document.getElementById("item-picker-results");
+    const hub = document.getElementById("item-picker-hub");
+    const query = document.getElementById("item-picker-q");
+    if (!host || !hub || !query) return;
+    const needle = query.value.trim().toLowerCase();
+    const rows = GuideApp.itemChoices().filter(item => item.hubId === hub.value && (!needle || (item.name + item.area).toLowerCase().includes(needle))).slice(0, 12);
+    host.innerHTML = rows.map(item => `<button type="button" data-link-add="${escapeAttr(item.id)}">${escapeText(item.name)}${item.area ? "（" + escapeText(item.area) + "）" : ""}</button>`).join("") || "<p>一致する項目がありません。</p>";
   }
 
   function openCatalogForm(seed) {
@@ -203,7 +252,9 @@
       flag: data.get("flag"),
       deadline: data.get("deadline"),
       source: data.get("source"),
-      trophy: data.get("trophy")
+      trophy: data.get("trophy"),
+      map: data.get("map"),
+      items: editing.links || []
     }, flagIds, GuideApp.trophyChoices().map(item => item.id));
     if (checked.error) {
       error.textContent = checked.error;
@@ -637,6 +688,25 @@
     event.preventDefault();
     event.stopPropagation();
   }, true);
+
+  dialog.addEventListener("input", event => {
+    if (event.target && (event.target.id === "item-picker-q" || event.target.id === "item-picker-hub")) refreshItemResults();
+  });
+  dialog.addEventListener("click", event => {
+    const add = event.target.closest && event.target.closest("[data-link-add]");
+    if (add && editing) {
+      const qty = Math.max(1, Math.min(99, Number((document.getElementById("item-picker-qty") || {}).value) || 1));
+      const id = add.getAttribute("data-link-add");
+      editing.links = (editing.links || []).filter(link => link.id !== id).concat({ id, qty });
+      paintItemPicker();
+      return;
+    }
+    const remove = event.target.closest && event.target.closest("[data-link-remove]");
+    if (remove && editing) {
+      editing.links = (editing.links || []).filter(link => link.id !== remove.getAttribute("data-link-remove"));
+      paintItemPicker();
+    }
+  });
 
   document.getElementById("card-edit-exit").addEventListener("click", () => setOn(false));
   document.getElementById("card-edit-export-route").addEventListener("click", () => {
