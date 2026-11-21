@@ -303,6 +303,8 @@
       const found = catalogItems(section.catalog).find(item => item.id === id);
       if (found) return Object.assign({ hubId: "items", hubLabel: section.label, catalogId: section.catalog }, found);
     }
+    const aside = catalogItems("intermission").find(item => item.id === id);
+    if (aside) return Object.assign({ hubId: "items", hubLabel: "INTERmission", aside: true }, aside);
     return null;
   }
 
@@ -351,6 +353,7 @@
             ${item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
             ${questLink}
             <button type="button" class="route-item-toggle" data-toggle-item="${esc(item.id)}" aria-expanded="${collapsed ? "false" : "true"}">詳細</button>
+            ${mapButton(item)}
           </div>
         </div>
         <div class="route-item-content"${collapsed ? " hidden" : ""}>
@@ -358,7 +361,6 @@
           ${itemLine(item)}
           ${sourceLine(item.source)}
           ${cardTools(item)}
-          ${mapButton(item)}
         </div>
         ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-toggle" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}">中のカード ${kids.length}</button><div class="kids"${kidsOpen ? "" : " hidden"}>${kids.map(child => routeCard(child, numbers[child.id], [], numbers)).join("")}</div></div>` : ""}
       </div>
@@ -459,6 +461,14 @@
       renderQuests(hub);
       return;
     }
+    if (hub.catalog === "summons") {
+      const host = document.getElementById("list-" + hub.id);
+      const count = document.getElementById("count-" + hub.id);
+      const items = catalogItems("summons").filter(item => !item.example);
+      if (count) count.textContent = String(items.length);
+      if (host) host.innerHTML = renderSummonTable(items);
+      return;
+    }
     const host = document.getElementById("list-" + hub.id);
     const count = document.getElementById("count-" + hub.id);
     const items = catalogItems(hub.catalog);
@@ -534,14 +544,30 @@
     renderItems();
   }
 
-  function itemColumns(catalogId) {
-    const columns = [["name", "名前"], ["detail", "概要"]];
-    if (catalogId === "weapons") columns.splice(1, 0, ["area", "キャラ"]);
-    if (catalogId === "materia") columns.splice(1, 0, ["area", "種類"]);
-    if (catalogId === "keyItems") columns.push(["obtain", "入手方法"], ["use", "用途"]);
-    else columns.push(["obtain", "入手方法"], ["buy", "買値"], ["sell", "売値"]);
-    columns.push(["cards", "入手カード"]);
-    return columns;
+  const SLOT_COUNT = {
+    holl01: 1, holl02: 2, holl05: 2, holl03: 3, holl04: 3, holl06: 4, holl07: 4, holl12: 4,
+    holl08: 5, holl09: 5, holl15: 5, holl10: 6, holl11: 6, holl13: 6, holl14: 6
+  };
+
+  function slotGlyph(ids) {
+    if (!ids || !ids.length) return "—";
+    return `<span class="slots">${ids.map(id => {
+      const count = SLOT_COUNT[id] || 1;
+      const dots = Array.from({ length: count }, () => '<i class="slot-dot"></i>').join("");
+      return `<span class="slot-row">${dots}</span>`;
+    }).join("")}</span>`;
+  }
+
+  function cardLinksCell(item) {
+    const links = cardsForItem(item.id);
+    const got = links.some(card => checked(card.id));
+    const html = links.map(card => `<button type="button" class="linkish" data-open-hit="${esc(card.id)}">${esc(card.chapterTitle)}「${esc(card.title)}」</button>`).join("、");
+    return `<td>${got ? '<span class="tag tone-item">入手済み</span> ' : ""}${html}</td>`;
+  }
+
+  function sourceNote(url) {
+    if (!url) return "";
+    return `<p class="source">出典: <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></p>`;
   }
 
   function renderItems() {
@@ -555,29 +581,153 @@
       const on = section.catalog === ui.itemSection;
       return `<button type="button" class="chip${on ? " on" : ""}" data-item-section="${esc(section.catalog)}" aria-pressed="${on ? "true" : "false"}">${esc(section.label)}</button>`;
     }).join("");
-    const items = catalogItems(ui.itemSection);
-    const query = (ui.catalogQuery.items || "").toLowerCase();
-    let rows = items.filter(item => {
-      if (!query) return true;
-      return [item.name, item.detail, item.obtain, item.area, item.use, item.buy, item.sell].join("\n").toLowerCase().includes(query);
-    });
-    const sortKey = ui.itemSort.key;
-    if (sortKey && sortKey !== "cards") {
-      rows = rows.slice().sort((a, b) => String(a[sortKey] || "").localeCompare(String(b[sortKey] || ""), "ja") * ui.itemSort.dir);
+    if (ui.itemSection === "weapons" && ui.weaponId) {
+      host.innerHTML = renderWeaponDetail(ui.weaponId);
+      if (count) count.textContent = "";
+      return;
     }
+    const items = catalogItems(ui.itemSection).filter(item => !item.intermission && item.area !== "INTERmission" && item.area !== "ユフィ" && item.area !== "武器アビリティ");
+    const query = (ui.catalogQuery.items || "").toLowerCase();
+    const rows = items.filter(item => !query || itemHay(item).toLowerCase().includes(query));
     if (count) count.textContent = rows.length + " / " + items.length;
-    const columns = itemColumns(ui.itemSection);
-    const head = columns.map(([key, label]) => `<th><button type="button" data-sort="${esc(key)}">${esc(label)}${ui.itemSort.key === key ? (ui.itemSort.dir > 0 ? " ↑" : " ↓") : ""}</button></th>`).join("");
-    const body = rows.map(item => `<tr data-id="${esc(item.id)}">${columns.map(([key]) => {
-      if (key === "cards") {
-        const links = cardsForItem(item.id);
-        const got = links.some(card => checked(card.id));
-        const html = links.map(card => `<button type="button" class="linkish" data-open-hit="${esc(card.id)}">${esc(card.chapterTitle)}「${esc(card.title)}」</button>`).join("、");
-        return `<td>${got ? '<span class="tag tone-item">入手済み</span> ' : ""}${html}</td>`;
+    const note = ui.asideNote ? `<p class="source">「${esc(ui.asideNote.name)}」はINTERmissionの項目なので、本編の表には入れていません。</p>` : "";
+    host.innerHTML = note + renderItemTable(ui.itemSection, rows);
+  }
+
+  function itemHay(item) {
+    const bits = [item.name, item.detail, item.obtain, item.area, item.ability, item.buy, item.sell];
+    (item.levels || []).forEach(level => bits.push(level.spell, level.effect, level.sell));
+    (item.tables || []).forEach(table => (table.body || []).forEach(row => row.forEach(cell => bits.push(cell.text))));
+    return bits.filter(Boolean).join("\n");
+  }
+
+  function statPair(initial, maximum) {
+    if (!initial) return "";
+    const line = (label, stats) => `${label} ${esc(stats.atk || "-")} / ${esc(stats.matk || "-")} / ${esc(stats.def || "-")} / ${esc(stats.mdef || "-")}`;
+    return `<div>${line("初期", initial)}</div>${maximum && maximum.atk ? `<div>${line("最大", maximum)}</div>` : ""}`;
+  }
+
+  function renderItemTable(catalogId, rows) {
+    if (catalogId === "weapons") return renderWeaponTable(rows);
+    if (catalogId === "materia") return renderMateriaTable(rows);
+    if (catalogId === "armor") return renderArmorTable(rows);
+    if (catalogId === "accessories") return renderAccessoryTable(rows);
+    const head = "<th>名前</th><th>概要</th><th>入手方法</th>" + (catalogId === "keyItems" ? "<th>用途</th>" : "<th>買値</th><th>売値</th>") + "<th>入手カード</th>";
+    const body = rows.map(item => `<tr data-id="${esc(item.id)}"><td>${esc(item.name)}</td><td>${esc(item.detail || "")}</td><td>${esc(item.obtain || "")}</td>${catalogId === "keyItems" ? `<td>${esc(item.use || "")}</td>` : `<td>${esc(item.buy || "")}</td><td>${esc(item.sell || "")}</td>`}${cardLinksCell(item)}</tr>`).join("");
+    return `<div class="table-scroll"><table class="sheet"><thead><tr>${head}</tr></thead><tbody>${body || "<tr><td>一致する項目がありません。</td></tr>"}</tbody></table></div>`;
+  }
+
+  function renderWeaponTable(rows) {
+    const groups = ["クラウド", "バレット", "エアリス", "ティファ"];
+    return groups.map(character => {
+      const list = rows.filter(item => item.area === character);
+      if (!list.length) return "";
+      const source = list[0].source || "";
+      const body = list.map(item => `<tr data-id="${esc(item.id)}">
+        <td><button type="button" class="linkish" data-open-weapon="${esc(item.id)}">${esc(item.name)}</button></td>
+        <td>${statPair(item.initial, item.maximum)}</td>
+        <td>${slotGlyph(item.initialSlots)}</td>
+        <td>${esc(item.ability || "")}</td>
+        <td>${esc(item.obtain || "")}</td>
+        <td>${esc(item.buy || "")}</td>
+        <td>${esc(item.sell || "")}</td>
+        ${cardLinksCell(item)}
+      </tr>`).join("");
+      return `<section class="equip-section"><h3>${esc(character)}</h3>${sourceNote(source)}
+        <div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>ステータスの上昇量<br>物攻 / 魔攻 / 物防 / 魔防</th><th>マテリア穴</th><th>武器アビリティ</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+    }).join("");
+  }
+
+  function otherStat(row) {
+    const bits = [];
+    if (row.luck && row.luck !== "-") bits.push("運" + row.luck);
+    if (row.speed && row.speed !== "-") bits.push("すばやさ" + row.speed);
+    if (row.other && row.other !== "-") bits.push(row.other);
+    return bits.join("、") || "-";
+  }
+
+  function renderWeaponDetail(id) {
+    const item = catalogItems("weapons").find(entry => entry.id === id);
+    if (!item) return "<p>武器が見つかりません。</p>";
+    const initial = item.initial || {};
+    const summary = `<p class="equip-initial"><span class="badge">初期状態</span> 物攻 ${esc(initial.atk || "-")} 魔攻 ${esc(initial.matk || "-")} 物防 ${esc(initial.def || "-")} 魔防 ${esc(initial.mdef || "-")} 最大HP - 最大MP - マテリア穴 ${slotGlyph(item.initialSlots)}</p>`;
+    const body = (item.levels || []).map(row => `<tr>
+      <td>${esc(row.lv)}</td><td>${esc(row.core)}</td><td>${esc(row.atk)}</td><td>${esc(row.matk)}</td><td>${esc(row.defn)}</td><td>${esc(row.mdef)}</td><td>${esc(row.hp)}</td><td>${esc(row.mp)}</td><td>${esc(otherStat(row))}</td><td>${row.slots && row.slots.length ? slotGlyph(row.slots) : esc(row.slotText || "初期状態")}</td><td>${esc(row.sp)}</td>
+    </tr>`).join("");
+    const total = item.total ? `<tr><td>合計</td><td></td><td>${esc(item.total.atk)}</td><td>${esc(item.total.matk)}</td><td>${esc(item.total.defn)}</td><td>${esc(item.total.mdef)}</td><td>${esc(item.total.hp)}</td><td>${esc(item.total.mp)}</td><td>${esc(otherStat(item.total))}</td><td>-</td><td>${esc(item.total.sp)}</td></tr>` : "";
+    return `<p><button type="button" class="linkish" data-weapon-back="1">武器一覧へ戻る</button></p>
+      <h3>${esc(item.name)}</h3>
+      ${summary}
+      <div class="table-scroll"><table class="sheet equip-grid"><thead><tr><th>武器Lv.</th><th>コア名</th><th>物攻</th><th>魔攻</th><th>物防</th><th>魔防</th><th>最大HP</th><th>最大MP</th><th>その他</th><th>マテリア穴拡張</th><th>必要SP</th></tr></thead><tbody>${body}${total}</tbody></table></div>
+      ${sourceNote(item.reinforceSource || item.source)}`;
+  }
+
+  function renderMateriaTable(rows) {
+    const kinds = ["魔法", "支援", "コマンド", "独立"];
+    return kinds.map(kind => {
+      const list = rows.filter(item => item.area === kind);
+      if (!list.length) return "";
+      if (kind === "魔法") {
+        const body = list.map(item => {
+          const levels = item.levels && item.levels.length ? item.levels : [{ spell: "", effect: item.detail, buy: item.buy, sell: item.sell }];
+          return levels.map((level, index) => `<tr data-id="${esc(item.id)}">
+            ${index === 0 ? `<td rowspan="${levels.length}">${esc(item.name)}</td>` : ""}
+            <td>${index + 1}</td>
+            <td>${esc(level.spell || "")}</td>
+            <td>${esc(level.effect || "")}</td>
+            ${index === 0 ? `<td rowspan="${levels.length}">${esc(item.obtain || "")}</td>` : ""}
+            ${index === 0 ? `<td rowspan="${levels.length}">${esc(item.buy || level.buy || "")}</td>` : ""}
+            <td>${esc(level.sell || "")}</td>
+            ${index === 0 ? cardLinksCell(item).replace("<td>", `<td rowspan="${levels.length}">`) : ""}
+          </tr>`).join("");
+        }).join("");
+        return `<section class="equip-section"><h3>魔法</h3>${sourceNote(list[0].source)}<div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>Lv</th><th>魔法名</th><th>効果</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
       }
-      return `<td>${esc(item[key] || "")}</td>`;
-    }).join("")}</tr>`).join("");
-    host.innerHTML = `<table class="sheet"><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td>一致する項目がありません。</td></tr>'}</tbody></table>`;
+      const body = list.map(item => `<article class="materia-block" data-id="${esc(item.id)}">
+        <h4>${esc(item.name)}</h4>
+        <p>${esc(item.detail || "")}</p>
+        ${item.showObtain && item.obtain ? `<p>入手: ${esc(item.obtain)}</p>` : ""}
+        ${(item.tables || []).map(renderSheet).join("")}
+        ${cardLinksLine(item)}
+      </article>`).join("");
+      return `<section class="equip-section"><h3>${esc(kind)}</h3>${sourceNote(list[0].source)}${body}</section>`;
+    }).join("");
+  }
+
+  function spanAttr(cell) {
+    return (cell.colspan > 1 ? ` colspan="${cell.colspan}"` : "") + (cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : "");
+  }
+
+  function renderSheet(table) {
+    const head = (table.head || []).map(row => `<tr>${row.map(cell => `<th${spanAttr(cell)}>${esc(cell.text)}</th>`).join("")}</tr>`).join("");
+    const body = (table.body || []).map(row => `<tr>${row.map(cell => `<td${spanAttr(cell)}>${esc(cell.text)}</td>`).join("")}</tr>`).join("");
+    return `<div class="table-scroll"><table class="sheet"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  }
+
+  function cardLinksLine(item) {
+    const links = cardsForItem(item.id);
+    if (!links.length) return "";
+    const got = links.some(card => checked(card.id));
+    const html = links.map(card => `<button type="button" class="linkish" data-open-hit="${esc(card.id)}">${esc(card.chapterTitle)}「${esc(card.title)}」</button>`).join("、");
+    return `<p>入手カード: ${got ? '<span class="tag tone-item">入手済み</span> ' : ""}${html}</p>`;
+  }
+
+  function renderArmorTable(rows) {
+    const body = rows.map(item => `<tr data-id="${esc(item.id)}"><td>${esc(item.name)}</td><td>${esc(item.pdef || "")}</td><td>${esc(item.mdef || "")}</td><td>${esc(item.slots || "")}</td><td>${esc(item.obtain || "")}</td><td>${esc(item.buy || "")}</td><td>${esc(item.sell || "")}</td>${cardLinksCell(item)}</tr>`).join("");
+    return `<section class="equip-section"><h3>防具</h3>${sourceNote("https://finalfantasy-jun-site.com/ff7_remake/item/protector.html")}<div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>物理防御力</th><th>魔法防御力</th><th>マテリア穴</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+  }
+
+  function renderAccessoryTable(rows) {
+    const body = rows.map(item => `<tr data-id="${esc(item.id)}"><td>${esc(item.name)}</td><td>${esc(item.detail || "")}</td><td>${esc(item.obtain || "")}</td><td>${esc(item.buy || "")}</td><td>${esc(item.sell || "")}</td>${cardLinksCell(item)}</tr>`).join("");
+    return `<section class="equip-section"><h3>アクセサリー</h3>${sourceNote("https://finalfantasy-jun-site.com/ff7_remake/item/accessory.html")}<div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>概要</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+  }
+
+  function renderSummonTable(items) {
+    const body = items.map(item => {
+      const growth = item.growth || [];
+      return `<tr data-id="${esc(item.id)}"><td>${esc(item.name)}</td><td>${esc(item.detail || "")}</td><td>${esc(item.obtain || "")}</td>${growth.map(value => `<td>${esc(value || "-")}</td>`).join("")}${cardLinksCell(item)}</tr>`;
+    }).join("");
+    return `<div class="table-scroll"><table class="sheet"><thead><tr><th rowspan="2">マテリア名</th><th rowspan="2">概要</th><th rowspan="2">入手方法</th><th colspan="7">ステータスの上昇率</th><th rowspan="2">入手カード</th></tr><tr><th>最大HP</th><th>最大MP</th><th>力</th><th>魔力</th><th>体力</th><th>精神</th><th>運</th></tr></thead><tbody>${body}</tbody></table></div>${sourceNote("https://finalfantasy-jun-site.com/ff7_remake/materia/summon.html")}`;
   }
 
   function renderQuestArticle(item) {
@@ -998,22 +1148,57 @@
     if (itemLink) {
       const record = catalogRecordById(itemLink.getAttribute("data-open-item"));
       if (!record) return;
-      ui.itemSection = record.catalogId || ui.itemSection;
-      ui.catalogQuery.items = "";
-      const input = document.querySelector('[data-catalog-search="items"]');
-      if (input) input.value = "";
-      renderItems();
-      showHub("items");
-      const row = document.querySelector('#list-items tr[data-id="' + record.id + '"]');
-      if (row) {
-        row.scrollIntoView({ behavior: "smooth", block: "center" });
-        row.classList.add("is-target");
+      if (record.aside) {
+        ui.asideNote = record;
+        ui.weaponId = "";
+        showHub("items");
+        renderItems();
+        return;
       }
+      ui.asideNote = null;
+      if (record.catalogId) {
+        ui.weaponId = "";
+        ui.itemSection = record.catalogId;
+        ui.catalogQuery.items = "";
+        const input = document.querySelector('[data-catalog-search="items"]');
+        if (input) input.value = "";
+        renderItems();
+        showHub("items");
+        const row = document.querySelector('#list-items tr[data-id="' + record.id + '"]');
+        if (row) {
+          row.scrollIntoView({ behavior: "smooth", block: "center" });
+          row.classList.add("is-target");
+        }
+        return;
+      }
+      showHub(record.hubId);
+      const hub = GAME.hubs.find(entry => entry.id === record.hubId);
+      if (hub) renderCatalog(hub);
+      const card = cardElement(record.id);
+      if (card) {
+        card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.classList.add("is-target");
+      }
+      return;
+    }
+    const weaponOpen = event.target.closest("[data-open-weapon]");
+    if (weaponOpen) {
+      ui.weaponId = weaponOpen.getAttribute("data-open-weapon");
+      ui.itemSection = "weapons";
+      renderItems();
+      const view = document.getElementById("list-items");
+      if (view) view.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (event.target.closest("[data-weapon-back]")) {
+      ui.weaponId = "";
+      renderItems();
       return;
     }
     const sectionTab = event.target.closest("[data-item-section]");
     if (sectionTab) {
       ui.itemSection = sectionTab.getAttribute("data-item-section");
+      ui.asideNote = null;
       renderItems();
       return;
     }

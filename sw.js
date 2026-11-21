@@ -1,6 +1,6 @@
 /* 版は data/game.js の GAME.cache と同じ文字列にする。importScripts は使わない。
    古いサービスワーカーが data/game.js を横取りすると、新しい戦略まで古い版に戻る。 */
-const CACHE = "ff7r-guide-v5";
+const CACHE = "ff7r-guide-v6";
 const CORE = [
   "./",
   "./index.html",
