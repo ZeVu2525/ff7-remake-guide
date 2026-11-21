@@ -335,6 +335,19 @@
     return ids.map(id => resolveCatalogCard(id, baseById, safeBook)).filter(Boolean);
   }
 
+  function orderWithMove(ids, movingId, beforeId, after) {
+    const next = (Array.isArray(ids) ? ids : []).filter(id => id && id !== movingId);
+    if (!beforeId) {
+      next.push(movingId);
+      return next;
+    }
+    let at = next.indexOf(beforeId);
+    if (at < 0) at = next.length;
+    else if (after) at += 1;
+    next.splice(at, 0, movingId);
+    return next;
+  }
+
   function saveOrder(book, key, order, baseIds) {
     const prev = book.chapters[key];
     const known = new Set(prev && prev.known && prev.known.length ? prev.known : baseIds);
@@ -525,6 +538,7 @@
     mergeTrack,
     mergeCatalog,
     mergedRoute,
+    orderWithMove,
     saveOrder,
     upsertRouteCard,
     upsertCatalogCard,

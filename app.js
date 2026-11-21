@@ -275,7 +275,8 @@
   function routeCard(item) {
     const on = checked(item.id);
     const collapsed = ui.collapsed[item.id] === true;
-    return `<article class="it flag-${esc(item.flag)}${item.example ? " is-example" : ""}${on ? " done" : ""}${collapsed ? " is-collapsed" : ""}" data-id="${esc(item.id)}"${cardEditing() ? " draggable=\"true\"" : ""}>
+    return `<article class="it flag-${esc(item.flag)}${item.example ? " is-example" : ""}${on ? " done" : ""}${collapsed ? " is-collapsed" : ""}" data-id="${esc(item.id)}">
+      ${dragHandle(item.id)}
       <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
       <div class="ibody">
         <div class="ihead">
@@ -293,6 +294,11 @@
         </div>
       </div>
     </article>`;
+  }
+
+  function dragHandle(id) {
+    if (!cardEditing()) return "";
+    return `<button type="button" class="card-drag-handle" data-card-drag="${esc(id)}" aria-label="ドラッグして移動" title="ドラッグして移動">⋮⋮</button>`;
   }
 
   function cardTools(item) {
@@ -358,7 +364,8 @@
     const adder = cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-catalog-add="${esc(hub.catalog)}">項目を追加</button></p>` : "";
     host.innerHTML = adder + (visible.map(item => {
       const on = checked(item.id);
-      return `<article class="it${item.example ? " is-example" : ""}${on ? " done" : ""}" data-id="${esc(item.id)}" data-catalog="${esc(hub.catalog)}"${cardEditing() ? " draggable=\"true\"" : ""}>
+      return `<article class="it${item.example ? " is-example" : ""}${on ? " done" : ""}" data-id="${esc(item.id)}" data-catalog="${esc(hub.catalog)}">
+        ${dragHandle(item.id)}
         <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
         <div class="ibody">
           <div class="ihead">
@@ -877,7 +884,51 @@
     }
   };
 
+  try {
+    const current = new URL(location.href);
+    if (current.searchParams.has("ff7r-sw")) {
+      current.searchParams.delete("ff7r-sw");
+      history.replaceState(null, "", current.pathname + current.search + current.hash);
+    }
+  } catch (error) {}
+
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
-    window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+    let reloading = false;
+    const reloadOnce = () => {
+      if (reloading) return;
+      reloading = true;
+      location.reload();
+    };
+    navigator.serviceWorker.addEventListener("message", event => {
+      if (event.data && event.data.type === "ff7r-reload") reloadOnce();
+    });
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(registration => {
+        registration.update().catch(() => {});
+        const showUpdate = () => {
+          const banner = document.getElementById("sw-update");
+          if (banner) banner.hidden = false;
+        };
+        if (registration.waiting && navigator.serviceWorker.controller) showUpdate();
+        registration.addEventListener("updatefound", () => {
+          const worker = registration.installing;
+          if (!worker) return;
+          worker.addEventListener("statechange", () => {
+            if (worker.state === "installed" && navigator.serviceWorker.controller) showUpdate();
+          });
+        });
+        const button = document.getElementById("sw-update-reload");
+        if (button) {
+          button.addEventListener("click", () => {
+            const waiting = registration.waiting;
+            if (waiting) waiting.postMessage({ type: "ff7r-skip-waiting" });
+            else reloadOnce();
+          });
+        }
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") registration.update().catch(() => {});
+        });
+      }).catch(() => {});
+    });
   }
 })();

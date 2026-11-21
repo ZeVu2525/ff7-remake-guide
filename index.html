@@ -188,6 +188,9 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
   .cht{font-size:16px}
   .it{padding:12px}
 }
+.sw-update{position:fixed;z-index:280;left:12px;right:12px;top:12px;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:10px;background:#14324a;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.sw-update[hidden]{display:none}
+.sw-update button{min-height:44px;padding:8px 14px;border:0;border-radius:8px;background:#f6e7c1;color:#10202c;font:inherit;font-weight:700;cursor:pointer}
 @media(prefers-reduced-motion:reduce){
   *{scroll-behavior:auto!important}
 }
@@ -195,6 +198,10 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 </head>
 <body>
 <a class="skip-link" href="#main">本文へスキップ</a>
+<div id="sw-update" class="sw-update" hidden>
+  <span>新しいバージョンがあります</span>
+  <button type="button" id="sw-update-reload">読み込む</button>
+</div>
 <header>
   <div class="hrow">
     <h1 id="site-title">FINAL FANTASY VII REMAKE<span>攻略ガイド</span></h1>
@@ -232,7 +239,7 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
     <h3>編集モード</h3>
     <p>アドレスの末尾に <code>?edit=1</code> を付けるか、ページ下の「編集モード」を押す。表示されている文をクリックして直せる。直しは進行とは別の場所に残る。「編集モードを終了」で戻る。</p>
     <h3>カード編集</h3>
-    <p><code>?cards=1</code> か、ページ下の「カード編集」で、カードの追加、修正、削除、並べ替えができる。原稿はそのままで、このブラウザの差分だけが残る。「ルートJSを書き出す」で <code>data/route.js</code> に貼れる形を保存できる。</p>
+    <p><code>?cards=1</code> か、ページ下の「カード編集」で、カードの追加、修正、削除、並べ替えができる。原稿はそのままで、このブラウザの差分だけが残る。左のつまみをドラッグすると、青い線の位置に動く。閉じた章や空の章の見出しへ落とすと、その章に入る。「上へ」「下へ」「移動」も使える。「ルートJSを書き出す」で <code>data/route.js</code> に貼れる形を保存できる。</p>
     <h3>iPhone</h3>
     <p>Safari の共有から「ホーム画面に追加」する。通信があるときに一度開くと、オフラインでもこの画面を開ける。</p>
   </div>
@@ -242,12 +249,12 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
   <button type="button" id="text-edit-toggle" aria-pressed="false">編集モード：オフ</button>
 </footer>
-<script src="data/game.js"></script>
-<script src="data/route.js"></script>
-<script src="data/catalogs.js"></script>
-<script src="progress.js"></script>
-<script src="app.js"></script>
-<script src="edit-mode.js"></script>
-<script src="card-edit.js"></script>
+<script src="data/game.js?v=ff7r-guide-v3"></script>
+<script src="data/route.js?v=ff7r-guide-v3"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v3"></script>
+<script src="progress.js?v=ff7r-guide-v3"></script>
+<script src="app.js?v=ff7r-guide-v3"></script>
+<script src="edit-mode.js?v=ff7r-guide-v3"></script>
+<script src="card-edit.js?v=ff7r-guide-v3"></script>
 </body>
 </html>

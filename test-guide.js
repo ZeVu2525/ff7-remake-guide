@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v2");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v3");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -194,6 +194,10 @@ if (moved.custom[newId]) {
 merged = progress.mergeTrack(baseRoute, baseDefs.main, moved, "main");
 assert.deepStrictEqual(merged[1].items.map(item => item.id), ["c"]);
 assert.ok(merged[0].items.some(item => item.id === newId));
+assert.deepStrictEqual(progress.orderWithMove(["a", "b", "c"], "a", "c", false), ["b", "a", "c"]);
+assert.deepStrictEqual(progress.orderWithMove(["a", "b", "c"], "a", "c", true), ["b", "c", "a"]);
+assert.deepStrictEqual(progress.orderWithMove(["a", "b"], "c", null, false), ["a", "b", "c"]);
+assert.deepStrictEqual(progress.orderWithMove(["a", "b", "c"], "b", "missing", true), ["a", "c", "b"]);
 
 const bad = progress.validateRouteFields({ title: "", detail: "x", flag: "story" }, ["story"], []);
 assert.ok(bad.error);

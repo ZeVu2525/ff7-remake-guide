@@ -29,11 +29,25 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v2") fail("キャッシュ名が ff7r-guide-v2 ではない");
+  if (GAME.cache !== "ff7r-guide-v3") fail("キャッシュ名が ff7r-guide-v3 ではない");
 
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-  if (!sw.includes('importScripts("./data/game.js")') || !sw.includes("GAME.cache")) {
-    fail("sw.js が GAME.cache を使っていない");
+  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  if (!sw.includes(GAME.cache)) fail("sw.js のキャッシュ名が GAME.cache と違う");
+  if (sw.includes("importScripts(")) fail("sw.js が importScripts で古いキャッシュ名を引き戻せる");
+  if (!sw.includes("async function networkFirst") || /return cached \|\|/.test(sw)) fail("sw.js が network-first ではない");
+  if (!sw.includes('cache: "reload"') || !sw.includes("skipWaiting") || !sw.includes("clients.claim") || !sw.includes("client.navigate") || !sw.includes("ff7r-sw")) {
+    fail("sw.js が更新時に古い画面を置き換えない");
+  }
+  for (const file of GAME.cacheFiles) {
+    if (!sw.includes(file)) fail("sw.js の対象に " + file + " がない");
+  }
+  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
+    if (!html.includes(file + "?v=" + GAME.cache)) fail("index.html の " + file + " に版のクエリがない");
+  }
+  if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw")) {
+    fail("画面がサービスワーカーの更新を見ていない");
   }
   if (/xc1de|xcde-guide|xenoblade/i.test(sw + fs.readFileSync(path.join(root, "app.js"), "utf8") + fs.readFileSync(path.join(root, "edit-mode.js"), "utf8"))) {
     fail("画面のコードに、流用元の保存キーや識別子が残っている");
@@ -46,7 +60,10 @@ function validateGuide(guide) {
   if (!cardEdit.includes("GAME.storage.cardEdits") || !cardEdit.includes("カード編集を終了")) {
     fail("カード編集がゲーム設定と繋がっていない");
   }
-  if (!fs.readFileSync(path.join(root, "index.html"), "utf8").includes("card-edit.js")) {
+  if (!cardEdit.includes("pointerdown") || !cardEdit.includes("card-drop-line") || !cardEdit.includes("orderWithMove") || !app.includes("data-card-drag")) {
+    fail("カード移動がポインタのドラッグになっていない");
+  }
+  if (!html.includes("card-edit.js")) {
     fail("index.html が card-edit.js を読んでいない");
   }
 
