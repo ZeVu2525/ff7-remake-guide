@@ -1,0 +1,11 @@
+{
+  "name": "FF7リメイク 攻略ガイド",
+  "short_name": "FF7R Guide",
+  "description": "FINAL FANTASY VII REMAKE の進行チェック用ガイド。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0e151b",
+  "theme_color": "#0b2438"
+}

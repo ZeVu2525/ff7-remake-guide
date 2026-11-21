@@ -1,0 +1,10 @@
+{
+  "name": "ff7-remake-guide",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FINAL FANTASY VII REMAKE 攻略ガイドの骨組み",
+  "scripts": {
+    "validate": "node validate-guide.js",
+    "test": "node test-guide.js"
+  }
+}
