@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v6");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v7");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -253,6 +253,27 @@ const ok = progress.validateRouteFields({
   trophy: "trophy-ch01"
 }, ["trophy"], ["trophy-ch01"]);
 assert.strictEqual(ok.value.trophy, "trophy-ch01");
+const imageMap = progress.validateRouteFields({
+  title: "t",
+  detail: "d",
+  flag: "story",
+  map: "data:image/png;base64,aaaa"
+}, ["story"], []);
+assert.strictEqual(imageMap.value.map, "data:image/png;base64,aaaa");
+const badMap = progress.validateRouteFields({ title: "t", detail: "d", flag: "story", map: "javascript:alert(1)" }, ["story"], []);
+assert.ok(badMap.error);
+const questBase = { items: [{ id: "q", name: "Q", detail: "d", map: "https://example.com/a.png", steps: ["s"] }] };
+const questBook = progress.upsertCatalogCard(progress.emptyCardBook(), questBase.items[0], "q", {
+  name: "Q",
+  detail: "d",
+  area: "",
+  source: "",
+  missable: false,
+  map: "https://example.com/b.png"
+}, "quests", ["q"], ["q"]);
+const questMerged = progress.mergeCatalog(questBase, questBook, "quests");
+assert.strictEqual(questMerged[0].map, "https://example.com/b.png");
+assert.deepStrictEqual(questMerged[0].steps, ["s"]);
 const bundle = progress.acceptBundle({
   app: "ff7r-guide",
   cards: added,

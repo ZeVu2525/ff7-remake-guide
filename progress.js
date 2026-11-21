@@ -101,7 +101,7 @@
   }
 
   const CARD_FIELDS = ["title", "detail", "flag", "deadline", "source", "trophy", "map", "parent", "quest"];
-  const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable"];
+  const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable", "map"];
 
   function emptyCardBook() {
     return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {} };
@@ -163,6 +163,7 @@
         card.detail = raw.detail == null ? "" : String(raw.detail);
         card.area = raw.area == null ? "" : String(raw.area);
         card.source = raw.source == null ? "" : String(raw.source);
+        card.map = typeof raw.map === "string" ? raw.map : "";
         card.missable = raw.missable === true;
         if (raw.auto === "rest") card.auto = "rest";
       }
@@ -326,6 +327,7 @@
         detail: custom.detail,
         area: custom.area || "",
         source: custom.source || "",
+        map: custom.map || "",
         missable: custom.missable === true,
         custom: true
       };
@@ -444,6 +446,7 @@
         detail: fields.detail,
         area: fields.area || "",
         source: fields.source || "",
+        map: fields.map || "",
         missable: fields.missable === true
       };
     } else {
@@ -527,7 +530,7 @@
     if (trophy && trophyIds && trophyIds.indexOf(trophy) < 0) return { error: "選んだトロフィーが台帳にありません。" };
     if (flag !== "trophy" && trophy) return { error: "トロフィーの紐付けは、タグがトロフィーのときだけです。" };
     const map = String(fields && fields.map || "").trim();
-    if (map && !/^chapter[0-9-]+$/.test(map) && !/^https:\/\//i.test(map)) return { error: "地図の指定が不正です。" };
+    if (map && !validMapValue(map)) return { error: "地図は章のID、https:// の画像、または画像ファイルにしてください。" };
     const parent = String(fields && fields.parent || "").trim();
     const quest = String(fields && fields.quest || "").trim();
     const items = flag === "item" ? itemLinks(fields && fields.items) : [];
@@ -542,7 +545,13 @@
     if (!name) return { error: "名前が空です。" };
     if (!detail) return { error: "説明が空です。" };
     if (source && !/^https:\/\//i.test(source)) return { error: "出典は https:// から始めるか、空にします。" };
-    return { value: { name, detail, area, source, missable: !!(fields && fields.missable) } };
+    const map = String(fields && fields.map || "").trim();
+    if (map && !validMapValue(map)) return { error: "地図は章のID、https:// の画像、または画像ファイルにしてください。" };
+    return { value: { name, detail, area, source, map, missable: !!(fields && fields.missable) } };
+  }
+
+  function validMapValue(map) {
+    return /^chapter[0-9-]+$/.test(map) || /^https:\/\//i.test(map) || /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(map);
   }
 
   function sourceValue(value, indent) {
