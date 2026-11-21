@@ -21,7 +21,7 @@ const GAME = {
     theme: "ff7r-guide-theme",
     backup: "ff7r-guide-state-v1-last-backup"
   },
-  cache: "ff7r-guide-v4",
+  cache: "ff7r-guide-v5",
   cacheFiles: [
     "./",
     "./index.html",
@@ -67,12 +67,14 @@ const GAME = {
     { id: "route", label: "ルート", kind: "route" },
     { id: "quests", label: "依頼", kind: "catalog", catalog: "quests" },
     { id: "trophies", label: "トロフィー", kind: "catalog", catalog: "trophies" },
-    { id: "keyitems", label: "だいじなもの", kind: "catalog", catalog: "keyItems" },
-    { id: "consumables", label: "消費アイテム", kind: "catalog", catalog: "consumables" },
-    { id: "accessories", label: "アクセサリー", kind: "catalog", catalog: "accessories" },
-    { id: "weapons", label: "武器", kind: "catalog", catalog: "weapons" },
-    { id: "armor", label: "防具", kind: "catalog", catalog: "armor" },
-    { id: "materia", label: "マテリア", kind: "catalog", catalog: "materia" },
+    { id: "items", label: "アイテム", kind: "items", sections: [
+      { catalog: "keyItems", label: "だいじなもの" },
+      { catalog: "consumables", label: "消費アイテム" },
+      { catalog: "accessories", label: "アクセサリー" },
+      { catalog: "weapons", label: "武器" },
+      { catalog: "armor", label: "防具" },
+      { catalog: "materia", label: "マテリア" }
+    ] },
     { id: "summons", label: "召喚獣", kind: "catalog", catalog: "summons" },
     { id: "skills", label: "敵の技", kind: "catalog", catalog: "skills" }
   ],

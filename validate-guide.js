@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v4") fail("キャッシュ名が ff7r-guide-v4 ではない");
+  if (GAME.cache !== "ff7r-guide-v5") fail("キャッシュ名が ff7r-guide-v5 ではない");
 
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
@@ -46,7 +46,7 @@ function validateGuide(guide) {
   for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
     if (!html.includes(file + "?v=" + GAME.cache)) fail("index.html の " + file + " に版のクエリがない");
   }
-  if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw") || !app.includes("すべて表示") || !app.includes("data-map") || !app.includes("data-open-item")) {
+  if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw") || !app.includes("すべて表示") || !app.includes("data-map") || !app.includes("data-open-item") || !app.includes("data-item-section") || !app.includes("map-zoom") || !app.includes("中のカード")) {
     fail("画面がサービスワーカーの更新を見ていない");
   }
   if (/xc1de|xcde-guide|xenoblade/i.test(sw + fs.readFileSync(path.join(root, "app.js"), "utf8") + fs.readFileSync(path.join(root, "edit-mode.js"), "utf8"))) {
@@ -139,13 +139,14 @@ function validateGuide(guide) {
 
   const catalogs = ["quests", "trophies", "summons", "skills", "materia", "weapons", "keyItems", "consumables", "accessories", "armor"];
   const hubCatalogs = new Set((GAME.hubs || []).filter(hub => hub.kind === "catalog").map(hub => hub.catalog));
+  const itemCatalogs = new Set(((GAME.hubs || []).find(hub => hub.kind === "items") || {}).sections?.map(section => section.catalog) || []);
   for (const name of catalogs) {
     const catalog = CATALOGS[name];
     if (!catalog || !Array.isArray(catalog.items)) {
       fail("台帳がない: " + name);
       continue;
     }
-    if (!hubCatalogs.has(name)) fail("画面がない: " + name);
+    if (!hubCatalogs.has(name) && !itemCatalogs.has(name)) fail("画面がない: " + name);
     for (const item of catalog.items) {
       claim(item && item.id, name);
       if (!item) continue;
@@ -175,6 +176,11 @@ function validateGuide(guide) {
       for (const item of row.items || []) {
         if (item && item.trophy && !trophyIds.has(item.trophy)) fail(item.id + " の trophy が台帳にない: " + item.trophy);
         if (item && item.map && !mapIds.has(item.map)) fail(item.id + " の地図が未定義: " + item.map);
+        if (item && item.parent) {
+          const parent = (row.items || []).find(other => other && other.id === item.parent);
+          if (!parent) fail(item.id + " の親がない");
+          else if (parent.parent) fail(item.id + " の親がさらに子カード");
+        }
         if (item && item.items) {
           if (!Array.isArray(item.items)) fail(item.id + " の items が配列ではない");
           else item.items.forEach(link => {
@@ -190,6 +196,10 @@ function validateGuide(guide) {
         });
       }
     }
+  }
+  if (!CATALOGS.quests || CATALOGS.quests.items.length < 26) fail("依頼が26件未満");
+  if (!CATALOGS.quests.items.some(item => item && item.id === "quest-chadley" && item.reports && item.reports.length >= 4)) {
+    fail("チャドリーレポートの表がない");
   }
   const chapter18 = (ROUTE.main || []).find(row => row.chapterId === "ch18");
   if (chapter18 && (chapter18.items || []).some(item => item && item.map)) fail("Chapter 18 に地図を出している");

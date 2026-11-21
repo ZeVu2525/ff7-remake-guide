@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v4");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v5");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -111,7 +111,7 @@ assert.strictEqual(
 );
 assert.ok(guide.ROUTE.hard.some(row => row.chapterId === "ch01" && row.items.some(item => item.id === "hard-ch01-01")));
 assert.ok(guide.ROUTE.intermission.some(row => row.items.some(item => item.id === "im01-01")));
-for (const name of ["quests", "summons", "skills"]) {
+for (const name of ["summons", "skills"]) {
   assert.ok(Array.isArray(guide.CATALOGS[name].items));
   assert.ok(guide.CATALOGS[name].items.length >= 1);
   assert.strictEqual(guide.CATALOGS[name].items[0].example, true);
@@ -127,6 +127,16 @@ const firstStory = guide.ROUTE.main[0].items.find(item => item.flag === "story")
 assert.ok(firstStory.step >= 1);
 const chest = guide.ROUTE.main[0].items.find(item => item.id === "ch01-02");
 assert.ok(chest.items.some(link => link.id === potion.id && link.qty >= 2));
+assert.strictEqual(chest.parent && chest.parent.length > 0, true);
+assert.deepStrictEqual(progress.numberCards([
+  { id: "a" },
+  { id: "b", parent: "a" },
+  { id: "c", parent: "a" },
+  { id: "d" }
+]), { a: "1", b: "1-1", c: "1-2", d: "2" });
+assert.ok(guide.CATALOGS.quests.items.length >= 26);
+assert.ok(guide.CATALOGS.quests.items.every(item => /^https:\/\//.test(item.source)));
+assert.ok(guide.CATALOGS.consumables.items.find(item => item.name === "ポーション").buy);
 assert.ok(Array.isArray(guide.CATALOGS.trophies.items));
 
 const baseRoute = {

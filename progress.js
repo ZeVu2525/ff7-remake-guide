@@ -100,7 +100,7 @@
     return { total: list.length, done, openBand };
   }
 
-  const CARD_FIELDS = ["title", "detail", "flag", "deadline", "source", "trophy", "map"];
+  const CARD_FIELDS = ["title", "detail", "flag", "deadline", "source", "trophy", "map", "parent", "quest"];
   const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable"];
 
   function emptyCardBook() {
@@ -138,7 +138,7 @@
     for (const id of Object.keys(asObject(src.patches))) {
       const patch = {};
       const raw = asObject(src.patches[id]);
-      for (const key of ["title", "detail", "flag", "deadline", "source", "trophy", "name", "area", "map"]) {
+      for (const key of ["title", "detail", "flag", "deadline", "source", "trophy", "name", "area", "map", "parent", "quest"]) {
         if (Object.prototype.hasOwnProperty.call(raw, key) && (typeof raw[key] === "string" || raw[key] == null)) {
           patch[key] = raw[key] == null ? "" : String(raw[key]);
         }
@@ -283,6 +283,8 @@
       };
       if (custom.flag === "trophy" && custom.trophy) card.trophy = custom.trophy;
       if (custom.map) card.map = custom.map;
+      if (custom.parent) card.parent = custom.parent;
+      if (custom.quest) card.quest = custom.quest;
       if (custom.flag === "item" && custom.items && custom.items.length) card.items = itemLinks(custom.items);
       return card;
     }
@@ -407,6 +409,8 @@
       source: fields.source || "",
       trophy: fields.flag === "trophy" ? fields.trophy || "" : "",
       map: fields.map || "",
+      parent: fields.parent || "",
+      quest: fields.quest || "",
       items: fields.flag === "item" ? itemLinks(fields.items) : []
     };
   }
@@ -478,6 +482,36 @@
     return "user-card-" + Date.now().toString(36);
   }
 
+  function numberCards(items) {
+    const list = Array.isArray(items) ? items.filter(item => item && item.id) : [];
+    const ids = new Set(list.map(item => item.id));
+    const childOf = {};
+    for (const item of list) {
+      if (item.parent && ids.has(item.parent) && item.parent !== item.id) childOf[item.id] = item.parent;
+    }
+    for (const id of Object.keys(childOf)) {
+      if (childOf[childOf[id]]) delete childOf[id];
+    }
+    const kids = {};
+    const tops = [];
+    for (const item of list) {
+      const parent = childOf[item.id];
+      if (parent) {
+        if (!kids[parent]) kids[parent] = [];
+        kids[parent].push(item);
+      } else tops.push(item);
+    }
+    const numbers = {};
+    tops.forEach((item, index) => {
+      const label = String(index + 1);
+      numbers[item.id] = label;
+      (kids[item.id] || []).forEach((child, childIndex) => {
+        numbers[child.id] = label + "-" + (childIndex + 1);
+      });
+    });
+    return numbers;
+  }
+
   function validateRouteFields(fields, flagIds, trophyIds) {
     const title = String(fields && fields.title || "").trim();
     const detail = String(fields && fields.detail || "").trim();
@@ -493,9 +527,11 @@
     if (trophy && trophyIds && trophyIds.indexOf(trophy) < 0) return { error: "選んだトロフィーが台帳にありません。" };
     if (flag !== "trophy" && trophy) return { error: "トロフィーの紐付けは、タグがトロフィーのときだけです。" };
     const map = String(fields && fields.map || "").trim();
-    if (map && !/^chapter[0-9-]+$/.test(map)) return { error: "地図の指定が不正です。" };
+    if (map && !/^chapter[0-9-]+$/.test(map) && !/^https:\/\//i.test(map)) return { error: "地図の指定が不正です。" };
+    const parent = String(fields && fields.parent || "").trim();
+    const quest = String(fields && fields.quest || "").trim();
     const items = flag === "item" ? itemLinks(fields && fields.items) : [];
-    return { value: { title, detail, flag, source, deadline, trophy: flag === "trophy" ? trophy : "", map, items } };
+    return { value: { title, detail, flag, source, deadline, trophy: flag === "trophy" ? trophy : "", map, parent, quest, items } };
   }
 
   function validateCatalogFields(fields) {
@@ -535,6 +571,8 @@
           if (!copy.deadline) delete copy.deadline;
           if (!copy.source) delete copy.source;
           if (!copy.map) delete copy.map;
+          if (!copy.parent) delete copy.parent;
+          if (!copy.quest) delete copy.quest;
           if (!copy.items || !copy.items.length) delete copy.items;
           return copy;
         })
@@ -569,6 +607,7 @@
     mergeTrack,
     mergeCatalog,
     mergedRoute,
+    numberCards,
     orderWithMove,
     saveOrder,
     upsertRouteCard,
