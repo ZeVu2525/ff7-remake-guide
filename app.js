@@ -326,6 +326,12 @@
   }
 
   function mapParts(map, id, label) {
+    const files = globalThis.MAP_FILES || [];
+    const repo = files.find(entry => entry && (entry.id === map || entry.file === map));
+    if (repo || (map && /^maps\//.test(map))) {
+      const file = repo ? repo.file : map;
+      return { key: (repo && repo.id) || id || map, src: file, href: "", label: (repo && repo.label) || label || "地図" };
+    }
     const preset = (GAME.maps || []).find(entry => entry.id === map);
     const src = !map ? "" : (preset ? "https://finalfantasy-jun-site.com/ff7_remake/field/images/" + map + ".png" : map);
     const href = preset
@@ -418,6 +424,7 @@
       <button type="button" data-card-down="${esc(item.id)}">下へ</button>
       <button type="button" data-card-edit="${esc(item.id)}">編集</button>
       <button type="button" data-card-move="${esc(item.id)}">移動</button>
+      <button type="button" data-card-add-after="${esc(item.id)}">＋追加</button>
       <button type="button" data-card-delete="${esc(item.id)}">削除</button>
     </div>`;
   }

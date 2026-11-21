@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v7");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v8");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -241,6 +241,36 @@ assert.deepStrictEqual(progress.orderWithMove(["a", "b", "c"], "a", "c", true), 
 assert.deepStrictEqual(progress.orderWithMove(["a", "b"], "c", null, false), ["a", "b", "c"]);
 assert.deepStrictEqual(progress.orderWithMove(["a", "b", "c"], "b", "missing", true), ["a", "c", "b"]);
 
+const emptyBody = progress.validateRouteFields({ title: "t", detail: "", flag: "story" }, ["story"], []);
+assert.strictEqual(emptyBody.error, undefined);
+assert.strictEqual(emptyBody.value.detail, "");
+assert.deepStrictEqual(progress.orderForSave(["p", "c1", "c2"], "c2", "p", "p", ""), ["p", "c1", "c2"]);
+assert.deepStrictEqual(progress.orderForSave(["p", "c1", "c2"], "new", "p", "", "c2"), ["p", "c1", "c2", "new"]);
+const childRoute = { main: [{ chapterId: "ch01", items: [
+  { id: "p", flag: "story", title: "P", detail: "d", source: "https://example.com/p" },
+  { id: "c1", flag: "item", title: "C1", detail: "d", parent: "p" },
+  { id: "c2", flag: "item", title: "C2", detail: "d", parent: "p" }
+] }] };
+const childDefs = { main: [{ id: "ch01", title: "Chapter 1" }] };
+const childOrder = progress.orderForSave(["p", "c1", "c2"], "c2", "p", "p", "");
+const childBook = progress.upsertRouteCard(progress.emptyCardBook(), childRoute.main[0].items[2], "c2", {
+  title: "C2b", detail: "d", flag: "item", deadline: "", source: "", trophy: "", map: "", parent: "p", quest: "", items: []
+}, "main", "ch01", childOrder, ["p", "c1", "c2"]);
+const childMerged = progress.mergeTrack(childRoute, childDefs.main, childBook, "main");
+assert.deepStrictEqual(childMerged[0].items.map(item => item.id), ["p", "c1", "c2"]);
+assert.strictEqual(childMerged[0].items[2].title, "C2b");
+assert.strictEqual(childMerged[0].items[2].parent, "p");
+assert.deepStrictEqual(progress.numberCards(childMerged[0].items), { p: "1", c1: "1-1", c2: "1-2" });
+const firstMap = progress.assignMapFile("abcdef1234567890", "png", []);
+const sameMap = progress.assignMapFile("abcdef1234567890", "png", firstMap.manifest);
+assert.strictEqual(sameMap.file, firstMap.file);
+assert.strictEqual(sameMap.added, null);
+const rewritten = progress.replaceMapValues({
+  main: [{ chapterId: "ch01", items: [{ id: "a", map: "data:image/png;base64,aa" }] }]
+}, {}, { "data:image/png;base64,aa": "maps/user-abcdef123456.png" });
+assert.strictEqual(rewritten.route.main[0].items[0].map, "maps/user-abcdef123456.png");
+const repoMap = progress.validateRouteFields({ title: "t", detail: "d", flag: "story", map: "maps/user-abcdef123456.png" }, ["story"], []);
+assert.strictEqual(repoMap.value.map, "maps/user-abcdef123456.png");
 const bad = progress.validateRouteFields({ title: "", detail: "x", flag: "story" }, ["story"], []);
 assert.ok(bad.error);
 const url = progress.validateRouteFields({ title: "t", detail: "d", flag: "story", source: "http://example.com" }, ["story"], []);

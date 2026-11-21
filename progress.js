@@ -523,7 +523,6 @@
     const deadline = String(fields && fields.deadline || "").trim();
     const trophy = String(fields && fields.trophy || "").trim();
     if (!title) return { error: "見出しが空です。" };
-    if (!detail) return { error: "本文が空です。" };
     if (!flagIds || flagIds.indexOf(flag) < 0) return { error: "タグが未定義です。" };
     if (source && !/^https:\/\//i.test(source)) return { error: "出典は https:// から始めるか、空にします。" };
     if (flag === "trophy" && !trophy) return { error: "トロフィーを選んでください。" };
@@ -551,7 +550,67 @@
   }
 
   function validMapValue(map) {
-    return /^chapter[0-9-]+$/.test(map) || /^https:\/\//i.test(map) || /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(map);
+    return /^chapter[0-9-]+$/.test(map) || /^https:\/\//i.test(map) || /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(map) || /^maps\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(map);
+  }
+
+  function orderForSave(ids, id, parentId, previousParent, insertAfter) {
+    const list = (Array.isArray(ids) ? ids : []).filter(item => item);
+    const exists = list.indexOf(id) >= 0;
+    const parent = parentId || "";
+    const previous = previousParent || "";
+    if (exists && parent === previous) return list.slice();
+    const without = list.filter(item => item !== id);
+    if (insertAfter) {
+      const at = without.indexOf(insertAfter);
+      without.splice(at < 0 ? without.length : at + 1, 0, id);
+      return without;
+    }
+    if (parent) {
+      const at = without.indexOf(parent);
+      without.splice(at < 0 ? without.length : at + 1, 0, id);
+      return without;
+    }
+    without.push(id);
+    return without;
+  }
+
+  function assignMapFile(hash, ext, manifest) {
+    const list = Array.isArray(manifest) ? manifest.slice() : [];
+    const found = list.find(item => item && item.hash === hash);
+    if (found) return { manifest: list, file: found.file, added: null };
+    const safeExt = /^(png|jpe?g|gif|webp)$/i.test(ext) ? ext.toLowerCase().replace("jpeg", "jpg") : "png";
+    const id = "user-" + String(hash || "").slice(0, 12);
+    const file = "maps/" + id + "." + safeExt;
+    const entry = { id, label: "追加した地図", file, hash };
+    list.push(entry);
+    return { manifest: list, file, added: entry };
+  }
+
+  function replaceMapValues(route, catalogs, lookup) {
+    const mapOf = typeof lookup === "function" ? lookup : (value => lookup[value] || value);
+    const nextRoute = {};
+    for (const trackId of Object.keys(route || {})) {
+      nextRoute[trackId] = (route[trackId] || []).map(row => ({
+        chapterId: row.chapterId,
+        items: (row.items || []).map(item => {
+          if (!item || !item.map || !/^data:image\//i.test(item.map)) return item;
+          const file = mapOf(item.map);
+          return Object.assign({}, item, { map: file || item.map });
+        })
+      }));
+    }
+    const nextCatalogs = {};
+    for (const name of Object.keys(catalogs || {})) {
+      const catalog = catalogs[name] || {};
+      nextCatalogs[name] = Object.assign({}, catalog, {
+        items: (catalog.items || []).map(item => {
+          if (!item || !item.map || !/^data:image\//i.test(item.map)) return item;
+          const file = mapOf(item.map);
+          return Object.assign({}, item, { map: file || item.map });
+        })
+      });
+    }
+    return { route: nextRoute, catalogs: nextCatalogs };
   }
 
   function sourceValue(value, indent) {
@@ -618,6 +677,9 @@
     mergedRoute,
     numberCards,
     orderWithMove,
+    orderForSave,
+    assignMapFile,
+    replaceMapValues,
     saveOrder,
     upsertRouteCard,
     upsertCatalogCard,
