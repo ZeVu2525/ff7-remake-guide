@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v5");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v6");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -111,11 +111,32 @@ assert.strictEqual(
 );
 assert.ok(guide.ROUTE.hard.some(row => row.chapterId === "ch01" && row.items.some(item => item.id === "hard-ch01-01")));
 assert.ok(guide.ROUTE.intermission.some(row => row.items.some(item => item.id === "im01-01")));
-for (const name of ["summons", "skills"]) {
+for (const name of ["skills"]) {
   assert.ok(Array.isArray(guide.CATALOGS[name].items));
   assert.ok(guide.CATALOGS[name].items.length >= 1);
   assert.strictEqual(guide.CATALOGS[name].items[0].example, true);
 }
+assert.ok(guide.CATALOGS.summons.items.length >= 6);
+assert.ok(guide.CATALOGS.summons.items.every(item => Array.isArray(item.growth) && item.growth.length === 7));
+const buster = guide.CATALOGS.weapons.items.find(item => item.name === "バスタードソード");
+assert.ok(buster && buster.levels.length === 6);
+assert.strictEqual(buster.levels[0].core, "コア");
+assert.strictEqual(buster.total.atk, "69");
+assert.strictEqual(buster.total.sp, "356");
+assert.ok(guide.CATALOGS.weapons.items.every(item => item.levels.length === 6 && item.total && item.total.sp));
+assert.strictEqual(guide.CATALOGS.weapons.items.find(item => item.name === "ツィンスティンガー").levels.length, 6);
+assert.ok(!guide.CATALOGS.weapons.items.some(item => item.area === "ユフィ" || item.area === "武器アビリティ"));
+const cure = guide.CATALOGS.materia.items.find(item => item.name === "かいふく");
+assert.strictEqual(cure.buy, "600");
+assert.strictEqual(cure.levels.map(level => level.sell).join(","), "300,600,1200,2400");
+assert.match(cure.levels[1].effect, /13/);
+const hpUp = guide.CATALOGS.materia.items.find(item => item.id === "mat-im-015");
+assert.strictEqual(hpUp && hpUp.name, "HPアップ");
+assert.strictEqual(hpUp.area, "独立");
+assert.ok(hpUp.tables[0].body.length >= 5);
+assert.ok(!guide.CATALOGS.materia.items.some(item => item.area === "召喚" || item.id === "mat-im-014" || item.id.startsWith("mat-sup-")));
+assert.ok(guide.CATALOGS.intermission.items.some(item => item.id === "mat-im-014"));
+assert.ok(!guide.CATALOGS.intermission.items.some(item => item.id === "mat-im-015"));
 for (const name of ["materia", "weapons", "keyItems", "consumables", "accessories", "armor"]) {
   assert.ok(guide.CATALOGS[name].items.length > 1);
   assert.notStrictEqual(guide.CATALOGS[name].items[0].example, true);
