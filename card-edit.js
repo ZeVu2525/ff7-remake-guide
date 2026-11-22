@@ -51,6 +51,15 @@
     "#card-edit-error{min-height:1.3em;margin:8px 0 0;color:var(--red);font-weight:700}",
     "#card-edit-toggle{min-height:32px;margin-left:8px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font-size:12px;cursor:pointer}",
     "#card-drag-ghost .drag-count{display:inline-flex;align-items:center;justify-content:center;min-width:1.4em;margin-left:6px;padding:0 6px;border-radius:99px;background:#39c9ff;color:#04222d;font-weight:800}",
+    "#block-editor{display:grid;gap:8px}",
+    ".blk-row{padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2)}",
+    ".blk-tools{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
+    ".blk-tools button,.blk-add button,.rt-bar button{min-height:32px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:inherit;font:inherit;cursor:pointer}",
+    ".rt-bar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
+    ".rt-bar [data-rt=color]{width:22px;min-height:22px;padding:0}",
+    ".rt-edit{min-height:72px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);white-space:pre-wrap}",
+    ".blk-file input{max-width:100%}",
+    ".blk-preview{max-width:180px;max-height:120px;margin-top:6px;background:#fff}",
     "@media(max-width:640px){#card-edit-bar button{flex:1 1 calc(50% - 6px)}#card-edit-exit{flex-basis:100%}}"
   ].join("");
   document.head.appendChild(style);
@@ -333,6 +342,309 @@
     paintMapPreview();
   }
 
+  const RICH_COLORS = ["#1d4e89", "#c44949", "#1f7a4d", "#8a5a00", "#5b3a8c", "#222222"];
+
+  function freshBlocks(seed) {
+    const stored = GuideProgress.normalizeBlocks(seed && seed.blocks);
+    if (stored.length) return stored;
+    return GuideProgress.blocksFromDetail(seed && seed.detail);
+  }
+
+  function blockAt(path) {
+    const parts = String(path || "").split(".").map(Number);
+    const block = editing && editing.blocks && editing.blocks[parts[0]];
+    if (!block) return null;
+    if (parts.length === 1) return block;
+    if (block.type !== "columns" || !block.columns) return null;
+    const col = block.columns[parts[1]] || [];
+    return col[parts[2]] || null;
+  }
+
+  function syncBlocks() {
+    const root = document.getElementById("block-editor");
+    if (!root || !editing || !editing.blocks) return;
+    root.querySelectorAll("[data-block-path]").forEach(node => {
+      const block = blockAt(node.getAttribute("data-block-path"));
+      if (!block) return;
+      const editor = node.querySelector(":scope > .rt-wrap .rt-edit");
+      if (editor && (block.type === "text" || block.type === "callout")) block.html = editor.innerHTML;
+      if (block.type === "image") readImageFields(node, block);
+      if (block.type === "tiles") {
+        node.querySelectorAll(":scope > [data-tile]").forEach(tile => {
+          const item = block.items[Number(tile.getAttribute("data-tile"))];
+          if (item) readImageFields(tile, item, true);
+        });
+      }
+      if (block.type === "columns") {
+        const count = node.querySelector(":scope > .blk-tools [data-col-count]");
+        const arrow = node.querySelector(":scope > .blk-tools [data-col-arrow]");
+        if (count) {
+          const next = count.value === "3" ? 3 : 2;
+          block.count = next;
+          block.columns = block.columns || [];
+          while (block.columns.length < next) block.columns.push([]);
+          block.columns = block.columns.slice(0, next);
+          if (next === 3) block.arrow = false;
+        }
+        if (arrow) block.arrow = !!arrow.checked && block.count !== 3;
+      }
+    });
+    const hidden = document.getElementById("block-json");
+    const detail = form.elements.detail;
+    if (hidden) hidden.value = JSON.stringify(editing.blocks);
+    if (detail) detail.value = GuideProgress.plainFromBlocks(editing.blocks);
+  }
+
+  function readImageFields(node, block, tile) {
+    const input = node.querySelector("[data-img-url]");
+    const repo = node.querySelector("[data-img-repo]");
+    if (input && input.value.trim()) block.src = input.value.trim();
+    else if (repo && repo.value) block.src = repo.value;
+    else block.src = "";
+    if (!tile) {
+      const caption = node.querySelector("[data-img-caption]");
+      const width = node.querySelector("[data-img-width]");
+      const align = node.querySelector("[data-img-align]");
+      if (caption) block.caption = caption.value;
+      if (width) block.width = width.value;
+      if (align) block.align = align.value;
+    } else {
+      const label = node.querySelector("[data-tile-label]");
+      if (label) block.label = label.value;
+    }
+  }
+
+  function imageLibrary() {
+    return (globalThis.IMAGE_FILES || []).concat(globalThis.MAP_FILES || []);
+  }
+
+  function imageField(block, tile) {
+    const saved = imageLibrary();
+    const current = block.src || "";
+    const repo = saved.find(item => item.file === current);
+    const options = ['<option value="">保存済みの画像は使わない</option>'].concat(saved.map(item => `<option value="${escapeAttr(item.file)}"${repo && item.file === repo.file ? " selected" : ""}>${escapeText(item.label || item.file)}</option>`)).join("");
+    const warn = /^data:/i.test(current) && current.length > 400 * 1024 ? `<p class="map-warn">この画像は約${Math.round(current.length / 1024)}KBです。</p>` : "";
+    return [
+      `<div class="blk-file">`,
+      `<select data-img-repo>${options}</select>`,
+      `<input data-img-url value="${escapeAttr(repo ? "" : current)}" placeholder="https:// またはファイル">`,
+      `<input data-img-file type="file" accept="image/png,image/jpeg,image/gif,image/webp">`,
+      tile ? `<input data-tile-label value="${escapeAttr(block.label || "")}" placeholder="ラベル">` : [
+        `<input data-img-caption value="${escapeAttr(block.caption || "")}" placeholder="説明（空でもよい）">`,
+        `<select data-img-width><option value="s"${block.width === "s" ? " selected" : ""}>小</option><option value="m"${!block.width || block.width === "m" ? " selected" : ""}>中</option><option value="l"${block.width === "l" ? " selected" : ""}>大</option><option value="full"${block.width === "full" ? " selected" : ""}>幅いっぱい</option></select>`,
+        `<select data-img-align><option value="left"${block.align === "left" ? " selected" : ""}>左</option><option value="center"${!block.align || block.align === "center" ? " selected" : ""}>中央</option><option value="right"${block.align === "right" ? " selected" : ""}>右</option></select>`
+      ].join(""),
+      current ? `<img class="blk-preview" alt="" src="${escapeAttr(current)}">` : "",
+      warn,
+      `</div>`
+    ].join("");
+  }
+
+  function richBox(html) {
+    const colors = RICH_COLORS.map(color => `<button type="button" data-rt="color" data-rt-value="${color}" style="background:${color}" aria-label="${color}"></button>`).join("");
+    return `<div class="rt-wrap"><div class="rt-bar"><button type="button" data-rt="bold"><b>B</b></button><button type="button" data-rt="italic"><i>I</i></button><button type="button" data-rt="underline"><u>U</u></button><button type="button" data-rt="strike"><s>S</s></button><button type="button" data-rt="clear">書式を消す</button><select data-rt="size"><option value="">大きさ</option><option value="0.85em">小</option><option value="1em">中</option><option value="1.25em">大</option></select><select data-rt="font"><option value="">字体</option><option value="serif">明朝</option><option value="monospace">等幅</option></select><label>色 <input type="color" data-rt="color" value="#1d4e89"></label>${colors}<label>背景 <input type="color" data-rt="bg" value="#fff3bf"></label></div><div class="rt-edit" contenteditable="true">${GuideProgress.sanitizeRich(html || "")}</div></div>`;
+  }
+
+  function addButtons(path) {
+    const kinds = path ? [["text", "文章"], ["image", "画像"]] : [["text", "文章"], ["image", "画像"], ["callout", "囲み"], ["columns", "2列"], ["tiles", "小画像"]];
+    return kinds.map(item => `<button type="button" data-add-block="${item[0]}" data-add-path="${escapeAttr(path)}">${item[1]}</button>`).join("");
+  }
+
+  function blockRow(block, path) {
+    const top = path.indexOf(".") < 0;
+    const tools = `<div class="blk-tools">${top ? `<button type="button" class="blk-handle" draggable="true" data-drag-block="${escapeAttr(path)}" aria-label="並べ替え">≡</button>` : ""}<button type="button" data-del-block="${escapeAttr(path)}">この部分を消す</button></div>`;
+    let body = "";
+    if (block.type === "text" || block.type === "callout") body = richBox(block.html);
+    else if (block.type === "image") body = imageField(block, false);
+    else if (block.type === "tiles") {
+      body = (block.items || []).map((item, index) => `<div data-tile="${index}">${imageField(item, true)}<button type="button" data-del-tile="${escapeAttr(path)}" data-tile-index="${index}">外す</button></div>`).join("") + `<p class="blk-add"><button type="button" data-add-tile="${escapeAttr(path)}">小画像を足す</button></p>`;
+    } else if (block.type === "columns") {
+      const count = block.count === 3 ? 3 : 2;
+      body = `<div class="blk-tools"><select data-col-count><option value="2"${count === 2 ? " selected" : ""}>2列</option><option value="3"${count === 3 ? " selected" : ""}>3列</option></select>${count === 2 ? `<label><input type="checkbox" data-col-arrow${block.arrow ? " checked" : ""}> 間に矢印</label>` : ""}</div>` + (block.columns || []).slice(0, count).map((col, index) => `<div class="blk-col-edit"><p>列 ${index + 1}</p>${col.map((child, childIndex) => blockRow(child, path + "." + index + "." + childIndex)).join("")}<p class="blk-add">${addButtons(path + "." + index)}</p></div>`).join("");
+    }
+    return `<div class="blk-row" data-block-path="${escapeAttr(path)}">${tools}${body}</div>`;
+  }
+
+  function paintBlocks() {
+    const host = document.getElementById("block-editor");
+    if (!host || !editing) return;
+    host.innerHTML = (editing.blocks || []).map((block, index) => blockRow(block, String(index))).join("") + `<p class="blk-add">${addButtons("")}</p>`;
+    syncBlocks();
+  }
+
+  function makeBlock(type) {
+    if (type === "callout") return { type: "callout", html: "" };
+    if (type === "image") return { type: "image", src: "", caption: "", width: "m", align: "center" };
+    if (type === "columns") return { type: "columns", count: 2, arrow: false, columns: [[{ type: "text", html: "" }], [{ type: "text", html: "" }]] };
+    if (type === "tiles") return { type: "tiles", items: [{ src: "", label: "" }] };
+    return { type: "text", html: "" };
+  }
+
+  function insertBlock(type, path) {
+    syncBlocks();
+    const block = makeBlock(type);
+    if (!path) editing.blocks.push(block);
+    else {
+      const parts = path.split(".").map(Number);
+      const parent = editing.blocks[parts[0]];
+      if (!parent || parent.type !== "columns") return;
+      parent.columns[parts[1]] = parent.columns[parts[1]] || [];
+      parent.columns[parts[1]].push(block);
+    }
+    paintBlocks();
+  }
+
+  function selectionHtml() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return "";
+    const box = document.createElement("div");
+    box.appendChild(sel.getRangeAt(0).cloneContents());
+    return box.innerHTML;
+  }
+
+  function applyRich(editor, kind, value) {
+    if (!editor) return;
+    editor.focus();
+    document.execCommand("styleWithCSS", false, true);
+    if (kind === "bold") document.execCommand("bold");
+    else if (kind === "italic") document.execCommand("italic");
+    else if (kind === "underline") document.execCommand("underline");
+    else if (kind === "strike") document.execCommand("strikeThrough");
+    else if (kind === "clear") {
+      document.execCommand("removeFormat");
+      document.execCommand("unlink");
+    } else if (kind === "color" && value) document.execCommand("foreColor", false, value);
+    else if (kind === "bg" && value) document.execCommand("hiliteColor", false, value);
+    else if ((kind === "size" || kind === "font") && value) {
+      const html = selectionHtml();
+      if (!html) return;
+      const css = kind === "size" ? "font-size:" + value : (value === "serif" ? "font-family:serif" : "font-family:ui-monospace,monospace");
+      document.execCommand("insertHTML", false, '<span style="' + css + '">' + html + "</span>");
+    }
+    syncBlocks();
+  }
+
+  function missingImage(blocks) {
+    return (blocks || []).some(block => {
+      if (!block) return false;
+      if (block.type === "image") return !GuideProgress.validImageValue(block.src);
+      if (block.type === "tiles") return !(block.items || []).length || block.items.some(item => !GuideProgress.validImageValue(item.src));
+      if (block.type === "columns") return (block.columns || []).some(col => missingImage(col));
+      return false;
+    });
+  }
+
+  function onBlockClick(event) {
+    const rt = event.target.closest("[data-rt]");
+    if (rt && rt.tagName === "BUTTON") {
+      event.preventDefault();
+      applyRich(rt.closest(".rt-wrap").querySelector(".rt-edit"), rt.getAttribute("data-rt"), rt.getAttribute("data-rt-value") || "");
+      return;
+    }
+    const add = event.target.closest("[data-add-block]");
+    if (add) { insertBlock(add.getAttribute("data-add-block"), add.getAttribute("data-add-path")); return; }
+    const del = event.target.closest("[data-del-block]");
+    if (del) {
+      syncBlocks();
+      const parts = del.getAttribute("data-del-block").split(".").map(Number);
+      if (parts.length === 1) editing.blocks.splice(parts[0], 1);
+      else editing.blocks[parts[0]].columns[parts[1]].splice(parts[2], 1);
+      paintBlocks();
+      return;
+    }
+    const tile = event.target.closest("[data-add-tile]");
+    if (tile) {
+      syncBlocks();
+      blockAt(tile.getAttribute("data-add-tile")).items.push({ src: "", label: "" });
+      paintBlocks();
+      return;
+    }
+    const dropTile = event.target.closest("[data-del-tile]");
+    if (dropTile) {
+      syncBlocks();
+      blockAt(dropTile.getAttribute("data-del-tile")).items.splice(Number(dropTile.getAttribute("data-tile-index")), 1);
+      paintBlocks();
+    }
+  }
+
+  function onBlockChange(event) {
+    const target = event.target;
+    if (!target || !target.closest || !target.closest("#block-editor")) return;
+    if (target.getAttribute("data-rt") === "size" || target.getAttribute("data-rt") === "font" || target.getAttribute("data-rt") === "color" || target.getAttribute("data-rt") === "bg") {
+      applyRich(target.closest(".rt-wrap").querySelector(".rt-edit"), target.getAttribute("data-rt"), target.value);
+      target.value = target.tagName === "SELECT" ? "" : target.value;
+      return;
+    }
+    if (target.hasAttribute("data-img-repo")) {
+      const input = target.parentElement.querySelector("[data-img-url]");
+      if (target.value && input) input.value = target.value;
+      syncBlocks();
+      paintBlocks();
+      return;
+    }
+    if (target.hasAttribute("data-img-file")) {
+      const picked = target.files && target.files[0];
+      if (!picked) return;
+      if (!/^image\/(png|jpeg|gif|webp)$/.test(picked.type)) {
+        error.textContent = "PNG、JPEG、GIF、WebPの画像にしてください。";
+        return;
+      }
+      if (picked.size > MAP_FILE_MAX) {
+        error.textContent = "画像が大きすぎます。1.2MBまでにしてください。";
+        return;
+      }
+      const input = target.parentElement.querySelector("[data-img-url]");
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (input) input.value = String(reader.result || "");
+        error.textContent = "";
+        syncBlocks();
+        paintBlocks();
+      };
+      reader.readAsDataURL(picked);
+      return;
+    }
+    if (target.hasAttribute("data-col-count") || target.hasAttribute("data-col-arrow")) {
+      syncBlocks();
+      paintBlocks();
+      return;
+    }
+    syncBlocks();
+  }
+
+  fields.addEventListener("click", onBlockClick);
+  fields.addEventListener("change", onBlockChange);
+  fields.addEventListener("input", event => {
+    if (event.target && event.target.closest && event.target.closest("#block-editor")) syncBlocks();
+  });
+  fields.addEventListener("mousedown", event => {
+    if (event.target.closest && event.target.closest(".rt-bar button")) event.preventDefault();
+  });
+  fields.addEventListener("dragstart", event => {
+    const handle = event.target.closest && event.target.closest("[data-drag-block]");
+    if (!handle || !event.dataTransfer) return;
+    event.dataTransfer.setData("text/plain", handle.getAttribute("data-drag-block"));
+    event.dataTransfer.effectAllowed = "move";
+  });
+  fields.addEventListener("dragover", event => {
+    if (event.target.closest && event.target.closest("[data-block-path]")) event.preventDefault();
+  });
+  fields.addEventListener("drop", event => {
+    const from = event.dataTransfer && event.dataTransfer.getData("text/plain");
+    const row = event.target.closest && event.target.closest("[data-block-path]");
+    if (!from || !row || from.indexOf(".") >= 0) return;
+    const to = row.getAttribute("data-block-path");
+    if (to.indexOf(".") >= 0) return;
+    event.preventDefault();
+    syncBlocks();
+    const a = Number(from);
+    const b = Number(to);
+    if (a === b || !editing.blocks[a]) return;
+    const moved = editing.blocks.splice(a, 1)[0];
+    editing.blocks.splice(b, 0, moved);
+    paintBlocks();
+  });
+
   function openRouteForm(seed) {
     editing = seed;
     error.textContent = "";
@@ -354,7 +666,10 @@
       field("見出しの定型文", `<select name="template">${templateOptions}</select>`),
       field("見出し", `<input name="title" value="${escapeAttr(seed.title || "")}" placeholder="定型文を選んだときは空でも保存できます">`),
       '<p id="template-preview"></p>',
-      field("本文", `<textarea name="detail">${escapeText(seed.detail || "")}</textarea>`),
+      '<p>本文は、文章・画像・列・囲みを上から順に並べます。文章の中の改行も、カードにそのまま出ます。</p>',
+      '<div id="block-editor"></div>',
+      `<textarea name="detail" hidden>${escapeText(seed.detail || "")}</textarea>`,
+      '<input type="hidden" id="block-json" name="blocks" value="">',
       field("タグ", `<select name="flag">${flags}</select>`),
       field("期限", `<input name="deadline" value="${escapeAttr(seed.deadline || "")}" placeholder="期限・取り逃しのとき">`),
       field("トロフィー", `<select name="trophy">${trophies}</select>`),
@@ -363,6 +678,8 @@
       field("親カード", `<select name="parent">${parentOptions}</select>`),
       '<div id="item-picker"></div>'
     ].join("");
+    editing.blocks = freshBlocks(seed);
+    paintBlocks();
     paintItemPicker();
     form.elements.flag.addEventListener("change", paintItemPicker);
     bindMapField();
@@ -455,6 +772,11 @@
     const flagIds = GAME.flags.map(flag => flag.id);
     const sectionId = String(data.get("section") || editing.section || "");
     const section = chapterSections(editing.trackId, editing.chapterId).find(item => item.id === sectionId);
+    syncBlocks();
+    if (missingImage(editing.blocks)) {
+      error.textContent = "画像が空です。ファイル、https:// のURL、保存済みの画像のどれかを選んでください。";
+      return;
+    }
     const rawMap = chosenMap();
     const checked = GuideProgress.validateRouteFields({
       title: data.get("title"),
@@ -468,7 +790,8 @@
       section: data.get("section") || editing.section || "",
       template: data.get("template") || "",
       quest: editing.quest || "",
-      items: editing.links || []
+      items: editing.links || [],
+      blocks: editing.blocks
     }, flagIds, GuideApp.trophyChoices().map(item => item.id));
     if (checked.error) {
       error.textContent = checked.error;
@@ -718,6 +1041,13 @@
     if (down) { shift(down.getAttribute("data-card-down"), 1); return; }
     const move = event.target.closest("[data-card-move]");
     if (move) { askMove(move.getAttribute("data-card-move")); return; }
+    const bodyOpen = event.target.closest(".blocks");
+    if (bodyOpen && !event.target.closest("button, a, input, label")) {
+      const card = bodyOpen.closest("article.it[data-id]");
+      const opener = card && card.querySelector("[data-card-edit]");
+      if (opener) opener.click();
+      return;
+    }
     const edit = event.target.closest("[data-card-edit]");
     if (edit) {
       const id = edit.getAttribute("data-card-edit");
@@ -1218,7 +1548,8 @@
       quest: item.quest || "",
       section: item.section || "",
       template: item.template || "",
-      items: item.items || []
+      items: item.items || [],
+      blocks: item.blocks && item.blocks.length ? item.blocks : GuideProgress.blocksFromDetail(item.detail)
     };
   }
 
@@ -1643,8 +1974,50 @@
     return { route: replaced.route, catalogs: replaced.catalogs, manifest, fresh };
   }
 
+  function collectBlockUrls(route) {
+    const urls = [];
+    const seen = new Set();
+    const take = src => {
+      if (!src || !/^data:image\//i.test(src) || seen.has(src)) return;
+      seen.add(src);
+      urls.push(src);
+    };
+    const walk = blocks => {
+      (blocks || []).forEach(block => {
+        if (!block) return;
+        if (block.type === "image") take(block.src);
+        if (block.type === "tiles") (block.items || []).forEach(item => take(item && item.src));
+        if (block.type === "columns") (block.columns || []).forEach(walk);
+      });
+    };
+    for (const trackId of Object.keys(route || {})) {
+      for (const row of route[trackId] || []) {
+        for (const item of row.items || []) walk(item && item.blocks);
+      }
+    }
+    return urls;
+  }
+
+  async function prepareImages(route) {
+    const urls = collectBlockUrls(route);
+    let manifest = (globalThis.IMAGE_FILES || []).map(item => Object.assign({}, item));
+    const lookup = {};
+    const fresh = [];
+    for (const url of urls) {
+      const hash = await hashDataUrl(url);
+      const assigned = GuideProgress.assignImageFile(hash, mapExt(url), manifest);
+      manifest = assigned.manifest;
+      lookup[url] = assigned.file;
+      if (assigned.added) fresh.push({ file: assigned.file, blob: dataUrlBlob(url) });
+    }
+    const replaced = GuideProgress.replaceMapValues(route, {}, lookup);
+    return { route: replaced.route, manifest, fresh };
+  }
+
   async function exportChosen(flags) {
     const prepared = await prepareMaps(GuideProgress.mergedRoute(ROUTE, GAME.chapters, book()), mergedCatalogs());
+    const images = await prepareImages(prepared.route);
+    prepared.route = images.route;
     if (flags.route) download("data-route.js", GuideProgress.routeModuleSource(prepared.route), "text/javascript");
     if (flags.catalog) download("data-catalogs.js", GuideProgress.catalogsModuleSource(prepared.catalogs), "text/javascript");
     if (flags.json) download("ff7r-card-edits.json", JSON.stringify({ app: GuideProgress.APP, cards: book() }, null, 2), "application/json");
@@ -1659,6 +2032,19 @@
         labels: book().labels || {},
         templates: GuideProgress.activeTemplates(book(), globalThis.TEMPLATES)
       }, null, 2), "application/json");
+    }
+    if (flags.images) {
+      download("images.js", "const IMAGE_FILES = " + JSON.stringify(images.manifest, null, 2) + ";\n\nglobalThis.IMAGE_FILES = IMAGE_FILES;\n", "text/javascript");
+      images.fresh.forEach(item => {
+        if (!item.blob) return;
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(item.blob);
+        link.download = item.file.split("/").pop();
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+      });
     }
     if (flags.maps) {
       download("maps.js", "const MAP_FILES = " + JSON.stringify(prepared.manifest, null, 2) + ";\n\nglobalThis.MAP_FILES = MAP_FILES;\n", "text/javascript");
@@ -1698,6 +2084,7 @@
       '<label><input type="checkbox" name="exp-catalog" checked> 台帳（アイテムや依頼）。data/catalogs.js と置き換えます。</label>',
       '<label><input type="checkbox" name="exp-json"> 編集データの控え。このブラウザの差分だけです。</label>',
       '<label><input type="checkbox" name="exp-maps"> 新しく追加した地図画像と data/maps.js。</label>',
+      '<label><input type="checkbox" name="exp-images"> カードに追加した画像と data/images.js。</label>',
       '<label><input type="checkbox" name="exp-templates"> 見出しの定型文。data/templates.js と置き換えます。</label>',
       '<label><input type="checkbox" name="exp-settings"> 設定（ボタン名など）。ff7r-settings.json です。</label>',
       '<label><input type="checkbox" name="exp-text"> 表示文の修正。進行とは別のJSONです。</label>'
@@ -1708,6 +2095,7 @@
         catalog: data.get("exp-catalog") === "on",
         json: data.get("exp-json") === "on",
         maps: data.get("exp-maps") === "on",
+        images: data.get("exp-images") === "on",
         templates: data.get("exp-templates") === "on",
         settings: data.get("exp-settings") === "on",
         text: data.get("exp-text") === "on"
@@ -1722,6 +2110,7 @@
       "<li>台帳は data/catalogs.js です。アイテムや依頼の中身です。</li>",
       "<li>編集データの控えは、差分だけのJSONです。「読み込む」でこのブラウザに戻せます。</li>",
       "<li>地図は maps/ の画像と data/maps.js です。掲載元の地図画像は入れません。</li>",
+      "<li>カードの画像は images/ と data/images.js です。掲載元の画像は入れません。</li>",
       "<li>定型文は data/templates.js です。宝箱① のような見出しの元です。設定タブでも直せます。</li>",
       "<li>設定はボタン名などのJSONです。「読み込む」でこのブラウザに戻せます。</li>",
       "<li>表示文の修正は、画面の文章を直接直した分です。</li></ul>",

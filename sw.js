@@ -1,6 +1,6 @@
 /* 版は data/game.js の GAME.cache と同じ文字列にする。importScripts は使わない。
    古いサービスワーカーが data/game.js を横取りすると、新しい戦略まで古い版に戻る。 */
-const CACHE = "ff7r-guide-v11";
+const CACHE = "ff7r-guide-v12";
 const CORE = [
   "./",
   "./index.html",
@@ -14,7 +14,8 @@ const CORE = [
   "./data/route.js",
   "./data/catalogs.js",
   "./data/maps.js",
-  "./data/templates.js"
+  "./data/templates.js",
+  "./data/images.js"
 ];
 
 self.addEventListener("install", event => {
@@ -58,7 +59,7 @@ self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
-  if (/\/maps\/[^/]+\.(?:png|jpe?g|gif|webp)$/i.test(url.pathname)) {
+  if (/\/(?:maps|images)\/[^/]+\.(?:png|jpe?g|gif|webp)$/i.test(url.pathname)) {
     event.respondWith(cacheFirstImage(event.request));
     return;
   }

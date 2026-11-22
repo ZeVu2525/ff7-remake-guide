@@ -375,7 +375,7 @@
           </div>
         </div>
         <div class="route-item-content"${collapsed ? " hidden" : ""}>
-          ${item.detail ? `<div class="det" data-edit-text>${esc(item.detail)}</div>` : ""}
+          ${cardBody(item)}
           ${itemLine(item)}
           ${sourceLine(item.source)}
           ${cardTools(item)}
@@ -416,6 +416,12 @@
       </section>`;
     }).join("");
     return { html, visible, numbers: {} };
+  }
+
+  function cardBody(item) {
+    const blocks = item.blocks && item.blocks.length ? item.blocks : GuideProgress.blocksFromDetail(item.detail);
+    const html = GuideProgress.blockHtml(blocks);
+    return html ? `<div class="blocks">${html}</div>` : "";
   }
 
   function shownMap(item, section) {
@@ -1340,6 +1346,12 @@
       if (ui.itemSort.key === key) ui.itemSort.dir *= -1;
       else ui.itemSort = { key, dir: 1 };
       renderItems();
+      return;
+    }
+    const zoom = event.target.closest("[data-zoom-src]");
+    if (zoom) {
+      event.preventDefault();
+      openZoom(zoom.getAttribute("data-zoom-src"), "", zoom.getAttribute("data-zoom-label") || "");
       return;
     }
     const map = event.target.closest("[data-map]");
