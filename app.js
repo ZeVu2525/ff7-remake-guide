@@ -604,6 +604,20 @@
     </div>`;
   }
 
+  function routeAnythingOpen() {
+    const chapters = chaptersFor(ui.trackId);
+    if (chapters.some(chapter => ui.collapsed[chapterKey(chapter.id)] !== true)) return true;
+    return chapters.some(chapter => (chapter.items || []).some(item => item && (ui.collapsed[item.id] !== true || ui.collapsed["kids:" + item.id] !== true)));
+  }
+
+  function paintExpandLabel() {
+    const expand = document.getElementById("expand");
+    if (!expand) return;
+    const open = routeAnythingOpen();
+    expand.textContent = open ? "すべて折りたたむ" : "すべて開く";
+    expand.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
   function narrowScreen() {
     return window.matchMedia("(max-width: 720px)").matches;
   }
@@ -683,8 +697,8 @@
           <button type="button" data-chapter-delete="${esc(chapter.id)}">削除</button>
         </span>` : "";
       const body = lazy ? "" : chapterBodyHtml(chapter).html;
-      const estimate = Math.max(64, 56 + chapter.items.length * 84);
-      return `<section class="ch${closed ? " closed" : ""}${hide ? " hide" : ""}" id="chapter-${esc(ui.trackId)}-${esc(chapter.id)}" data-chapter="${esc(chapter.id)}"${lazy ? ` data-lazy="1" style="min-height:${estimate}px"` : ""}>
+      const estimate = !closed && lazy ? Math.max(64, 56 + chapter.items.length * 84) : 0;
+      return `<section class="ch${closed ? " closed" : ""}${hide ? " hide" : ""}" id="chapter-${esc(ui.trackId)}-${esc(chapter.id)}" data-chapter="${esc(chapter.id)}"${lazy ? ` data-lazy="1"${estimate ? ` style="min-height:${estimate}px"` : ""}` : ""}>
         <h2 class="chapter-heading"><button type="button" class="chh" data-toggle-chapter="${esc(chapter.id)}" aria-expanded="${closed ? "false" : "true"}">
           <span class="caret" aria-hidden="true">▼</span>
           <span class="cht">${esc(chapter.title)}</span>
@@ -707,10 +721,7 @@
       .join("");
     jump.value = [...jump.options].some(option => option.value === ui.chapterId) ? ui.chapterId : "";
     if (previous && previous !== jump.value && !ui.chapterId) jump.value = "";
-    const anyOpen = chapters.some(chapter => ui.collapsed[chapterKey(chapter.id)] !== true);
-    const expand = document.getElementById("expand");
-    expand.textContent = anyOpen ? "すべて折りたたむ" : "すべて開く";
-    expand.setAttribute("aria-expanded", anyOpen ? "true" : "false");
+    paintExpandLabel();
     renderDash();
   }
 
@@ -1133,8 +1144,12 @@
       </section>`;
     document.getElementById("expand").addEventListener("click", () => {
       const chapters = chaptersFor(ui.trackId);
-      const collapse = chapters.some(chapter => ui.collapsed[chapterKey(chapter.id)] !== true);
-      chapters.forEach(chapter => { ui.collapsed[chapterKey(chapter.id)] = collapse; });
+      const ids = [];
+      chapters.forEach(chapter => {
+        ids.push(chapterKey(chapter.id));
+        (chapter.items || []).forEach(item => { if (item && item.id) ids.push(item.id); });
+      });
+      ui.collapsed = GuideProgress.foldAll(ui.collapsed, ids, routeAnythingOpen());
       renderRoute();
     });
     document.getElementById("chapter-jump").addEventListener("change", event => {
@@ -1690,10 +1705,8 @@
       section.classList.toggle("closed", closed);
       ui.collapsed[chapterKey(id)] = closed;
       chapter.setAttribute("aria-expanded", closed ? "false" : "true");
-      const expand = document.getElementById("expand");
-      const anyOpen = !!document.querySelector("#route section.ch:not(.closed)");
-      expand.textContent = anyOpen ? "すべて折りたたむ" : "すべて開く";
-      expand.setAttribute("aria-expanded", anyOpen ? "true" : "false");
+      if (!closed) fillLazyChapter(section);
+      paintExpandLabel();
       return;
     }
     const toggle = event.target.closest("[data-toggle-item]");
@@ -1703,6 +1716,7 @@
       const collapsed = ui.collapsed[id] !== true;
       ui.collapsed = GuideProgress.foldCards(ui.collapsed, id, childIndex(card), collapsed);
       paintFold(card);
+      paintExpandLabel();
       return;
     }
     const questToggle = event.target.closest("[data-toggle-quest]");
@@ -1719,6 +1733,7 @@
       ui.collapsed["kids:" + id] = closed;
       const card = kidsToggle.closest("article.it");
       if (card) setKidsOpen(card, !closed);
+      paintExpandLabel();
       return;
     }
     const questLink = event.target.closest("[data-open-quest]");

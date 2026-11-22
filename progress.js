@@ -813,6 +813,16 @@
     return next;
   }
 
+  function foldAll(flags, ids, closed) {
+    const next = Object.assign(Object.create(null), flags || {});
+    (ids || []).forEach(id => {
+      if (!id) return;
+      next[id] = closed === true;
+      next["kids:" + id] = closed === true;
+    });
+    return next;
+  }
+
   function clampMapFrame(frame, viewport) {
     const box = viewport || { width: 0, height: 0 };
     const viewWidth = Math.max(0, Number(box.width) || 0);
@@ -1555,6 +1565,7 @@
     enemyLinks,
     numberCards,
     foldCards,
+    foldAll,
     clampMapFrame,
     defaultMapFrame,
     numberChapter,
