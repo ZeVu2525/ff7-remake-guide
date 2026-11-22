@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v16");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v17");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -431,4 +431,46 @@ assert.ok(appSrc.includes("ff7r-tab-scroll-v1"));
 assert.ok(appSrc.includes("data-section-insert"));
 assert.ok(editSrc.includes("id=\"tag-pop\"") || editSrc.includes('pop.id = "tag-pop"'));
 
-console.log("test-guide: ok");
+assert.ok(require("fs").readFileSync(require("path").join(__dirname, "card-edit.js"), "utf8").includes('return [{ type: "text", html: "" }]'));
+function mockFetch(handler) {
+  return async (url, options) => {
+    const hit = await handler(url, options || {});
+    return { ok: hit.status < 300, status: hit.status, text: async () => JSON.stringify(hit.body) };
+  };
+}
+(async () => {
+  const denied = await progress.githubTest(mockFetch(async () => ({ status: 200, body: { permissions: { push: false }, full_name: "ZeVu2525/ff7-remake-guide" } })), "secret-token", "ZeVu2525", "ff7-remake-guide");
+  assert.strictEqual(denied.push, false);
+  let patches = 0;
+  const calls = [];
+  const fetchImpl = mockFetch(async (url, options) => {
+    const method = options.method || "GET";
+    calls.push(method + " " + url);
+    assert.ok(!String(options.body || "").includes("secret-token"));
+    if (method === "GET" && url.endsWith("/repos/ZeVu2525/ff7-remake-guide")) return { status: 200, body: { permissions: { push: true }, full_name: "ZeVu2525/ff7-remake-guide" } };
+    if (method === "GET" && url.includes("/git/ref/heads/main")) return { status: 200, body: { object: { sha: "head" + calls.length } } };
+    if (method === "GET" && url.includes("/git/commits/")) return { status: 200, body: { tree: { sha: "base-tree" } } };
+    if (method === "POST" && url.endsWith("/git/blobs")) return { status: 201, body: { sha: "blob" } };
+    if (method === "POST" && url.endsWith("/git/trees")) return { status: 201, body: { sha: "tree" } };
+    if (method === "POST" && url.endsWith("/git/commits")) return { status: 201, body: { sha: "commitsha", html_url: "https://github.com/ZeVu2525/ff7-remake-guide/commit/commitsha" } };
+    if (method === "PATCH" && url.includes("/git/refs/heads/main")) {
+      patches += 1;
+      if (patches === 1) return { status: 409, body: { message: "not a fast forward" } };
+      return { status: 200, body: {} };
+    }
+    if (method === "GET" && url.includes("/contents/data/route.js")) return { status: 200, body: { content: progress.utf8ToBase64("const ROUTE = {};\n") } };
+    return { status: 404, body: { message: "missing" } };
+  });
+  const allowed = await progress.githubTest(fetchImpl, "secret-token", "ZeVu2525", "ff7-remake-guide");
+  assert.strictEqual(allowed.push, true);
+  const committed = await progress.githubCommit(fetchImpl, "secret-token", {
+    owner: "ZeVu2525", repo: "ff7-remake-guide", branch: "main", message: "編集内容を書き出し",
+    files: [{ path: "data/route.js", base64: progress.utf8ToBase64("const ROUTE = {};\n") }]
+  });
+  assert.strictEqual(patches, 2);
+  assert.strictEqual(committed.sha, "commitsha");
+  assert.ok(!JSON.stringify(committed).includes("secret-token"));
+  const read = await progress.githubReadFiles(fetchImpl, "secret-token", "ZeVu2525", "ff7-remake-guide", "main", ["data/route.js"]);
+  assert.strictEqual(read["data/route.js"], "const ROUTE = {};\n");
+  console.log("test-guide: ok");
+})().catch(error => { console.error(error); process.exit(1); });

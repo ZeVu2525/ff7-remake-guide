@@ -1244,6 +1244,84 @@
     return "const CATALOGS = " + sourceValue(catalogs, 0) + ";\n\nglobalThis.CATALOGS = CATALOGS;\n";
   }
 
+  function utf8ToBase64(text) {
+    return btoa(unescape(encodeURIComponent(String(text))));
+  }
+
+  function base64ToUtf8(value) {
+    return decodeURIComponent(escape(atob(String(value || "").replace(/\s/g, ""))));
+  }
+
+  async function githubApi(fetchImpl, token, method, path, payload) {
+    const res = await fetchImpl("https://api.github.com" + path, {
+      method: method,
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      },
+      body: payload == null ? undefined : JSON.stringify(payload)
+    });
+    const raw = await res.text();
+    let body = null;
+    try { body = raw ? JSON.parse(raw) : null; } catch (error) { body = { message: String(raw).slice(0, 180) }; }
+    return { ok: res.ok, status: res.status, body: body };
+  }
+
+  async function githubTest(fetchImpl, token, owner, repo) {
+    const res = await githubApi(fetchImpl, token, "GET", "/repos/" + owner + "/" + repo);
+    if (!res.ok) return { ok: false, push: false, error: (res.body && res.body.message) || ("HTTP " + res.status) };
+    const push = !!(res.body && res.body.permissions && res.body.permissions.push === true);
+    return { ok: push, push: push, fullName: res.body.full_name || "" };
+  }
+
+  async function githubCommitOnce(fetchImpl, token, spec) {
+    const base = "/repos/" + spec.owner + "/" + spec.repo;
+    const ref = await githubApi(fetchImpl, token, "GET", base + "/git/ref/heads/" + spec.branch);
+    if (!ref.ok) throw new Error((ref.body && ref.body.message) || "ブランチを読めませんでした");
+    const head = ref.body.object.sha;
+    const parent = await githubApi(fetchImpl, token, "GET", base + "/git/commits/" + head);
+    if (!parent.ok) throw new Error("直前のコミットを読めませんでした");
+    const items = [];
+    for (const file of spec.files) {
+      const blob = await githubApi(fetchImpl, token, "POST", base + "/git/blobs", { content: file.base64, encoding: "base64" });
+      if (!blob.ok) throw new Error((file.path || "blob") + " を送れませんでした");
+      items.push({ path: file.path, mode: "100644", type: "blob", sha: blob.body.sha });
+    }
+    const tree = await githubApi(fetchImpl, token, "POST", base + "/git/trees", { base_tree: parent.body.tree.sha, tree: items });
+    if (!tree.ok) throw new Error("ツリーを作れませんでした");
+    const made = await githubApi(fetchImpl, token, "POST", base + "/git/commits", { message: spec.message, tree: tree.body.sha, parents: [head] });
+    if (!made.ok) throw new Error("コミットを作れませんでした");
+    const updated = await githubApi(fetchImpl, token, "PATCH", base + "/git/refs/heads/" + spec.branch, { sha: made.body.sha });
+    return { updated: updated, sha: made.body.sha, url: made.body.html_url || ("https://github.com/" + spec.owner + "/" + spec.repo + "/commit/" + made.body.sha) };
+  }
+
+  async function githubCommit(fetchImpl, token, spec) {
+    const first = await githubCommitOnce(fetchImpl, token, spec);
+    const message = first.updated.body && first.updated.body.message || "";
+    if (first.updated.status === 409 || /fast[- ]forward/i.test(message)) {
+      const second = await githubCommitOnce(fetchImpl, token, spec);
+      if (!second.updated.ok) throw new Error((second.updated.body && second.updated.body.message) || "main が先に更新されていたため、書き出せませんでした");
+      return { sha: second.sha, url: second.url };
+    }
+    if (!first.updated.ok) throw new Error(message || "main を更新できませんでした");
+    return { sha: first.sha, url: first.url };
+  }
+
+  const GITHUB_STORE = "ff7r-github-admin-v1";
+
+  async function githubReadFiles(fetchImpl, token, owner, repo, branch, paths) {
+    const out = {};
+    for (const path of paths) {
+      const res = await githubApi(fetchImpl, token, "GET", "/repos/" + owner + "/" + repo + "/contents/" + path + "?ref=" + encodeURIComponent(branch));
+      if (res.status === 404) continue;
+      if (!res.ok) throw new Error(path + " を読めませんでした");
+      out[path] = base64ToUtf8(res.body.content || "");
+    }
+    return out;
+  }
+
   function mergedRoute(route, chapterMap, book) {
     const out = {};
     for (const trackId of Object.keys(chapterMap || {})) {
@@ -1269,6 +1347,12 @@
     cardFlags,
     suggestMatches,
     statForMode,
+    utf8ToBase64,
+    base64ToUtf8,
+    githubTest,
+    githubCommit,
+    githubReadFiles,
+    GITHUB_STORE,
     enemyLinks,
     numberCards,
     numberChapter,
