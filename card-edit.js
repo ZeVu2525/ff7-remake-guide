@@ -28,7 +28,8 @@
     "#card-edit-dialog{position:fixed;z-index:270;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:12px;background:rgba(2,10,18,.55);box-sizing:border-box}",
     "#card-edit-dialog[hidden]{display:none}",
     "#card-edit-dialog form{width:min(640px,100%);max-height:min(88vh,760px);overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;padding:14px;border-radius:12px 12px 0 0;background:var(--bg2);color:var(--fg)}",
-    "#card-edit-fields{overflow:auto;min-height:0}",
+    "#card-edit-fields{overflow:auto;min-height:0;overscroll-behavior:contain}",
+    "#card-edit-dialog form{overscroll-behavior:contain}",
     "#card-edit-dialog h2{margin:0 0 8px;font-size:20px}",
     "#card-edit-dialog label{display:block;margin:10px 0 4px;font-weight:700}",
     "#card-edit-dialog input,#card-edit-dialog textarea,#card-edit-dialog select{width:100%;box-sizing:border-box;min-height:44px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:16px/1.45 inherit}",
@@ -1338,6 +1339,18 @@
   dialog.addEventListener("click", event => {
     if (event.target === dialog) event.stopPropagation();
   });
+  dialog.addEventListener("wheel", event => {
+    if (dialog.hidden) return;
+    const form = dialog.querySelector("form");
+    const scroller = document.getElementById("card-edit-fields");
+    if (form && form.contains(event.target) && scroller) {
+      event.preventDefault();
+      scroller.scrollTop += event.deltaY;
+      return;
+    }
+    event.preventDefault();
+    window.scrollBy(0, event.deltaY);
+  }, { passive: false });
   document.addEventListener("click", event => {
     const pop = document.getElementById("tag-pop");
     if (!pop || event.target.closest("#tag-pop, [data-tag-spot]")) return;
@@ -1483,14 +1496,6 @@
     if (down) { shift(down.getAttribute("data-card-down"), 1); return; }
     const move = event.target.closest("[data-card-move]");
     if (move) { askMove(move.getAttribute("data-card-move")); return; }
-    const bodyOpen = event.target.closest(".blocks");
-    if (bodyOpen && event.target.closest("[data-bpath], .blk-resize, .blk-split")) return;
-    if (bodyOpen && !event.target.closest("button, a, input, label")) {
-      const card = bodyOpen.closest("article.it[data-id]");
-      const opener = card && card.querySelector("[data-card-edit]");
-      if (opener) opener.click();
-      return;
-    }
     const edit = event.target.closest("[data-card-edit]");
     if (edit) {
       const id = edit.getAttribute("data-card-edit");
@@ -1905,11 +1910,11 @@
   document.addEventListener("dblclick", event => {
     if (!document.body.classList.contains("is-card-edit")) return;
     const block = event.target.closest && event.target.closest("[data-bpath]");
-    const card = block && block.closest("article.it[data-id]");
-    if (block && card && !event.target.closest(".map-open, .blk-resize, .blk-split")) {
+    const host = block && block.closest("article.it[data-id]");
+    if (block && host && !event.target.closest(".map-open, .blk-resize, .blk-split")) {
       event.preventDefault();
       event.stopPropagation();
-      const id = card.getAttribute("data-id");
+      const id = host.getAttribute("data-id");
       const place = locate(id);
       const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
       if (!item) return;
@@ -1917,13 +1922,25 @@
       return;
     }
     const button = event.target.closest && event.target.closest(".map-open");
-    if (!button) return;
+    if (button) {
+      event.preventDefault();
+      event.stopPropagation();
+      const owner = button.getAttribute("data-map-owner");
+      const ownerId = button.getAttribute("data-owner-id");
+      if (owner === "section") openSectionEdit(ownerId);
+      else openCardMap(ownerId);
+      return;
+    }
+    if (event.target.closest("button, a, input, textarea, select")) return;
+    const card = event.target.closest("article.it[data-id]");
+    if (!card) return;
+    const id = card.getAttribute("data-id");
+    const place = locate(id);
+    if (!place || place.kind !== "route") return;
+    const item = routeRecord(place.trackId, place.chapterId, id);
+    if (!item) return;
     event.preventDefault();
-    event.stopPropagation();
-    const owner = button.getAttribute("data-map-owner");
-    const id = button.getAttribute("data-owner-id");
-    if (owner === "section") openSectionEdit(id);
-    else openCardMap(id);
+    openRouteForm(Object.assign({ kind: "route", id, trackId: place.trackId, chapterId: place.chapterId }, item));
   });
 
   function clearDragVisuals() {

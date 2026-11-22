@@ -90,6 +90,27 @@
     return state.checks[id] === true;
   }
 
+  function currentAchieveTags() {
+    return GuideProgress.achieveTagList(cardBook, (GAME.flags || []).map(flag => flag.id));
+  }
+
+  function achievementItems(items) {
+    const tags = currentAchieveTags();
+    return (items || []).filter(item => GuideProgress.hasAchievementTag(item, tags));
+  }
+
+  function selectBox(item) {
+    if (!cardEditing() || !item) return "";
+    return `<input type="checkbox" data-card-pick="${esc(item.id)}" aria-label="選択" title="選択"${globalThis.GuideSelect && GuideSelect.has(item.id) ? " checked" : ""}>`;
+  }
+
+  function achievementMark(item, catalogId) {
+    if (cardEditing() || !item) return "";
+    if (!GuideProgress.hasAchievementTag(item, currentAchieveTags(), catalogId)) return "";
+    const on = checked(item.id);
+    return `<span class="achieve${on ? " is-done" : ""}" data-achieve="${esc(item.id)}">${on ? "達成" : "未達成"}</span>`;
+  }
+
   function backup() {
     try {
       localStorage.setItem(storage.backup, JSON.stringify(state));
@@ -300,7 +321,7 @@
   function renderDash() {
     const items = routeItems(ui.trackId);
     const summary = GuideProgress.summarize(items, state.checks, [...bandFlags]);
-    const progress = GuideProgress.summarize(items, state.checks, []);
+    const progress = GuideProgress.summarize(achievementItems(items), state.checks, []);
     const track = GAME.tracks.find(item => item.id === ui.trackId);
     const trackLabel = track ? track.label : "";
     const dash = document.getElementById("dash");
@@ -429,15 +450,18 @@
     const collapsed = ui.collapsed[item.id] === true;
     const kids = ((kidsMap && kidsMap[item.id]) || []).filter(child => child && !guard.has(child.id));
     const kidsOpen = ui.collapsed["kids:" + item.id] !== true;
+    const childOpen = (function walk(list) {
+      return (list || []).some(child => ui.collapsed[child.id] !== true || walk((kidsMap && kidsMap[child.id]) || []));
+    })(kids);
     const questLink = item.quest ? `<button type="button" class="linkish" data-open-quest="${esc(item.quest)}">依頼の詳細</button>` : "";
     const flags = GuideProgress.cardFlags(item);
     return `<article class="it ${flags.map(flag => "flag-" + esc(flag)).join(" ")}${item.example ? " is-example" : ""}${on ? " done" : ""}${collapsed ? " is-collapsed" : ""}" data-id="${esc(item.id)}">
       <span class="ord">${esc(ord || "")}</span>
       ${dragHandle(item.id)}
-      <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
+      ${selectBox(item)}
       <div class="ibody">
         <div class="ihead">
-          <div class="ihead-main"><span class="tag-spot" data-tag-spot="${esc(item.id)}">${flagTags(item)}</span><label for="check-${esc(item.id)}">${hasFlag(item, "tips") ? `<span class="hint-mark">${esc(GuideProgress.labelText(cardBook, "hint"))}</span>` : ""}${exampleMark(item)}<span class="it-title" data-edit-text>${esc((headings && headings[item.id]) || item.title || item.id)}</span></label></div>
+          <div class="ihead-main"><span class="tag-spot" data-tag-spot="${esc(item.id)}">${flagTags(item)}</span>${hasFlag(item, "tips") ? `<span class="hint-mark">${esc(GuideProgress.labelText(cardBook, "hint"))}</span>` : ""}${exampleMark(item)}<span class="it-title" data-edit-text>${esc((headings && headings[item.id]) || item.title || item.id)}</span>${achievementMark(item)}</div>
           <div class="imeta">
             ${hasFlag(item, "trophy") && item.trophy && trophyById(item.trophy) ? `<span class="tag tone-trophy">${esc(trophyById(item.trophy).name)}</span>` : ""}
             ${(hasFlag(item, "deadline") || hasFlag(item, "missable")) && item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
@@ -453,7 +477,7 @@
           ${sourceLine(item.source)}
           ${cardTools(item)}
         </div>
-        ${kids.length ? `<div class="kids-wrap"><div class="kids-bar"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）"><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><button type="button" class="kids-fold" data-fold-kids="${esc(item.id)}" title="子カードの詳細をすべて閉じる" aria-label="子カードの詳細をすべて閉じる">⊟</button></div><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard)).join("")}</div></div></div>` : ""}
+        ${kids.length ? `<div class="kids-wrap"><div class="kids-bar"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）"><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><button type="button" class="kids-fold" data-fold-kids="${esc(item.id)}" title="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}" aria-label="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}">${childOpen ? "⊟" : "⊞"}</button></div><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard)).join("")}</div></div></div>` : ""}
       </div>
     </article>`;
   }
@@ -596,7 +620,6 @@
       <button type="button" data-card-down="${esc(item.id)}" title="${esc(L("down"))}" aria-label="${esc(L("down"))}">▽</button>
       <button type="button" data-card-edit="${esc(item.id)}" title="${esc(L("edit"))}" aria-label="${esc(L("edit"))}">✎</button>
       <button type="button" data-card-add-after="${esc(item.id)}" title="${esc(L("add"))}" aria-label="${esc(L("add"))}">＋</button>
-      <label class="pick-label" title="${esc(L("pick"))}"><input type="checkbox" data-card-pick="${esc(item.id)}" aria-label="${esc(L("pick"))}"${globalThis.GuideSelect && GuideSelect.has(item.id) ? " checked" : ""}></label>
       <button type="button" data-card-delete="${esc(item.id)}" title="${esc(L("delete"))}" aria-label="${esc(L("delete"))}">✕</button>
     </div>`;
   }
@@ -684,7 +707,8 @@
       total += chapter.items.length;
       const matched = chapter.items.filter(itemVisible).length;
       visible += matched;
-      const done = chapter.items.filter(item => checked(item.id)).length;
+      const counted = achievementItems(chapter.items);
+      const done = counted.filter(item => checked(item.id)).length;
       const closed = ui.chapterId ? false : ui.collapsed[chapterKey(chapter.id)] === true;
       const hide = filtering && matched === 0;
       const chapterTools = cardEditing() ? `<span class="chapter-tools">
@@ -700,7 +724,7 @@
         <h2 class="chapter-heading"><button type="button" class="chh" data-toggle-chapter="${esc(chapter.id)}" aria-expanded="${closed ? "false" : "true"}">
           <span class="caret" aria-hidden="true">▼</span>
           <span class="cht">${esc(chapter.title)}</span>
-          <span class="chl"><span class="cnt${chapter.items.length && done === chapter.items.length ? " done" : ""}">${done}/${chapter.items.length}</span></span>
+          <span class="chl"><span class="cnt${counted.length && done === counted.length ? " done" : ""}">${done}/${counted.length}</span></span>
         </button>${chapterTools}</h2>
         <div class="chb" data-card-track="${esc(ui.trackId)}">${body}</div>
       </section>`;
@@ -749,8 +773,10 @@
       if (facet === "INTERmission") return item.intermission === true || item.area === "INTERmission";
       return item.area === facet;
     });
-    const done = items.filter(item => checked(item.id)).length;
-    if (count) count.textContent = done + " / " + items.length;
+    const achieveOn = GuideProgress.hasAchievementTag(null, currentAchieveTags(), hub.catalog);
+    const counted = achieveOn ? items : [];
+    const done = counted.filter(item => checked(item.id)).length;
+    if (count) count.textContent = achieveOn ? (done + " / " + items.length) : String(items.length);
     if (!host) return;
     if (!items.length && !cardEditing()) {
       host.innerHTML = `<p class="empty-chapter">まだ項目がありません。<code>data/catalogs.js</code> の ${esc(hub.catalog)} に足してください。</p>`;
@@ -767,10 +793,10 @@
       const on = checked(item.id);
       return `<article class="it${item.example ? " is-example" : ""}${on ? " done" : ""}" data-id="${esc(item.id)}" data-catalog="${esc(hub.catalog)}">
         ${dragHandle(item.id)}
-        <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
+        ${selectBox(item)}
         <div class="ibody">
           <div class="ihead">
-            <label for="check-${esc(item.id)}">${exampleMark(item)}${item.missable ? '<span class="tag tone-missable">取り逃し</span>' : ""}<span class="it-title">${esc(item.name || item.id)}</span></label>
+            <div class="ihead-main">${exampleMark(item)}${item.missable ? '<span class="tag tone-missable">取り逃し</span>' : ""}<span class="it-title">${esc(item.name || item.id)}</span>${achievementMark(item, hub.catalog)}</div>
           </div>
           ${item.area ? `<p class="area">${esc(item.area)}${item.intermission && item.area !== "INTERmission" ? " · INTERmission" : ""}</p>` : (item.intermission ? '<p class="area">INTERmission</p>' : "")}
           ${itemObtained(item)}
@@ -1024,9 +1050,10 @@
     const card = item.card ? `<button type="button" class="linkish" data-open-hit="${esc(item.card)}">進行カードを開く</button>` : "";
     const parts = item.map ? mapParts(item.map, item.id, item.name) : null;
     const map = parts ? `<button type="button" class="map-open" data-map="${esc(parts.key)}" data-map-src="${esc(parts.src)}"${parts.href ? ` data-map-href="${esc(parts.href)}"` : ""} data-map-label="${esc(parts.label)}">MAP</button>` : "";
-    const edit = cardEditing() ? `<p class="card-edit-tools"><button type="button" data-card-edit="${esc(item.id)}">編集</button></p>` : "";
-    return `<article class="quest" id="quest-${esc(item.id)}" data-id="${esc(item.id)}">
-      <button type="button" class="quest-toggle" data-toggle-quest="${esc(item.id)}" aria-expanded="${open ? "true" : "false"}"><span class="caret" aria-hidden="true">▼</span>${esc(item.name)}</button>
+    const edit = cardEditing() ? `<p class="card-edit-tools"><button type="button" data-card-edit="${esc(item.id)}" title="編集" aria-label="編集">✎</button></p>` : "";
+    const mark = achievementMark(item, "quests");
+    return `<article class="quest${checked(item.id) ? " done" : ""}" id="quest-${esc(item.id)}" data-id="${esc(item.id)}">
+      <button type="button" class="quest-toggle" data-toggle-quest="${esc(item.id)}" aria-expanded="${open ? "true" : "false"}"><span class="caret" aria-hidden="true">▼</span>${esc(item.name)}</button>${mark}
       <div class="quest-body"${open ? "" : " hidden"}>
         <p>${esc(item.detail || "")} ${card} ${map}</p>
         ${edit}
@@ -1056,7 +1083,8 @@
     const items = catalogItems(hub.catalog);
     const query = ui.catalogQuery[hub.id] || "";
     const visible = items.filter(item => !query || [item.name, item.place, item.client, item.clear, item.detail].join("\n").toLowerCase().includes(query.toLowerCase()));
-    if (count) count.textContent = visible.length + " / " + items.length;
+    const achieveOn = GuideProgress.hasAchievementTag(null, currentAchieveTags(), "quests");
+    if (count) count.textContent = achieveOn ? (items.filter(item => checked(item.id)).length + " / " + items.length) : (visible.length + " / " + items.length);
     if (host) host.innerHTML = visible.map(renderQuestArticle).join("") || '<p class="empty-chapter">一致する依頼がありません。</p>';
   }
 
@@ -1319,10 +1347,11 @@
   }
 
   function paintChecks() {
-    document.querySelectorAll("input[data-check]").forEach(input => {
-      const on = checked(input.getAttribute("data-check"));
-      input.checked = on;
-      const card = input.closest(".it");
+    document.querySelectorAll("[data-achieve]").forEach(node => {
+      const on = checked(node.getAttribute("data-achieve"));
+      node.textContent = on ? "達成" : "未達成";
+      node.classList.toggle("is-done", on);
+      const card = node.closest(".it, .quest");
       if (card) card.classList.toggle("done", on);
     });
   }
@@ -1332,11 +1361,12 @@
       document.querySelectorAll("#route section.ch").forEach(section => {
         const chapter = chaptersFor(ui.trackId).find(item => item.id === section.dataset.chapter);
         if (!chapter) return;
-        const done = chapter.items.filter(item => checked(item.id)).length;
+        const counted = achievementItems(chapter.items);
+        const done = counted.filter(item => checked(item.id)).length;
         const cnt = section.querySelector(".cnt");
         if (!cnt) return;
-        cnt.textContent = done + "/" + chapter.items.length;
-        cnt.classList.toggle("done", chapter.items.length > 0 && done === chapter.items.length);
+        cnt.textContent = done + "/" + counted.length;
+        cnt.classList.toggle("done", counted.length > 0 && done === counted.length);
       });
       const chapters = chaptersFor(ui.trackId);
       const visible = chapters.reduce((sum, chapter) => sum + chapter.items.filter(itemVisible).length, 0);
@@ -1480,7 +1510,11 @@
         <div class="progress-action" id="progress-undo-row"${undoAvailable() ? "" : " hidden"}><button type="button" class="ghost safe" id="restore">直前のリセットを戻す</button><p>直前に消したチェックを、このブラウザに戻します。</p></div>
         <div class="progress-action"><button type="button" class="ghost" id="reset">進行をすべて消す</button><p>このブラウザのチェックを消します。消す前に確認します。</p></div>
       </div>
-      <h3>難易度</h3><p class="lead">今進めているチャートの難易度です。カードとエネミー頁のHP、経験値、AP、ギルは、この難易度の列を使います。CLASSICは操作の種類で、数値の表はありません。</p><label class="setting-row"><span>難易度</span><select id="settings-difficulty"><option value="easy"${difficulty === "easy" ? " selected" : ""}>EASY</option><option value="normal"${difficulty === "normal" ? " selected" : ""}>NORMAL</option><option value="hard"${difficulty === "hard" ? " selected" : ""}>HARD</option></select></label><h3>ボタンとタブの名前</h3><div class="setting-list">${rows}</div>
+      <h3>難易度</h3><p class="lead">今進めているチャートの難易度です。カードとエネミー頁のHP、経験値、AP、ギルは、この難易度の列を使います。CLASSICは操作の種類で、数値の表はありません。</p><label class="setting-row"><span>難易度</span><select id="settings-difficulty"><option value="easy"${difficulty === "easy" ? " selected" : ""}>EASY</option><option value="normal"${difficulty === "normal" ? " selected" : ""}>NORMAL</option><option value="hard"${difficulty === "hard" ? " selected" : ""}>HARD</option></select></label>
+      <h3>達成表示するタグ</h3>
+      <p class="lead">選んだタグのカードだけ、見出しの右に「達成」「未達成」を出します。進行の数も、このタグが付いたカードだけを数えます。初期値はトロフィー、期限、取り逃し、依頼、アイテム入手です。</p>
+      <div class="achieve-tags">${(GAME.flags || []).map(flag => `<label class="pick-label"><input type="checkbox" data-achieve-tag value="${esc(flag.id)}"${currentAchieveTags().indexOf(flag.id) >= 0 ? " checked" : ""}>${esc(flag.label)}</label>`).join("")}</div>
+      <h3>ボタンとタブの名前</h3><div class="setting-list">${rows}</div>
       <h3>見出しの定型文</h3>
       <p class="lead">1行が1つの定型文です。カードの見出しで選ぶと、章の中で 宝箱① のように番号が付きます。</p>
       <textarea id="settings-templates" rows="6">${esc(templates.map(item => item.label).join("\n"))}</textarea>
@@ -1756,6 +1790,14 @@
         next.labels = Object.assign({}, next.labels);
         delete next.labels[key];
         setCardBook(next);
+      });
+    });
+    root.querySelectorAll("[data-achieve-tag]").forEach(input => {
+      input.addEventListener("change", () => {
+        const picked = [...root.querySelectorAll("[data-achieve-tag]:checked")].map(box => box.value);
+        const next = JSON.parse(JSON.stringify(cardBook));
+        next.achieveTags = picked;
+        setCardBook(next, "達成表示するタグ");
       });
     });
     const saveTemplates = document.getElementById("settings-templates-save");
@@ -2048,7 +2090,8 @@
         kids[item.parent] = kids[item.parent] || [];
         kids[item.parent].push(item.id);
       });
-      ui.collapsed = GuideProgress.foldChildDetails(ui.collapsed, id, kids);
+      const toggled = GuideProgress.toggleChildDetails(ui.collapsed, id, kids);
+      ui.collapsed = toggled.flags;
       const card = foldKids.closest("article.it");
       if (card) {
         paintFold(card);
@@ -2171,10 +2214,67 @@
     if (map) {
       event.preventDefault();
       event.stopPropagation();
-      toggleMap(map);
+      toggleMap(map, false);
       return;
     }
     if (mapPop.dataset.pin !== "1" && !event.target.closest("#map-pop") && !event.target.closest("#map-zoom")) hideMap(true);
+  });
+
+  function achievementTarget(event) {
+    if (cardEditing()) return "";
+    if (event.target.closest("button, a, input, textarea, select, .map-open, .kids-disclosure, .kids-fold, .kids-chevron")) return "";
+    const card = event.target.closest("article.it[data-id], article.quest[data-id]");
+    if (!card) return "";
+    const id = card.getAttribute("data-id");
+    const catalog = card.getAttribute("data-catalog") || (card.classList.contains("quest") ? "quests" : "");
+    if (!GuideProgress.hasAchievementTag(catalog ? null : { flags: flagIdsOf(id) }, currentAchieveTags(), catalog || undefined)) return "";
+    return id;
+  }
+
+  function flagIdsOf(id) {
+    const item = routeItems(ui.trackId).find(entry => entry.id === id);
+    return item ? GuideProgress.cardFlags(item) : [];
+  }
+
+  function toggleAchievement(id) {
+    if (!id) return;
+    state.checks = GuideProgress.applyToggle(state.checks, id, !checked(id), trophyMeta());
+    save();
+    paintChecks();
+    if (ui.hub === "route" && (ui.flag === "todo" || ui.flag === "band")) renderRoute();
+    else refreshVisibleCounts();
+    const currentHub = GAME.hubs.find(hub => hub.id === ui.hub);
+    if (currentHub && currentHub.kind === "catalog") renderCatalog(currentHub);
+    if (ui.hub === "items") renderItems();
+  }
+
+  document.addEventListener("dblclick", event => {
+    const sel = window.getSelection && window.getSelection();
+    if (sel && !sel.isCollapsed && (sel.toString().includes("\n") || sel.toString().length > 48)) return;
+    const id = achievementTarget(event);
+    if (!id) return;
+    event.preventDefault();
+    toggleAchievement(id);
+  });
+
+  let achievePress = 0;
+  document.addEventListener("pointerdown", event => {
+    if (event.pointerType === "mouse" || cardEditing()) return;
+    const id = achievementTarget(event);
+    if (!id) return;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    achievePress = window.setTimeout(() => toggleAchievement(id), 550);
+    const cancel = move => {
+      if (Math.hypot(move.clientX - startX, move.clientY - startY) > 10) window.clearTimeout(achievePress);
+    };
+    const end = () => {
+      window.clearTimeout(achievePress);
+      document.removeEventListener("pointermove", cancel);
+      document.removeEventListener("pointerup", end);
+    };
+    document.addEventListener("pointermove", cancel);
+    document.addEventListener("pointerup", end);
   });
 
   document.addEventListener("change", event => {
@@ -2573,9 +2673,12 @@
     mapPop.querySelector(".map-fallback").hidden = false;
   });
 
+  let mapPinned = false;
+
   function hideMap(force) {
-    if (!force && mapPop.dataset.pin === "1") return;
+    if (!force && mapPinned) return;
     mapPop.hidden = true;
+    mapPinned = false;
     mapPop.dataset.pin = "0";
   }
 
@@ -2605,9 +2708,10 @@
     image.src = src;
   }
 
-  function toggleMap(button) {
+  function toggleMap(button, fromHover) {
+    if (fromHover && mapPinned) return;
     const id = button.getAttribute("data-map") || button.getAttribute("data-map-src") || "";
-    if (!mapPop.hidden && mapPop.dataset.map === id && mapPop.dataset.pin === "1") {
+    if (!fromHover && !mapPop.hidden && mapPop.dataset.map === id && mapPinned) {
       hideMap(true);
       return;
     }
@@ -2619,7 +2723,8 @@
     mapPop.dataset.map = id;
     mapPop.dataset.src = src;
     mapPop.dataset.href = href;
-    mapPop.dataset.pin = "1";
+    mapPinned = !fromHover;
+    mapPop.dataset.pin = mapPinned ? "1" : "0";
     image.hidden = false;
     mapPop.querySelector(".map-fallback").hidden = true;
     const missing = mapPop.querySelector(".map-missing");
@@ -2797,13 +2902,11 @@
 
   document.addEventListener("mouseover", event => {
     const button = event.target.closest && event.target.closest("[data-map]");
-    if (!button || !window.matchMedia("(hover: hover)").matches) return;
-    if (mapPop.dataset.pin === "1") return;
-    toggleMap(button);
-    mapPop.dataset.pin = "0";
+    if (!button || !window.matchMedia("(hover: hover)").matches || mapPinned) return;
+    toggleMap(button, true);
   });
   document.addEventListener("mouseout", event => {
-    if (mapPop.dataset.pin === "1") return;
+    if (mapPinned) return;
     const fromMap = event.target.closest && (event.target.closest("[data-map]") || event.target.closest("#map-pop"));
     if (!fromMap) return;
     const next = event.relatedTarget && event.relatedTarget.closest && (event.relatedTarget.closest("[data-map]") || event.relatedTarget.closest("#map-pop"));
