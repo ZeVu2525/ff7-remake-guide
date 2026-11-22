@@ -261,6 +261,17 @@ assert.deepStrictEqual(childMerged[0].items.map(item => item.id), ["p", "c1", "c
 assert.strictEqual(childMerged[0].items[2].title, "C2b");
 assert.strictEqual(childMerged[0].items[2].parent, "p");
 assert.deepStrictEqual(progress.numberCards(childMerged[0].items), { p: "1", c1: "1-1", c2: "1-2" });
+assert.deepStrictEqual(progress.numberChapter([
+  { id: "a", section: "s1" },
+  { id: "a1", section: "s1", parent: "a" },
+  { id: "b", section: "s2" },
+  { id: "c", section: "s2" },
+  { id: "c1", section: "s2", parent: "c" }
+], [{ id: "s1" }, { id: "s2" }]), { a: "1", a1: "1-1", b: "2", c: "3", c1: "3-1" });
+assert.deepStrictEqual(progress.numberChapter([
+  { id: "a", section: "s1" },
+  { id: "b", section: "s2" }
+], [{ id: "s2" }, { id: "s1" }]), { b: "1", a: "2" });
 assert.strictEqual(progress.circledNumber(1), "①");
 assert.strictEqual(progress.circledNumber(20), "⑳");
 assert.strictEqual(progress.circledNumber(21), "(21)");

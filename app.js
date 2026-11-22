@@ -390,10 +390,11 @@
     const known = new Set(groups.map(section => section.id));
     const sectionOf = item => item.section && known.has(item.section) ? item.section : groups[0].id;
     const headings = GuideProgress.templateHeadings(GuideProgress.displayItems(items, groups), GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES));
+    const numbers = GuideProgress.numberChapter(items, groups);
     let visible = 0;
     const html = groups.map((section, index) => {
       const mine = items.filter(item => sectionOf(item) === section.id);
-      const built = blockCards(mine, headings, section);
+      const built = blockCards(mine, headings, section, numbers);
       visible += built.visible;
       const closed = ui.collapsed["section:" + ui.trackId + ":" + section.id] === true;
       const name = GuideProgress.sectionName(section.title) || "区分";
@@ -428,8 +429,8 @@
     return GuideProgress.visibleMap(item, section);
   }
 
-  function blockCards(items, headings, section) {
-    const numbers = GuideProgress.numberCards(items);
+  function blockCards(items, headings, section, numbers) {
+    if (!numbers) numbers = GuideProgress.numberCards(items);
     const ids = new Set(items.map(item => item.id));
     const childOf = {};
     for (const item of items) {

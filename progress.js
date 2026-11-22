@@ -586,6 +586,10 @@
     return numbers;
   }
 
+  function numberChapter(items, sections) {
+    return numberCards(displayItems(items, sections));
+  }
+
   const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
 
   function circledNumber(value) {
@@ -1173,6 +1177,7 @@
     mergeCatalog,
     mergedRoute,
     numberCards,
+    numberChapter,
     circledNumber,
     templateHeadings,
     UI_LABELS,
