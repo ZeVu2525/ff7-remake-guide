@@ -21,7 +21,7 @@ const GAME = {
     theme: "ff7r-guide-theme",
     backup: "ff7r-guide-state-v1-last-backup"
   },
-  cache: "ff7r-guide-v24",
+  cache: "ff7r-guide-v26",
   cacheFiles: [
     "./",
     "./index.html",
@@ -30,6 +30,8 @@ const GAME = {
     "./app.js",
     "./edit-mode.js",
     "./progress.js",
+    "./zip-store.js",
+    "./image-library.js",
     "./card-edit.js",
     "./data/game.js",
     "./data/route.js",
