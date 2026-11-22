@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v8");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v9");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -261,6 +261,19 @@ assert.deepStrictEqual(childMerged[0].items.map(item => item.id), ["p", "c1", "c
 assert.strictEqual(childMerged[0].items[2].title, "C2b");
 assert.strictEqual(childMerged[0].items[2].parent, "p");
 assert.deepStrictEqual(progress.numberCards(childMerged[0].items), { p: "1", c1: "1-1", c2: "1-2" });
+assert.strictEqual(progress.circledNumber(1), "①");
+assert.strictEqual(progress.circledNumber(20), "⑳");
+assert.strictEqual(progress.circledNumber(21), "(21)");
+assert.deepStrictEqual(progress.templateHeadings([
+  { id: "a", template: "tpl-chest" },
+  { id: "b", template: "tpl-chest" },
+  { id: "c", template: "tpl-shinra" }
+], progress.DEFAULT_TEMPLATES), { a: "宝箱①", b: "宝箱②", c: "神羅ボックス①" });
+const ch1 = guide.ROUTE.main.find(row => row.chapterId === "ch01");
+assert.ok(ch1.sections && ch1.sections.length >= 1);
+assert.ok(ch1.items.every(item => item.section === ch1.sections[0].id));
+assert.ok(ch1.items.every(item => !item.map));
+assert.ok(ch1.sections[0].map);
 const firstMap = progress.assignMapFile("abcdef1234567890", "png", []);
 const sameMap = progress.assignMapFile("abcdef1234567890", "png", firstMap.manifest);
 assert.strictEqual(sameMap.file, firstMap.file);

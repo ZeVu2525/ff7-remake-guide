@@ -107,11 +107,15 @@
     const defs = GAME.chapters[trackId] || [];
     const merged = GuideProgress.mergeTrack(ROUTE, defs, cardBook, trackId);
     const itemsByChapter = new Map(merged.map(row => [row.chapterId, row.items || []]));
-    return defs.map(chapter => ({
-      id: chapter.id,
-      title: chapter.title,
-      items: itemsByChapter.get(chapter.id) || []
-    }));
+    return defs.map(chapter => {
+      const row = merged.find(item => item.chapterId === chapter.id);
+      return {
+        id: chapter.id,
+        title: chapter.title,
+        items: itemsByChapter.get(chapter.id) || [],
+        sections: row && row.sections || []
+      };
+    });
   }
 
   function baseItems(trackId, chapterId) {
@@ -340,14 +344,14 @@
     return { key: preset ? map : (id || "custom"), src, href, label: preset ? preset.label : (label || "地図") };
   }
 
-  function mapButton(item) {
-    if (!item.map) return "";
+  function mapButton(item, owner) {
+    if (!item || !item.map) return "";
     const parts = mapParts(item.map, item.id, "地図");
     const href = parts.href ? ` data-map-href="${esc(parts.href)}"` : "";
-    return `<button type="button" class="map-open" data-map="${esc(parts.key)}" data-map-src="${esc(parts.src)}"${href} data-map-label="${esc(parts.label)}">MAP</button>`;
+    return `<button type="button" class="map-open" data-map-owner="${esc(owner || "card")}" data-owner-id="${esc(item.id)}" data-map="${esc(parts.key)}" data-map-src="${esc(parts.src)}"${href} data-map-label="${esc(parts.label)}">MAP</button>`;
   }
 
-  function routeCard(item, ord, children, numbers) {
+  function routeCard(item, ord, children, numbers, headings) {
     const on = checked(item.id);
     const collapsed = ui.collapsed[item.id] === true;
     const kids = children || [];
@@ -359,7 +363,7 @@
       <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
       <div class="ibody">
         <div class="ihead">
-          <label for="check-${esc(item.id)}">${flagTag(item.flag)}${exampleMark(item)}<span class="it-title">${esc(item.title || item.id)}</span></label>
+          <label for="check-${esc(item.id)}">${item.flag === "tips" ? '<span class="hint-mark">ヒント</span>' : ""}${flagTag(item.flag)}${exampleMark(item)}<span class="it-title">${esc((headings && headings[item.id]) || item.title || item.id)}</span></label>
           <div class="imeta">
             ${item.trophy && trophyById(item.trophy) ? `<span class="tag tone-trophy">${esc(trophyById(item.trophy).name)}</span>` : ""}
             ${item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
@@ -374,12 +378,42 @@
           ${sourceLine(item.source)}
           ${cardTools(item)}
         </div>
-        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-toggle" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}">中のカード ${kids.length}</button><div class="kids"${kidsOpen ? "" : " hidden"}>${kids.map(child => routeCard(child, numbers[child.id], [], numbers)).join("")}</div></div>` : ""}
+        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-toggle" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}">中のカード ${kids.length}</button><div class="kids"${kidsOpen ? "" : " hidden"}>${kids.map(child => routeCard(child, numbers[child.id], [], numbers, headings)).join("")}</div></div>` : ""}
       </div>
     </article>`;
   }
 
-  function chapterBlocks(items) {
+  function chapterBlocks(items, sections) {
+    const groups = sections && sections.length ? sections : [{ id: "", title: "(1) 本章", map: "", note: "" }];
+    const known = new Set(groups.map(section => section.id));
+    const sectionOf = item => item.section && known.has(item.section) ? item.section : groups[0].id;
+    const headings = GuideProgress.templateHeadings(items, GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES));
+    let visible = 0;
+    const html = groups.map(section => {
+      const mine = items.filter(item => sectionOf(item) === section.id);
+      const built = blockCards(mine, headings);
+      visible += built.visible;
+      const closed = ui.collapsed["section:" + ui.trackId + ":" + section.id] === true;
+      const tools = cardEditing() ? `<span class="subch-tools">
+        <button type="button" data-section-edit="${esc(section.id)}">名前</button>
+        <button type="button" data-section-up="${esc(section.id)}">上へ</button>
+        <button type="button" data-section-down="${esc(section.id)}">下へ</button>
+        <button type="button" data-section-delete="${esc(section.id)}">削除</button>
+      </span>` : "";
+      return `<section class="subch${closed ? " closed" : ""}" data-section="${esc(section.id)}">
+        <div class="subch-bar">
+          <button type="button" class="subch-toggle" data-toggle-section="${esc(section.id)}" aria-expanded="${closed ? "false" : "true"}"><span class="caret">▼</span>${esc(section.title || "区分")}</button>
+          ${mapButton({ id: section.id, map: section.map }, "section")}
+          ${tools}
+        </div>
+        ${section.note ? `<p class="subch-note">${esc(section.note)}</p>` : ""}
+        <div class="subch-body"${closed ? " hidden" : ""}>${built.html || '<p class="empty-chapter">この区分にはカードがありません。</p>'}</div>
+      </section>`;
+    }).join("");
+    return { html, visible, numbers: {} };
+  }
+
+  function blockCards(items, headings) {
     const numbers = GuideProgress.numberCards(items);
     const ids = new Set(items.map(item => item.id));
     const childOf = {};
@@ -407,7 +441,7 @@
       if (!self && !shownKids.length) return "";
       if (self) visible += 1;
       visible += shownKids.length;
-      return routeCard(self ? item : item, numbers[item.id], shownKids, numbers);
+      return routeCard(item, numbers[item.id], shownKids, numbers, headings);
     }).join("");
     return { html, visible, numbers };
   }
@@ -425,6 +459,7 @@
       <button type="button" data-card-edit="${esc(item.id)}">編集</button>
       <button type="button" data-card-move="${esc(item.id)}">移動</button>
       <button type="button" data-card-add-after="${esc(item.id)}">＋追加</button>
+      <button type="button" data-card-copy="${esc(item.id)}">コピー</button>
       <button type="button" data-card-delete="${esc(item.id)}">削除</button>
     </div>`;
   }
@@ -439,7 +474,7 @@
     const host = document.getElementById("route");
     host.innerHTML = shown.map(chapter => {
       total += chapter.items.length;
-      const built = chapterBlocks(chapter.items);
+      const built = chapterBlocks(chapter.items, chapter.sections);
       visible += built.visible;
       const done = chapter.items.filter(item => checked(item.id)).length;
       const closed = ui.chapterId ? false : ui.collapsed[chapterKey(chapter.id)] === true;
@@ -450,7 +485,7 @@
           <span class="cht">${esc(chapter.title)}</span>
           <span class="chl"><span class="cnt${chapter.items.length && done === chapter.items.length ? " done" : ""}">${done}/${chapter.items.length}</span></span>
         </button></h2>
-        <div class="chb" data-card-track="${esc(ui.trackId)}">${cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">カードを追加</button></p>` : ""}${built.html || '<p class="empty-chapter">項目はまだありません。</p>'}</div>
+        <div class="chb" data-card-track="${esc(ui.trackId)}">${cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">カードを追加</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">子チャプターを追加</button></p>` : ""}${built.html || '<p class="empty-chapter">項目はまだありません。</p>'}</div>
       </section>`;
     }).join("");
     document.getElementById("route-count").textContent = visible + " / " + total + " 件を表示";
@@ -1099,6 +1134,18 @@
       ui.flag = filter.dataset.filter;
       paintFlags();
       renderRoute();
+      return;
+    }
+    const sub = event.target.closest("[data-toggle-section]");
+    if (sub) {
+      const id = sub.getAttribute("data-toggle-section");
+      const box = sub.closest(".subch");
+      const closed = box && !box.classList.contains("closed");
+      if (box) box.classList.toggle("closed", closed);
+      const body = box && box.querySelector(".subch-body");
+      if (body) body.hidden = !!closed;
+      ui.collapsed["section:" + ui.trackId + ":" + id] = !!closed;
+      sub.setAttribute("aria-expanded", closed ? "false" : "true");
       return;
     }
     const chapter = event.target.closest("[data-toggle-chapter]");

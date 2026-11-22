@@ -163,7 +163,7 @@
   function syncBar() {
     const n = Object.keys(edits).length;
     count.textContent = n ? n + "件" : "";
-    bar.hidden = !editOn;
+    bar.hidden = true;
     const barHeight = editOn ? bar.offsetHeight : 0;
     document.body.style.paddingTop = barHeight ? barHeight + "px" : "";
     document.documentElement.style.setProperty("--text-edit-bar-h", barHeight + "px");
@@ -380,7 +380,7 @@
 
   function onInteract(event) {
     const el = elementFrom(event.target);
-    if (el && el.closest("#text-edit-exit, #text-edit-toggle")) return;
+    if (el && el.closest("button, a, input, select, textarea, label, #card-edit-root, #text-edit-root, #map-pop, #map-zoom, #edit-toggle")) return;
     if (dialogOpen) {
       if (!el || !el.closest("#text-edit-root")) {
         event.preventDefault();
@@ -440,7 +440,12 @@
     return savedMode() === "1";
   }
   applyAll();
-  setEditOn(initialEditOn());
+  setEditOn(false);
+  globalThis.GuideText = {
+    setOn: setEditOn,
+    payload: payload,
+    importJson: importJson
+  };
   new MutationObserver(mutations => {
     if (!Object.keys(edits).length) return;
     for (const mutation of mutations) for (const node of mutation.addedNodes) applyNode(node);

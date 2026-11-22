@@ -100,11 +100,16 @@
     return { total: list.length, done, openBand };
   }
 
-  const CARD_FIELDS = ["title", "detail", "flag", "deadline", "source", "trophy", "map", "parent", "quest"];
+  const CARD_FIELDS = ["title", "detail", "flag", "deadline", "source", "trophy", "map", "parent", "quest", "section", "template"];
+  const DEFAULT_TEMPLATES = [
+    { id: "tpl-chest", label: "宝箱" },
+    { id: "tpl-shinra", label: "神羅ボックス" },
+    { id: "tpl-get", label: "入手" }
+  ];
   const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable", "map"];
 
   function emptyCardBook() {
-    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {} };
+    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, templates: [] };
   }
 
   function asObject(value) {
@@ -138,7 +143,7 @@
     for (const id of Object.keys(asObject(src.patches))) {
       const patch = {};
       const raw = asObject(src.patches[id]);
-      for (const key of ["title", "detail", "flag", "deadline", "source", "trophy", "name", "area", "map", "parent", "quest"]) {
+      for (const key of ["title", "detail", "flag", "deadline", "source", "trophy", "name", "area", "map", "parent", "quest", "section", "template"]) {
         if (Object.prototype.hasOwnProperty.call(raw, key) && (typeof raw[key] === "string" || raw[key] == null)) {
           patch[key] = raw[key] == null ? "" : String(raw[key]);
         }
@@ -171,9 +176,39 @@
     }
     for (const key of Object.keys(asObject(src.chapters))) {
       const raw = asObject(src.chapters[key]);
-      book.chapters[key] = { order: stringList(raw.order), known: stringList(raw.known) };
+      const chapter = { order: stringList(raw.order), known: stringList(raw.known) };
+      if (Array.isArray(raw.sections)) {
+        chapter.sections = raw.sections.filter(item => item && item.id).map(item => ({
+          id: String(item.id),
+          title: item.title == null ? "" : String(item.title),
+          map: item.map == null ? "" : String(item.map),
+          note: item.note == null ? "" : String(item.note)
+        }));
+      }
+      book.chapters[key] = chapter;
+    }
+    if (Array.isArray(src.templates)) {
+      book.templates = src.templates.filter(item => item && item.id && item.label).map(item => ({
+        id: String(item.id),
+        label: String(item.label)
+      }));
     }
     return book;
+  }
+
+  function resolveSections(row, book, trackId, chapterId) {
+    const saved = book.chapters[chapterKey(trackId, chapterId)];
+    const base = row && Array.isArray(row.sections) ? row.sections : [];
+    const list = saved && saved.sections && saved.sections.length ? saved.sections : base;
+    if (list.length) {
+      return list.map(item => ({
+        id: String(item.id),
+        title: item.title || "",
+        map: item.map || "",
+        note: item.note || ""
+      }));
+    }
+    return [{ id: chapterId + "-sec-1", title: "(1) 本章", map: "", note: "" }];
   }
 
   function cloneBook(book) {
@@ -285,8 +320,10 @@
       if (custom.flag === "trophy" && custom.trophy) card.trophy = custom.trophy;
       if (custom.map) card.map = custom.map;
       if (custom.parent) card.parent = custom.parent;
-      if (custom.quest) card.quest = custom.quest;
-      if (custom.flag === "item" && custom.items && custom.items.length) card.items = itemLinks(custom.items);
+        if (custom.quest) card.quest = custom.quest;
+        if (custom.section) card.section = custom.section;
+        if (custom.template) card.template = custom.template;
+        if (custom.flag === "item" && custom.items && custom.items.length) card.items = itemLinks(custom.items);
       return card;
     }
     const base = routeIndex.byId.get(id);
@@ -310,8 +347,10 @@
         if (safeBook.deleted[id] || ids.indexOf(id) >= 0 || ownedElsewhere(safeBook, id, chapterKey(trackId, chapter.id))) continue;
         ids.push(id);
       }
+      const baseRow = rows.find(row => row.chapterId === chapter.id);
       return {
         chapterId: chapter.id,
+        sections: resolveSections(baseRow, safeBook, trackId, chapter.id),
         items: ids.map(id => resolveRouteCard(id, routeIndex, safeBook)).filter(Boolean)
       };
     });
@@ -380,6 +419,20 @@
       if (order.indexOf(id) >= 0) known.add(id);
     }
     book.chapters[key] = { order: order.slice(), known: [...known] };
+    if (prev && prev.sections) book.chapters[key].sections = prev.sections;
+    return book;
+  }
+
+  function saveSections(book, key, sections) {
+    const prev = book.chapters[key] || { order: [], known: [] };
+    book.chapters[key] = Object.assign({}, prev, {
+      sections: (sections || []).map(item => ({
+        id: String(item.id),
+        title: item.title || "",
+        map: item.map || "",
+        note: item.note || ""
+      }))
+    });
     return book;
   }
 
@@ -413,6 +466,8 @@
       map: fields.map || "",
       parent: fields.parent || "",
       quest: fields.quest || "",
+      section: fields.section || "",
+      template: fields.template || "",
       items: fields.flag === "item" ? itemLinks(fields.items) : []
     };
   }
@@ -515,6 +570,32 @@
     return numbers;
   }
 
+  const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
+
+  function circledNumber(value) {
+    const number = Number(value);
+    if (number >= 1 && number <= CIRCLED.length) return CIRCLED.charAt(number - 1);
+    return "(" + number + ")";
+  }
+
+  function templateHeadings(items, templates) {
+    const labels = {};
+    (templates || []).forEach(item => { if (item && item.id) labels[item.id] = item.label; });
+    const counts = {};
+    const headings = {};
+    for (const item of items || []) {
+      if (!item || !item.template || !labels[item.template]) continue;
+      counts[item.template] = (counts[item.template] || 0) + 1;
+      headings[item.id] = labels[item.template] + circledNumber(counts[item.template]);
+    }
+    return headings;
+  }
+
+  function activeTemplates(book, defaults) {
+    const custom = book && Array.isArray(book.templates) ? book.templates : [];
+    return custom.length ? custom : (defaults || DEFAULT_TEMPLATES);
+  }
+
   function validateRouteFields(fields, flagIds, trophyIds) {
     const title = String(fields && fields.title || "").trim();
     const detail = String(fields && fields.detail || "").trim();
@@ -532,8 +613,10 @@
     if (map && !validMapValue(map)) return { error: "地図は章のID、https:// の画像、または画像ファイルにしてください。" };
     const parent = String(fields && fields.parent || "").trim();
     const quest = String(fields && fields.quest || "").trim();
+    const section = String(fields && fields.section || "").trim();
+    const template = String(fields && fields.template || "").trim();
     const items = flag === "item" ? itemLinks(fields && fields.items) : [];
-    return { value: { title, detail, flag, source, deadline, trophy: flag === "trophy" ? trophy : "", map, parent, quest, items } };
+    return { value: { title, detail, flag, source, deadline, trophy: flag === "trophy" ? trophy : "", map, parent, quest, section, template, items } };
   }
 
   function validateCatalogFields(fields) {
@@ -592,6 +675,7 @@
     for (const trackId of Object.keys(route || {})) {
       nextRoute[trackId] = (route[trackId] || []).map(row => ({
         chapterId: row.chapterId,
+        sections: row.sections || [],
         items: (row.items || []).map(item => {
           if (!item || !item.map || !/^data:image\//i.test(item.map)) return item;
           const file = mapOf(item.map);
@@ -632,6 +716,12 @@
     for (const trackId of Object.keys(route || {})) {
       clean[trackId] = (route[trackId] || []).map(row => ({
         chapterId: row.chapterId,
+        sections: (row.sections || []).map(section => ({
+          id: section.id,
+          title: section.title || "",
+          map: section.map || "",
+          note: section.note || ""
+        })),
         items: (row.items || []).map(item => {
           const copy = Object.assign({}, item);
           delete copy.custom;
@@ -641,6 +731,8 @@
           if (!copy.map) delete copy.map;
           if (!copy.parent) delete copy.parent;
           if (!copy.quest) delete copy.quest;
+          if (!copy.section) delete copy.section;
+          if (!copy.template) delete copy.template;
           if (!copy.items || !copy.items.length) delete copy.items;
           return copy;
         })
@@ -676,11 +768,16 @@
     mergeCatalog,
     mergedRoute,
     numberCards,
+    circledNumber,
+    templateHeadings,
+    activeTemplates,
+    DEFAULT_TEMPLATES,
     orderWithMove,
     orderForSave,
     assignMapFile,
     replaceMapValues,
     saveOrder,
+    saveSections,
     upsertRouteCard,
     upsertCatalogCard,
     removeCard,

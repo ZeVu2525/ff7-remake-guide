@@ -11,7 +11,7 @@ function loadGuide() {
   const sandbox = { console };
   sandbox.globalThis = sandbox;
   const context = vm.createContext(sandbox);
-  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js"]) {
+  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "data/templates.js"]) {
     vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context, { filename: file });
   }
   return { GAME: sandbox.GAME, ROUTE: sandbox.ROUTE, CATALOGS: sandbox.CATALOGS, MAP_FILES: sandbox.MAP_FILES };
@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v8") fail("キャッシュ名が ff7r-guide-v8 ではない");
+  if (GAME.cache !== "ff7r-guide-v9") fail("キャッシュ名が ff7r-guide-v9 ではない");
   const mapFiles = guide.MAP_FILES;
   if (!Array.isArray(mapFiles)) fail("data/maps.js の MAP_FILES が配列ではない");
   else mapFiles.forEach(entry => {
@@ -50,7 +50,7 @@ function validateGuide(guide) {
   for (const file of GAME.cacheFiles) {
     if (!sw.includes(file)) fail("sw.js の対象に " + file + " がない");
   }
-  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
+  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "data/templates.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
     if (!html.includes(file + "?v=" + GAME.cache)) fail("index.html の " + file + " に版のクエリがない");
   }
   if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw") || !app.includes("すべて表示") || !app.includes("data-map") || !app.includes("data-open-item") || !app.includes("data-item-section") || !app.includes("map-zoom") || !app.includes("中のカード") || !app.includes("data-open-weapon")) {
@@ -64,7 +64,7 @@ function validateGuide(guide) {
     fail("編集モードがゲーム設定と繋がっていない");
   }
   const cardEdit = fs.readFileSync(path.join(root, "card-edit.js"), "utf8");
-  if (!cardEdit.includes("GAME.storage.cardEdits") || !cardEdit.includes("カード編集を終了")) {
+  if (!cardEdit.includes("GAME.storage.cardEdits") || !cardEdit.includes("編集を終了") || !cardEdit.includes("書き出す")) {
     fail("カード編集がゲーム設定と繋がっていない");
   }
   if (cardEdit.includes("event.target === dialog) dialog.hidden = true") || !cardEdit.includes("保存していない変更があります")) {
@@ -128,6 +128,11 @@ function validateGuide(guide) {
       if (!Array.isArray(row.items)) {
         fail(row.chapterId + " の items がない");
         continue;
+      }
+      if (!Array.isArray(row.sections) || !row.sections.length) fail(row.chapterId + " に子チャプターがない");
+      const sectionIds = new Set((row.sections || []).map(section => section && section.id));
+      for (const item of row.items) {
+        if (item && item.section && !sectionIds.has(item.section)) fail(item.id + " の子チャプターがない");
       }
       for (const item of row.items) {
         claim(item && item.id, trackId + " " + row.chapterId);
