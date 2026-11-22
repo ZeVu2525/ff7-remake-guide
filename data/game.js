@@ -21,7 +21,7 @@ const GAME = {
     theme: "ff7r-guide-theme",
     backup: "ff7r-guide-state-v1-last-backup"
   },
-  cache: "ff7r-guide-v8",
+  cache: "ff7r-guide-v9",
   cacheFiles: [
     "./",
     "./index.html",
@@ -34,7 +34,8 @@ const GAME = {
     "./data/game.js",
     "./data/route.js",
     "./data/catalogs.js",
-    "./data/maps.js"
+    "./data/maps.js",
+    "./data/templates.js"
   ],
   themes: [
     { id: "light", label: "読みやすいライト" },

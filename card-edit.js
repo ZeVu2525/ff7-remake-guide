@@ -33,6 +33,7 @@
     "#card-edit-dialog h2{margin:0 0 8px;font-size:20px}",
     "#card-edit-dialog label{display:block;margin:10px 0 4px;font-weight:700}",
     "#card-edit-dialog input,#card-edit-dialog textarea,#card-edit-dialog select{width:100%;box-sizing:border-box;min-height:44px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:16px/1.45 inherit}",
+    "#card-edit-dialog input[type=checkbox]{width:auto;min-height:0;margin-right:8px}",
     "#card-edit-dialog textarea{min-height:120px}",
     "#card-edit-dialog .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}",
     "#card-edit-dialog .row button{min-height:44px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg3);color:var(--fg);font:inherit;cursor:pointer}",
@@ -57,12 +58,12 @@
   root.id = "card-edit-root";
   root.innerHTML = [
     '<div id="card-edit-bar" hidden>',
-    '<button type="button" id="card-edit-exit">カード編集を終了</button>',
-    '<strong>カード編集</strong>',
-    '<button type="button" id="card-edit-export-route">ルートJSを書き出す</button>',
-    '<button type="button" id="card-edit-export-catalog">台帳JSを書き出す</button>',
-    '<button type="button" id="card-edit-export-json">編集データを書き出す</button>',
-    '<button type="button" id="card-edit-import">編集データを読み込む</button>',
+    '<button type="button" id="card-edit-exit">編集を終了</button>',
+    '<strong>編集</strong>',
+    '<button type="button" id="card-edit-export">書き出す</button>',
+    '<button type="button" id="card-edit-info" aria-label="書き出しと読み込みの説明">ⓘ</button>',
+    '<button type="button" id="card-edit-import">読み込む</button>',
+    '<button type="button" id="card-edit-templates">定型文</button>',
     '<button type="button" id="card-edit-reset">編集をすべて戻す</button>',
     '<input id="card-edit-file" type="file" accept="application/json,.json" hidden>',
     '</div>',
@@ -115,11 +116,11 @@
   }
 
   function paintToggle() {
-    const button = document.getElementById("card-edit-toggle");
+    const button = document.getElementById("edit-toggle");
     const on = document.body.classList.contains("is-card-edit");
     if (!button) return;
     button.setAttribute("aria-pressed", on ? "true" : "false");
-    button.textContent = on ? "カード編集：オン" : "カード編集：オフ";
+    button.textContent = on ? "編集：オン" : "編集：オフ";
   }
 
   function setOn(on) {
@@ -127,6 +128,7 @@
       if (!window.confirm("保存していない変更があります。破棄して閉じますか。")) return;
     }
     document.body.classList.toggle("is-card-edit", !!on);
+    if (globalThis.GuideText && GuideText.setOn) GuideText.setOn(!!on);
     bar.hidden = !on;
     try { localStorage.setItem(MODE_KEY, on ? "1" : "0"); } catch (e) {}
     if (!on) {
@@ -328,13 +330,21 @@
     const parents = ((chapterRow && chapterRow.items) || []).filter(item => item.id !== seed.id && !item.parent);
     const parentOptions = ['<option value="">親なし（章の直下）</option>'].concat(parents.map(item => `<option value="${escapeAttr(item.id)}"${item.id === seed.parent ? " selected" : ""}>${escapeText(item.title || item.id)}</option>`)).join("");
     editing.links = (seed.items || []).map(link => ({ id: link.id, qty: link.qty || 1 }));
+    const templates = GuideProgress.activeTemplates(book(), globalThis.TEMPLATES);
+    const templateOptions = ['<option value="">自由入力</option>'].concat(templates.map(item => `<option value="${escapeAttr(item.id)}"${item.id === seed.template ? " selected" : ""}>${escapeText(item.label)}</option>`)).join("");
+    const sectionList = chapterSections(seed.trackId, seed.chapterId);
+    const sectionId = seed.section || (sectionList[0] && sectionList[0].id) || "";
+    const sectionOptions = sectionList.map(item => `<option value="${escapeAttr(item.id)}"${item.id === sectionId ? " selected" : ""}>${escapeText(item.title)}</option>`).join("");
     fields.innerHTML = [
+      field("見出しの定型文", `<select name="template">${templateOptions}</select>`),
       field("見出し", `<input name="title" required value="${escapeAttr(seed.title || "")}">`),
+      '<p id="template-preview"></p>',
       field("本文", `<textarea name="detail">${escapeText(seed.detail || "")}</textarea>`),
       field("タグ", `<select name="flag">${flags}</select>`),
       field("期限", `<input name="deadline" value="${escapeAttr(seed.deadline || "")}" placeholder="期限・取り逃しのとき">`),
       field("トロフィー", `<select name="trophy">${trophies}</select>`),
       mapFields(seed.map || ""),
+      field("子チャプター", `<select name="section">${sectionOptions}</select>`),
       field("親カード", `<select name="parent">${parentOptions}</select>`),
       '<div id="item-picker"></div>'
     ].join("");
@@ -345,6 +355,8 @@
     captureBaseline();
     form.elements.title.focus();
   }
+
+  const pickerState = { hub: "consumables", query: "", selected: "", qty: "1" };
 
   function paintItemPicker() {
     const host = document.getElementById("item-picker");
@@ -360,16 +372,19 @@
     choices.forEach(item => {
       if (!hubs.some(hub => hub.id === item.hubId)) hubs.push({ id: item.hubId, label: item.hubLabel });
     });
+    hubs.sort((a, b) => (a.id === "consumables" ? -1 : b.id === "consumables" ? 1 : 0));
+    if (!hubs.some(hub => hub.id === pickerState.hub) && hubs[0]) pickerState.hub = hubs[0].id;
     const selected = (editing.links || []).map(link => {
       const found = choices.find(item => item.id === link.id);
       return `<li><span>${escapeText((found ? found.name : link.id) + " ×" + link.qty)}</span> <button type="button" data-link-remove="${escapeAttr(link.id)}">外す</button></li>`;
     }).join("");
     host.innerHTML = [
-      "<p>入手するアイテムを台帳から選び、個数を付ける。</p>",
-      `<select id="item-picker-hub">${hubs.map(hub => `<option value="${escapeAttr(hub.id)}">${escapeText(hub.label)}</option>`).join("")}</select>`,
-      '<input id="item-picker-q" type="search" placeholder="名前で探す" autocomplete="off">',
-      '<label>個数 <input id="item-picker-qty" type="number" min="1" max="99" value="1"></label>',
+      "<p>先にアイテムを選び、そのあと個数を決めて追加します。</p>",
+      `<select id="item-picker-hub">${hubs.map(hub => `<option value="${escapeAttr(hub.id)}"${hub.id === pickerState.hub ? " selected" : ""}>${escapeText(hub.label)}</option>`).join("")}</select>`,
+      `<input id="item-picker-q" type="search" placeholder="名前で探す" autocomplete="off" value="${escapeAttr(pickerState.query)}">`,
       '<div id="item-picker-results"></div>',
+      `<label>個数 <input id="item-picker-qty" type="number" min="1" max="99" value="${escapeAttr(pickerState.qty || "1")}"></label>`,
+      '<button type="button" id="item-picker-add">このアイテムを追加</button>',
       `<ul id="item-picker-selected">${selected}</ul>`
     ].join("");
     refreshItemResults();
@@ -382,7 +397,7 @@
     if (!host || !hub || !query) return;
     const needle = query.value.trim().toLowerCase();
     const rows = GuideApp.itemChoices().filter(item => item.hubId === hub.value && (!needle || (item.name + item.area).toLowerCase().includes(needle))).slice(0, 12);
-    host.innerHTML = rows.map(item => `<button type="button" data-link-add="${escapeAttr(item.id)}">${escapeText(item.name)}${item.area ? "（" + escapeText(item.area) + "）" : ""}</button>`).join("") || "<p>一致する項目がありません。</p>";
+    host.innerHTML = rows.map(item => `<button type="button" data-link-pick="${escapeAttr(item.id)}"${item.id === pickerState.selected ? ' style="outline:2px solid #39c9ff"' : ""}>${escapeText(item.name)}${item.area ? "（" + escapeText(item.area) + "）" : ""}</button>`).join("") || "<p>一致する項目がありません。</p>";
   }
 
   function openCatalogForm(seed) {
@@ -432,6 +447,8 @@
       trophy: data.get("trophy"),
       map: chosenMap(),
       parent: data.get("parent"),
+      section: data.get("section") || editing.section || "",
+      template: data.get("template") || "",
       quest: editing.quest || "",
       items: editing.links || []
     }, flagIds, GuideApp.trophyChoices().map(item => item.id));
@@ -579,6 +596,18 @@
 
   form.addEventListener("submit", event => {
     event.preventDefault();
+    if (editing && editing.chooser) {
+      if (editing.onOk) editing.onOk();
+      return;
+    }
+    if (editing && editing.mapOnly) {
+      saveMapOnly();
+      return;
+    }
+    if (editing && editing.sectionEdit) {
+      saveSectionEdit();
+      return;
+    }
     if (editing && editing.move) {
       moveRoute(editing.id, form.elements.track.value, form.elements.chapter.value);
       dialog.hidden = true;
@@ -600,6 +629,18 @@
 
   document.addEventListener("click", event => {
     if (!document.body.classList.contains("is-card-edit")) return;
+    const copy = event.target.closest("[data-card-copy]");
+    if (copy) { duplicateCard(copy.getAttribute("data-card-copy")); return; }
+    const sectionEdit = event.target.closest("[data-section-edit]");
+    if (sectionEdit) { openSectionEdit(sectionEdit.getAttribute("data-section-edit")); return; }
+    const sectionUp = event.target.closest("[data-section-up]");
+    if (sectionUp) { moveSection(sectionUp.getAttribute("data-section-up"), -1); return; }
+    const sectionDown = event.target.closest("[data-section-down]");
+    if (sectionDown) { moveSection(sectionDown.getAttribute("data-section-down"), 1); return; }
+    const sectionDelete = event.target.closest("[data-section-delete]");
+    if (sectionDelete) { removeSection(sectionDelete.getAttribute("data-section-delete")); return; }
+    const sectionAdd = event.target.closest("[data-section-add]");
+    if (sectionAdd) { addSection(sectionAdd.getAttribute("data-card-track"), sectionAdd.getAttribute("data-section-add")); return; }
     const addAfter = event.target.closest("[data-card-add-after]");
     if (addAfter) {
       const id = addAfter.getAttribute("data-card-add-after");
@@ -612,6 +653,7 @@
         chapterId: place.chapterId,
         flag: item.flag || "story",
         parent: item.parent || "",
+        section: item.section || "",
         insertAfter: id,
         title: "",
         detail: "",
@@ -682,6 +724,183 @@
     if (!hub) return null;
     return GuideProgress.mergeCatalog(CATALOGS[catalogId], book(), catalogId).find(item => item.id === id);
   }
+
+  function chapterSections(trackId, chapterId) {
+    const rows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[trackId] || [], book(), trackId) || [];
+    const row = rows.find(item => item.chapterId === chapterId);
+    return row && row.sections ? row.sections.map(item => Object.assign({}, item)) : [];
+  }
+
+  function storeSections(trackId, chapterId, sections) {
+    const next = JSON.parse(JSON.stringify(book()));
+    GuideProgress.saveSections(next, trackId + ":" + chapterId, sections);
+    GuideApp.setCardBook(next);
+  }
+
+  function addSection(trackId, chapterId) {
+    const sections = chapterSections(trackId, chapterId);
+    sections.push({
+      id: chapterId + "-sec-" + Date.now().toString(36),
+      title: "(" + (sections.length + 1) + ") 新しい区分",
+      map: "",
+      note: ""
+    });
+    storeSections(trackId, chapterId, sections);
+  }
+
+  function moveSection(sectionId, delta) {
+    const place = sectionPlace(sectionId);
+    if (!place) return;
+    const sections = chapterSections(place.trackId, place.chapterId);
+    const index = sections.findIndex(item => item.id === sectionId);
+    const next = index + delta;
+    if (index < 0 || next < 0 || next >= sections.length) return;
+    const moved = sections.splice(index, 1)[0];
+    sections.splice(next, 0, moved);
+    storeSections(place.trackId, place.chapterId, sections);
+  }
+
+  function sectionPlace(sectionId) {
+    for (const track of GAME.tracks) {
+      for (const chapter of GAME.chapters[track.id] || []) {
+        if (chapterSections(track.id, chapter.id).some(item => item.id === sectionId)) {
+          return { trackId: track.id, chapterId: chapter.id };
+        }
+      }
+    }
+    return null;
+  }
+
+  function removeSection(sectionId) {
+    const place = sectionPlace(sectionId);
+    if (!place) return;
+    const sections = chapterSections(place.trackId, place.chapterId);
+    const index = sections.findIndex(item => item.id === sectionId);
+    if (index < 0) return;
+    const previous = sections[index - 1];
+    const ids = GuideApp.currentIds(place.trackId, place.chapterId).filter(id => {
+      const item = routeRecord(place.trackId, place.chapterId, id);
+      return item && item.section === sectionId;
+    });
+    if (previous && window.confirm("カードを前の子チャプターへ移します。残すカードがない場合も、この区分だけ消します。")) {
+      ids.forEach(id => retagSection(id, previous.id));
+    } else if (window.confirm("この子チャプターと、中のカードを削除します。")) {
+      ids.forEach(id => GuideApp.dropCard(id));
+    } else return;
+    storeSections(place.trackId, place.chapterId, sections.filter(item => item.id !== sectionId));
+  }
+
+  function retagSection(id, sectionId) {
+    const place = locate(id);
+    const item = place && routeRecord(place.trackId, place.chapterId, id);
+    if (!item) return;
+    const base = GuideApp.findBaseRoute(id);
+    GuideApp.setCardBook(GuideProgress.upsertRouteCard(
+      book(), base && base.item, id, cardFields(Object.assign({}, item, { section: sectionId }), item.parent || ""),
+      place.trackId, place.chapterId, GuideApp.currentIds(place.trackId, place.chapterId),
+      GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id)
+    ));
+  }
+
+  function openSectionEdit(sectionId) {
+    const place = sectionPlace(sectionId);
+    if (!place) return;
+    const section = chapterSections(place.trackId, place.chapterId).find(item => item.id === sectionId);
+    if (!section) return;
+    editing = { sectionEdit: true, sectionId, trackId: place.trackId, chapterId: place.chapterId };
+    document.getElementById("card-edit-title").textContent = "子チャプター";
+    document.getElementById("card-edit-id").textContent = section.id;
+    fields.innerHTML = [
+      field("名前", `<input name="title" required value="${escapeAttr(section.title)}">`),
+      field("共通のメモ", `<textarea name="note">${escapeText(section.note || "")}</textarea>`),
+      mapFields(section.map || "")
+    ].join("");
+    bindMapField();
+    error.textContent = "";
+    dialog.hidden = false;
+    captureBaseline();
+  }
+
+  function saveSectionEdit() {
+    const sections = chapterSections(editing.trackId, editing.chapterId);
+    const section = sections.find(item => item.id === editing.sectionId);
+    if (!section) return;
+    section.title = String(new FormData(form).get("title") || "").trim() || section.title;
+    section.note = String(new FormData(form).get("note") || "").trim();
+    section.map = chosenMap();
+    dialog.hidden = true;
+    storeSections(editing.trackId, editing.chapterId, sections);
+  }
+
+  function openCardMap(id) {
+    const place = locate(id);
+    const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
+    if (!item) return;
+    editing = Object.assign({ kind: "route", mapOnly: true, trackId: place.trackId, chapterId: place.chapterId }, item);
+    document.getElementById("card-edit-title").textContent = "地図を変える";
+    document.getElementById("card-edit-id").textContent = item.title || id;
+    fields.innerHTML = mapFields(item.map || "");
+    bindMapField();
+    error.textContent = "";
+    dialog.hidden = false;
+    captureBaseline();
+  }
+
+  function saveMapOnly() {
+    const place = { trackId: editing.trackId, chapterId: editing.chapterId };
+    const item = routeRecord(place.trackId, place.chapterId, editing.id);
+    if (!item) return;
+    const base = GuideApp.findBaseRoute(editing.id);
+    const fields = cardFields(item, item.parent || "");
+    fields.map = chosenMap();
+    dialog.hidden = true;
+    GuideApp.setCardBook(GuideProgress.upsertRouteCard(
+      book(), base && base.item, editing.id, fields, place.trackId, place.chapterId,
+      GuideApp.currentIds(place.trackId, place.chapterId),
+      GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id)
+    ));
+  }
+
+  function duplicateCard(id) {
+    const place = locate(id);
+    const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
+    if (!item) return;
+    const orderIds = GuideApp.currentIds(place.trackId, place.chapterId);
+    const children = orderIds.map(cid => routeRecord(place.trackId, place.chapterId, cid)).filter(entry => entry && entry.parent === id);
+    const taken = usedIds();
+    const newId = GuideProgress.createCardId(taken);
+    taken.add(newId);
+    const childIds = children.map(() => {
+      const childId = GuideProgress.createCardId(taken);
+      taken.add(childId);
+      return childId;
+    });
+    const order = orderIds.slice();
+    const at = order.indexOf(id);
+    order.splice(at < 0 ? order.length : at + 1, 0, newId, ...childIds);
+    let next = book();
+    const copyFields = cardFields(item, item.parent || "");
+    next = GuideProgress.upsertRouteCard(next, null, newId, copyFields, place.trackId, place.chapterId, order, GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id));
+    children.forEach((child, index) => {
+      const fields = cardFields(child, newId);
+      next = GuideProgress.upsertRouteCard(next, null, childIds[index], fields, place.trackId, place.chapterId, order, GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id));
+    });
+    GuideApp.setCardBook(next);
+    const created = routeRecord(place.trackId, place.chapterId, newId);
+    if (created) openRouteForm(Object.assign({ kind: "route", id: newId, trackId: place.trackId, chapterId: place.chapterId }, created));
+  }
+
+  document.addEventListener("dblclick", event => {
+    if (!document.body.classList.contains("is-card-edit")) return;
+    const button = event.target.closest && event.target.closest(".map-open");
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const owner = button.getAttribute("data-map-owner");
+    const id = button.getAttribute("data-owner-id");
+    if (owner === "section") openSectionEdit(id);
+    else openCardMap(id);
+  });
 
   function clearDragVisuals() {
     document.body.classList.remove("is-card-dragging");
@@ -835,6 +1054,8 @@
       map: item.map || "",
       parent: parentId || "",
       quest: item.quest || "",
+      section: item.section || "",
+      template: item.template || "",
       items: item.items || []
     };
   }
@@ -957,6 +1178,8 @@
         return;
       }
       commitRoute(id, from, to.trackId, to.chapterId, target.id, target.after);
+      const neighbor = routeRecord(to.trackId, to.chapterId, target.id);
+      if (neighbor && neighbor.section) retagSection(id, neighbor.section);
       if (target.unnest) setParent(id, "");
       else alignParent(id, target.id);
       return;
@@ -1043,13 +1266,38 @@
   }, true);
 
   dialog.addEventListener("input", event => {
-    if (event.target && (event.target.id === "item-picker-q" || event.target.id === "item-picker-hub")) refreshItemResults();
+    if (!event.target) return;
+    if (event.target.id === "item-picker-q") pickerState.query = event.target.value;
+    if (event.target.id === "item-picker-qty") pickerState.qty = event.target.value;
+    if (event.target.id === "item-picker-q" || event.target.id === "item-picker-hub") {
+      if (event.target.id === "item-picker-hub") pickerState.hub = event.target.value;
+      refreshItemResults();
+    }
+  });
+  dialog.addEventListener("change", event => {
+    if (event.target && event.target.id === "item-picker-hub") {
+      pickerState.hub = event.target.value;
+      refreshItemResults();
+    }
   });
   dialog.addEventListener("click", event => {
-    const add = event.target.closest && event.target.closest("[data-link-add]");
-    if (add && editing) {
-      const qty = Math.max(1, Math.min(99, Number((document.getElementById("item-picker-qty") || {}).value) || 1));
-      const id = add.getAttribute("data-link-add");
+    const pick = event.target.closest && event.target.closest("[data-link-pick]");
+    if (pick && editing) {
+      pickerState.selected = pick.getAttribute("data-link-pick");
+      const hub = document.getElementById("item-picker-hub");
+      const query = document.getElementById("item-picker-q");
+      if (hub) pickerState.hub = hub.value;
+      if (query) pickerState.query = query.value;
+      refreshItemResults();
+      return;
+    }
+    if (event.target && event.target.id === "item-picker-add" && editing) {
+      const id = pickerState.selected;
+      if (!id) {
+        error.textContent = "先にアイテムを選んでください。";
+        return;
+      }
+      const qty = Math.max(1, Math.min(99, Number(pickerState.qty || (document.getElementById("item-picker-qty") || {}).value) || 1));
       editing.links = (editing.links || []).filter(link => link.id !== id).concat({ id, qty });
       paintItemPicker();
       return;
@@ -1121,9 +1369,7 @@
     return type.toLowerCase() === "jpeg" ? "jpg" : type.toLowerCase();
   }
 
-  async function exportWithMaps(kind) {
-    const route = GuideProgress.mergedRoute(ROUTE, GAME.chapters, book());
-    const catalogs = mergedCatalogs();
+  async function prepareMaps(route, catalogs) {
     const urls = collectDataUrls(route, catalogs);
     let manifest = repoMaps().map(item => Object.assign({}, item));
     const lookup = {};
@@ -1136,33 +1382,98 @@
       if (assigned.added) fresh.push({ file: assigned.file, blob: dataUrlBlob(url) });
     }
     const replaced = GuideProgress.replaceMapValues(route, catalogs, lookup);
-    if (kind === "route") download("data-route.js", GuideProgress.routeModuleSource(replaced.route), "text/javascript");
-    else download("data-catalogs.js", GuideProgress.catalogsModuleSource(replaced.catalogs), "text/javascript");
-    if (!fresh.length && manifest.length === repoMaps().length) return;
-    const changed = fresh.length || JSON.stringify(manifest) !== JSON.stringify(repoMaps());
-    if (!changed) return;
-    download("maps.js", "const MAP_FILES = " + JSON.stringify(manifest, null, 2) + ";\n\nglobalThis.MAP_FILES = MAP_FILES;\n", "text/javascript");
-    fresh.forEach(item => {
-      if (!item.blob) return;
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(item.blob);
-      link.download = item.file.split("/").pop();
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1500);
-    });
-    window.alert("新しい地図は maps/ に置いてください。ダウンロードした画像を GitHub の Add file → Upload files で maps/ に上げ、maps.js は data/maps.js と置き換えます。同じ画像は同じファイル名になります。掲載元の地図はそのまま参照します。");
+    return { route: replaced.route, catalogs: replaced.catalogs, manifest, fresh };
   }
 
-  document.getElementById("card-edit-export-route").addEventListener("click", () => {
-    exportWithMaps("route").catch(() => window.alert("書き出しに失敗しました。"));
+  async function exportChosen(flags) {
+    const prepared = await prepareMaps(GuideProgress.mergedRoute(ROUTE, GAME.chapters, book()), mergedCatalogs());
+    if (flags.route) download("data-route.js", GuideProgress.routeModuleSource(prepared.route), "text/javascript");
+    if (flags.catalog) download("data-catalogs.js", GuideProgress.catalogsModuleSource(prepared.catalogs), "text/javascript");
+    if (flags.json) download("ff7r-card-edits.json", JSON.stringify({ app: GuideProgress.APP, cards: book() }, null, 2), "application/json");
+    if (flags.templates) {
+      const templates = GuideProgress.activeTemplates(book(), globalThis.TEMPLATES);
+      download("templates.js", "const TEMPLATES = " + JSON.stringify(templates, null, 2) + ";\n\nglobalThis.TEMPLATES = TEMPLATES;\n", "text/javascript");
+    }
+    if (flags.text && globalThis.GuideText) download("ff7r-text-edits.json", JSON.stringify(GuideText.payload(), null, 2), "application/json");
+    if (flags.maps) {
+      download("maps.js", "const MAP_FILES = " + JSON.stringify(prepared.manifest, null, 2) + ";\n\nglobalThis.MAP_FILES = MAP_FILES;\n", "text/javascript");
+      prepared.fresh.forEach(item => {
+        if (!item.blob) return;
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(item.blob);
+        link.download = item.file.split("/").pop();
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+      });
+    }
+    dialog.hidden = true;
+    const submit = form.querySelector("[type=submit]");
+    if (submit) submit.textContent = "保存";
+  }
+
+  function openChooser(title, body, onOk, label) {
+    editing = { chooser: true, onOk: onOk };
+    document.getElementById("card-edit-title").textContent = title;
+    document.getElementById("card-edit-id").textContent = "";
+    fields.innerHTML = body;
+    error.textContent = "";
+    const submit = form.querySelector("[type=submit]");
+    if (submit) submit.textContent = label || "書き出す";
+    dialog.hidden = false;
+    captureBaseline();
+  }
+  function closeOnly() { dialog.hidden = true; }
+
+  document.getElementById("card-edit-export").addEventListener("click", () => {
+    openChooser("書き出す", [
+      "<p>必要なものだけ選んでください。選んだファイルがダウンロードされます。</p>",
+      '<label><input type="checkbox" name="exp-route" checked> ルート（カードと子チャプター）。data/route.js と置き換えます。</label>',
+      '<label><input type="checkbox" name="exp-catalog" checked> 台帳（アイテムや依頼）。data/catalogs.js と置き換えます。</label>',
+      '<label><input type="checkbox" name="exp-json"> 編集データの控え。このブラウザの差分だけです。</label>',
+      '<label><input type="checkbox" name="exp-maps"> 新しく追加した地図画像と data/maps.js。</label>',
+      '<label><input type="checkbox" name="exp-templates"> 見出しの定型文。data/templates.js と置き換えます。</label>',
+      '<label><input type="checkbox" name="exp-text"> 表示文の修正。進行とは別のJSONです。</label>'
+    ].join(""), () => {
+      const data = new FormData(form);
+      exportChosen({
+        route: data.get("exp-route") === "on",
+        catalog: data.get("exp-catalog") === "on",
+        json: data.get("exp-json") === "on",
+        maps: data.get("exp-maps") === "on",
+        templates: data.get("exp-templates") === "on",
+        text: data.get("exp-text") === "on"
+      }).catch(() => window.alert("書き出しに失敗しました。"));
+    });
   });
-  document.getElementById("card-edit-export-catalog").addEventListener("click", () => {
-    exportWithMaps("catalog").catch(() => window.alert("書き出しに失敗しました。"));
+  document.getElementById("card-edit-info").addEventListener("click", () => {
+    openChooser("書き出しと読み込み", [
+      "<p>編集は、書き出すまでこのブラウザの中だけに残ります。別の端末やGitHubには自動では送られません。</p>",
+      "<p>「書き出す」でファイルを保存し、GitHubの Add file → Upload files で同じ名前の場所に置きます。</p>",
+      "<ul><li>ルートは data/route.js です。カード、子チャプター、見出しの番号の元になります。</li>",
+      "<li>台帳は data/catalogs.js です。アイテムや依頼の中身です。</li>",
+      "<li>編集データの控えは、差分だけのJSONです。「読み込む」でこのブラウザに戻せます。</li>",
+      "<li>地図は maps/ の画像と data/maps.js です。掲載元の地図画像は入れません。</li>",
+      "<li>定型文は data/templates.js です。宝箱① のような見出しの元です。</li>",
+      "<li>表示文の修正は、画面の文章を直接直した分です。</li></ul>",
+      "<p>「読み込む」は、編集データの控えJSONをこのブラウザに反映します。原稿ファイルそのものは置き換わりません。</p>"
+    ].join(""), () => { dialog.hidden = true; }, "閉じる");
   });
-  document.getElementById("card-edit-export-json").addEventListener("click", () => {
-    download("ff7r-card-edits.json", JSON.stringify({ app: GuideProgress.APP, cards: book() }, null, 2), "application/json");
+  document.getElementById("card-edit-templates").addEventListener("click", () => {
+    const current = GuideProgress.activeTemplates(book(), globalThis.TEMPLATES);
+    openChooser("定型文", `<p>1行が1つの定型文です。上から順に並びます。空行は無視します。</p><textarea name="tpl-lines">${escapeText(current.map(item => item.label).join("\n"))}</textarea>`, () => {
+      const lines = String(new FormData(form).get("tpl-lines") || "").split(/\n/).map(line => line.trim()).filter(Boolean);
+      const next = JSON.parse(JSON.stringify(book()));
+      next.templates = lines.map(label => {
+        const found = current.find(item => item.label === label);
+        return { id: found ? found.id : ("tpl-" + Date.now().toString(36) + "-" + label.length), label };
+      });
+      GuideApp.setCardBook(next);
+      dialog.hidden = true;
+      const submit = form.querySelector("[type=submit]");
+      if (submit) submit.textContent = "保存";
+    });
   });
   document.getElementById("card-edit-import").addEventListener("click", () => document.getElementById("card-edit-file").click());
   document.getElementById("card-edit-file").addEventListener("change", async event => {
@@ -1182,17 +1493,14 @@
     GuideApp.setCardBook(GuideProgress.emptyCardBook());
   });
 
-  const footer = document.querySelector("footer");
-  if (footer && !document.getElementById("card-edit-toggle")) {
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.id = "card-edit-toggle";
-    toggle.addEventListener("click", () => setOn(!document.body.classList.contains("is-card-edit")));
-    footer.appendChild(toggle);
-  }
+  const footerToggle = document.getElementById("edit-toggle");
+  if (footerToggle) footerToggle.addEventListener("click", () => setOn(!document.body.classList.contains("is-card-edit")));
   let start = false;
-  try { start = localStorage.getItem(MODE_KEY) === "1"; } catch (e) {}
-  try { if (new URL(location.href).searchParams.get("cards") === "1") start = true; } catch (e) {}
+  try { start = localStorage.getItem(MODE_KEY) === "1" || localStorage.getItem(GAME.storage.textEditMode) === "1"; } catch (e) {}
+  try {
+    const params = new URL(location.href).searchParams;
+    if (params.get("cards") === "1" || params.get("edit") === "1") start = true;
+  } catch (e) {}
   paintToggle();
   if (start) setOn(true);
 })();

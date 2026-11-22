@@ -134,6 +134,16 @@ section.ch.closed .chb{display:none}
 .cnt.done{color:var(--green);font-weight:800}
 .chb{border-top:1px solid var(--line)}
 .it{position:relative;display:flex;gap:12px;align-items:flex-start;padding:14px;border-bottom:1px solid var(--line)}
+.it.flag-tips{background:#e5f4ff}
+html[data-theme="dark"] .it.flag-tips,html[data-theme="accent"] .it.flag-tips{background:#14384a}
+.hint-mark{display:inline-flex;align-items:center;margin-right:4px;padding:1px 6px;border-radius:99px;background:#1677a8;color:#fff;font-size:12px;font-weight:700}
+.subch{border-top:1px solid var(--line)}
+.subch-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;background:var(--bg3)}
+.subch-toggle{display:flex;gap:8px;align-items:center;min-height:44px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-weight:750;cursor:pointer}
+.subch.closed .caret{display:inline-block;transform:rotate(-90deg)}
+.subch-note{margin:0;padding:0 12px 8px;color:var(--fg2)}
+.subch-tools{display:flex;flex-wrap:wrap;gap:4px}
+.subch-tools button{min-height:36px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg2);color:inherit;cursor:pointer}
 .ord{flex:0 0 auto;min-width:2.4em;margin-top:2px;color:var(--fg3);font-variant-numeric:tabular-nums;font-weight:800}
 .kids{margin:8px 0 0 8px;padding-left:8px;border-left:3px solid var(--line)}
 .kids-toggle{min-height:40px;margin-top:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:inherit;font:inherit}
@@ -150,13 +160,13 @@ table.sheet th:first-child{background:var(--bg3)}
 .materia-block{margin:0 0 16px;padding:0 0 8px;border-bottom:1px solid var(--line)}
 .materia-block h4{margin:0 0 4px}
 tr.is-target td{background:rgba(57,201,255,.18)}
-#map-zoom{position:fixed;inset:0;z-index:420;display:flex;flex-direction:column;background:rgba(2,10,18,.94);color:#fff}
+#map-zoom{position:fixed;inset:0;z-index:420;display:flex;flex-direction:column;background:#fff;color:#142635}
 #map-zoom[hidden]{display:none}
 .map-zoom-bar{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px}
 #map-zoom-close,#map-enlarge{min-height:44px;padding:8px 14px;border:0;border-radius:8px;background:#f6e7c1;color:#10202c;font:inherit;font-weight:700}
 #map-zoom-stage{flex:1;min-height:0;overflow:hidden;touch-action:none;display:flex;align-items:center;justify-content:center}
 #map-zoom-stage img{max-width:94vw;max-height:76vh;transform-origin:center center;cursor:grab}
-#map-zoom a{color:#9ad7ff}
+#map-zoom a{color:#0b5f86}
 .quest{margin:0 0 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg2)}
 .quest-toggle{display:flex;gap:8px;align-items:center;width:100%;min-height:48px;padding:10px 12px;border:0;background:transparent;color:inherit;font:inherit;font-weight:750;text-align:left}
 .quest-body{padding:0 12px 12px}
@@ -170,7 +180,7 @@ tr.is-target td{background:rgba(57,201,255,.18)}
 .equip-section{margin:0 0 18px}
 .equip-initial{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .equip-grid td,.equip-grid th{text-align:center}
-#map-pop{position:fixed;z-index:320;max-height:min(70vh,560px);overflow:auto;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);box-shadow:0 12px 32px rgba(0,0,0,.28)}
+#map-pop{position:fixed;z-index:320;max-height:min(70vh,560px);overflow:auto;padding:8px;border:1px solid #bfd0da;border-radius:12px;background:#fff;color:#142635;box-shadow:0 12px 32px rgba(0,0,0,.28)}
 #map-pop[hidden]{display:none}
 #map-pop img{display:block;width:100%;height:auto;background:#111;border-radius:8px}
 #map-pop a{color:var(--accent)}
@@ -290,15 +300,16 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <main id="main" tabindex="-1"></main>
 <footer>
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
-  <button type="button" id="text-edit-toggle" aria-pressed="false">編集モード：オフ</button>
+  <button type="button" id="edit-toggle" aria-pressed="false">編集：オフ</button>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v8"></script>
-<script src="data/route.js?v=ff7r-guide-v8"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v8"></script>
-<script src="data/maps.js?v=ff7r-guide-v8"></script>
-<script src="progress.js?v=ff7r-guide-v8"></script>
-<script src="app.js?v=ff7r-guide-v8"></script>
-<script src="edit-mode.js?v=ff7r-guide-v8"></script>
-<script src="card-edit.js?v=ff7r-guide-v8"></script>
+<script src="data/game.js?v=ff7r-guide-v9"></script>
+<script src="data/route.js?v=ff7r-guide-v9"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v9"></script>
+<script src="data/maps.js?v=ff7r-guide-v9"></script>
+<script src="data/templates.js?v=ff7r-guide-v9"></script>
+<script src="progress.js?v=ff7r-guide-v9"></script>
+<script src="app.js?v=ff7r-guide-v9"></script>
+<script src="edit-mode.js?v=ff7r-guide-v9"></script>
+<script src="card-edit.js?v=ff7r-guide-v9"></script>
 </body>
 </html>
