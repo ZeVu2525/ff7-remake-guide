@@ -119,18 +119,19 @@
   }
 
   function chaptersFor(trackId) {
-    const defs = GAME.chapters[trackId] || [];
-    const merged = GuideProgress.mergeTrack(ROUTE, defs, cardBook, trackId);
-    const itemsByChapter = new Map(merged.map(row => [row.chapterId, row.items || []]));
-    return defs.map(chapter => {
-      const row = merged.find(item => item.chapterId === chapter.id);
-      return {
-        id: chapter.id,
-        title: chapter.title,
-        items: itemsByChapter.get(chapter.id) || [],
-        sections: row && row.sections || []
-      };
-    });
+    const merged = GuideProgress.mergeTrack(ROUTE, GAME.chapters[trackId] || [], cardBook, trackId);
+    return merged.map((row, index) => ({
+      id: row.chapterId,
+      title: row.title || ("Chapter " + (index + 1)),
+      items: row.items || [],
+      sections: row.sections || []
+    }));
+  }
+
+  function storeChapterList(trackId, list) {
+    const next = JSON.parse(JSON.stringify(cardBook));
+    next.chapterLists = Object.assign({}, next.chapterLists, { [trackId]: list });
+    setCardBook(next);
   }
 
   function baseItems(trackId, chapterId) {
@@ -618,15 +619,22 @@
       const done = chapter.items.filter(item => checked(item.id)).length;
       const closed = ui.chapterId ? false : ui.collapsed[chapterKey(chapter.id)] === true;
       const hide = filtering && built.visible === 0;
+      const chapterTools = cardEditing() ? `<span class="chapter-tools">
+          <button type="button" data-chapter-rename="${esc(chapter.id)}">名前</button>
+          <button type="button" data-chapter-up="${esc(chapter.id)}">上へ</button>
+          <button type="button" data-chapter-down="${esc(chapter.id)}">下へ</button>
+          <button type="button" data-chapter-add="${esc(chapter.id)}">チャプターを追加</button>
+          <button type="button" data-chapter-delete="${esc(chapter.id)}">削除</button>
+        </span>` : "";
       return `<section class="ch${closed ? " closed" : ""}${hide ? " hide" : ""}" id="chapter-${esc(ui.trackId)}-${esc(chapter.id)}" data-chapter="${esc(chapter.id)}">
         <h2 class="chapter-heading"><button type="button" class="chh" data-toggle-chapter="${esc(chapter.id)}" aria-expanded="${closed ? "false" : "true"}">
           <span class="caret" aria-hidden="true">▼</span>
           <span class="cht">${esc(chapter.title)}</span>
           <span class="chl"><span class="cnt${chapter.items.length && done === chapter.items.length ? " done" : ""}">${done}/${chapter.items.length}</span></span>
-        </button></h2>
+        </button>${chapterTools}</h2>
         <div class="chb" data-card-track="${esc(ui.trackId)}">${cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">${esc(L("addCard"))}</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">${esc(L("addSection"))}</button><button type="button" data-move-selected="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}"${GuideSelect.size ? "" : " disabled"}>${esc(L("moveSelected"))}</button></p>` : ""}${built.html || '<p class="empty-chapter">項目はまだありません。</p>'}</div>
       </section>`;
-    }).join("");
+    }).join("") + (cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-chapter-add="" data-card-track="${esc(ui.trackId)}">チャプターを追加</button></p>` : "");
     document.getElementById("route-count").textContent = visible + " / " + total + " 件を表示";
     const jump = document.getElementById("chapter-jump");
     const previous = jump.value;
@@ -1531,6 +1539,61 @@
       if (body) body.hidden = !!closed;
       ui.collapsed["section:" + ui.trackId + ":" + id] = !!closed;
       sub.setAttribute("aria-expanded", closed ? "false" : "true");
+      return;
+    }
+    const chapterAdd = event.target.closest("[data-chapter-add]");
+    if (chapterAdd) {
+      const trackId = ui.trackId;
+      const afterId = chapterAdd.getAttribute("data-chapter-add");
+      const current = GuideProgress.resolveChapterList(GAME.chapters[trackId] || [], ROUTE[trackId] || [], cardBook, trackId);
+      const added = GuideProgress.insertChapter(current, afterId);
+      storeChapterList(trackId, added.list);
+      const section = document.getElementById("chapter-" + trackId + "-" + added.id);
+      if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    const chapterRename = event.target.closest("[data-chapter-rename]");
+    if (chapterRename) {
+      const id = chapterRename.getAttribute("data-chapter-rename");
+      const current = GuideProgress.resolveChapterList(GAME.chapters[ui.trackId] || [], ROUTE[ui.trackId] || [], cardBook, ui.trackId);
+      const chapter = current.find(item => item.id === id);
+      const title = window.prompt("チャプター名", chapter ? chapter.title : "");
+      if (title == null) return;
+      storeChapterList(ui.trackId, GuideProgress.renameChapter(current, id, title.trim()));
+      return;
+    }
+    const chapterUp = event.target.closest("[data-chapter-up]");
+    if (chapterUp) {
+      const current = GuideProgress.resolveChapterList(GAME.chapters[ui.trackId] || [], ROUTE[ui.trackId] || [], cardBook, ui.trackId);
+      storeChapterList(ui.trackId, GuideProgress.moveChapter(current, chapterUp.getAttribute("data-chapter-up"), -1));
+      return;
+    }
+    const chapterDown = event.target.closest("[data-chapter-down]");
+    if (chapterDown) {
+      const current = GuideProgress.resolveChapterList(GAME.chapters[ui.trackId] || [], ROUTE[ui.trackId] || [], cardBook, ui.trackId);
+      storeChapterList(ui.trackId, GuideProgress.moveChapter(current, chapterDown.getAttribute("data-chapter-down"), 1));
+      return;
+    }
+    const chapterDelete = event.target.closest("[data-chapter-delete]");
+    if (chapterDelete) {
+      const id = chapterDelete.getAttribute("data-chapter-delete");
+      const chapter = chaptersFor(ui.trackId).find(item => item.id === id);
+      const count = chapter && chapter.items ? chapter.items.length : 0;
+      const message = count ? "このチャプターと、中のカードを削除します。" : "このチャプターを削除します。";
+      if (!window.confirm(message)) return;
+      const current = GuideProgress.resolveChapterList(GAME.chapters[ui.trackId] || [], ROUTE[ui.trackId] || [], cardBook, ui.trackId);
+      const next = JSON.parse(JSON.stringify(cardBook));
+      next.chapterLists = Object.assign({}, next.chapterLists, { [ui.trackId]: GuideProgress.deleteChapter(current, id) });
+      (chapter && chapter.items || []).forEach(item => {
+        next.deleted[item.id] = true;
+        if (next.custom) delete next.custom[item.id];
+        if (next.patches) delete next.patches[item.id];
+        delete state.checks[item.id];
+      });
+      if (next.chapters) delete next.chapters[ui.trackId + ":" + id];
+      save();
+      if (ui.chapterId === id) ui.chapterId = "";
+      setCardBook(next);
       return;
     }
     const chapter = event.target.closest("[data-toggle-chapter]");

@@ -10,7 +10,6 @@
     "#card-edit-bar{position:fixed;z-index:250;left:0;right:0;bottom:0;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;background:#14324a;color:#fff}",
     "#card-edit-bar[hidden]{display:none}",
     "#card-edit-bar button{box-sizing:border-box;min-height:40px;padding:6px 10px;border:1px solid #8fb6cc;border-radius:6px;background:#0d2436;color:#fff;font:inherit;cursor:pointer}",
-    "#card-edit-bar #card-edit-exit{flex:1 1 100%;min-height:44px;background:#f6e7c1;color:#10202c;border-color:#f6e7c1;font-weight:700}",
     "body.is-card-edit{padding-bottom:128px}",
     ".card-edit-tools,.card-edit-chapter{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}",
     ".card-edit-tools button,.card-edit-chapter button,.subch-tools button{min-height:32px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:var(--fg);font-size:13px;line-height:1.3;cursor:pointer}",
@@ -64,7 +63,7 @@
     "#tag-pop label{display:flex;gap:8px;align-items:center;min-height:36px;margin:0;font-weight:700}",
     "body.is-card-edit .tag-spot{cursor:pointer}",
     "@media(pointer:coarse){.card-edit-tools button,.card-edit-chapter button,.subch-tools button,.blk-tools button,.rt-bar button{min-height:40px;padding:4px 10px}.card-drag-handle{width:40px;height:40px}}",
-    "@media(max-width:640px){#card-edit-bar button{flex:1 1 calc(50% - 6px)}#card-edit-exit{flex-basis:100%}}"
+    "@media(max-width:640px){#card-edit-bar button{flex:1 1 calc(50% - 6px)}#card-edit-info{flex:0 0 auto}}"
   ].join("");
   document.head.appendChild(style);
 
@@ -72,13 +71,10 @@
   root.id = "card-edit-root";
   root.innerHTML = [
     '<div id="card-edit-bar" hidden>',
-    '<button type="button" id="card-edit-exit">編集を終了</button>',
-    '<strong>編集</strong>',
     '<button type="button" id="card-edit-export">書き出す</button>',
-    '<button type="button" id="card-edit-info" aria-label="書き出しと読み込みの説明">ⓘ</button>',
     '<button type="button" id="card-edit-import">読み込む</button>',
-    '<button type="button" id="card-edit-templates">設定</button>',
     '<button type="button" id="card-edit-reset">編集をすべて戻す</button>',
+    '<button type="button" id="card-edit-info" aria-label="書き出しと読み込みの説明">ⓘ</button>',
     '<input id="card-edit-file" type="file" accept="application/json,.json" hidden>',
     '</div>',
     '<div id="card-edit-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="card-edit-title">',
@@ -140,10 +136,8 @@
     if (!labels) return;
     const current = book();
     const named = {
-      "card-edit-exit": "endEdit",
       "card-edit-export": "export",
       "card-edit-import": "import",
-      "card-edit-templates": "openSettings",
       "card-edit-reset": "resetEdits"
     };
     Object.keys(named).forEach(id => {
@@ -164,9 +158,9 @@
   }
 
   function paintGithub() {
-    const exportButton = document.getElementById("card-edit-export");
+    const importButton = document.getElementById("card-edit-import");
     let box = document.getElementById("github-admin-actions");
-    if (!githubAccount() || !exportButton) {
+    if (!githubAccount() || !importButton) {
       if (box) box.remove();
       return;
     }
@@ -174,7 +168,7 @@
     box = document.createElement("span");
     box.id = "github-admin-actions";
     box.innerHTML = '<button type="button" id="github-push">GitHubに書き出す</button><button type="button" id="github-pull">GitHubから読み込む</button>';
-    exportButton.insertAdjacentElement("afterend", box);
+    importButton.insertAdjacentElement("afterend", box);
     document.getElementById("github-push").addEventListener("click", () => { githubPush().catch(error => window.alert(error.message || "書き出せませんでした。")); });
     document.getElementById("github-pull").addEventListener("click", () => { githubPull().catch(error => window.alert(error.message || "読み込めませんでした。")); });
   }
@@ -204,9 +198,9 @@
 
   function locate(id) {
     for (const track of GAME.tracks) {
-      for (const chapter of GAME.chapters[track.id] || []) {
-        if (GuideApp.currentIds(track.id, chapter.id).indexOf(id) >= 0) {
-          return { kind: "route", trackId: track.id, chapterId: chapter.id };
+      for (const chapter of GuideProgress.mergeTrack(ROUTE, GAME.chapters[track.id] || [], book(), track.id) || []) {
+        if (GuideApp.currentIds(track.id, chapter.chapterId).indexOf(id) >= 0) {
+          return { kind: "route", trackId: track.id, chapterId: chapter.chapterId };
         }
       }
     }
@@ -1077,7 +1071,7 @@
     const track = form.elements.track;
     const chapter = form.elements.chapter;
     const fill = () => {
-      chapter.innerHTML = (GAME.chapters[track.value] || []).map(item => `<option value="${item.id}"${item.id === place.chapterId && track.value === place.trackId ? " selected" : ""}>${item.title}</option>`).join("");
+      chapter.innerHTML = (GuideProgress.mergeTrack(ROUTE, GAME.chapters[track.value] || [], book(), track.value) || []).map(item => `<option value="${item.chapterId}"${item.chapterId === place.chapterId && track.value === place.trackId ? " selected" : ""}>${item.title || item.chapterId}</option>`).join("");
     };
     track.addEventListener("change", fill);
     fill();
@@ -2136,7 +2130,6 @@
     }
   });
 
-  document.getElementById("card-edit-exit").addEventListener("click", () => setOn(false));
   function mergedCatalogs() {
     return GuideProgress.exportCatalogs(globalThis.CATALOGS, book());
   }
@@ -2623,9 +2616,6 @@
 
   globalThis.GuideCardEdit = { paintGithub: paintGithub };
 
-  document.getElementById("card-edit-templates").addEventListener("click", () => {
-    if (globalThis.GuideApp && GuideApp.showHub) GuideApp.showHub("settings");
-  });
   document.getElementById("card-edit-import").addEventListener("click", () => document.getElementById("card-edit-file").click());
   document.getElementById("card-edit-file").addEventListener("change", async event => {
     const file = event.target.files && event.target.files[0];

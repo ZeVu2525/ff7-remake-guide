@@ -109,7 +109,7 @@
   const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable", "map"];
 
   function emptyCardBook() {
-    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, templates: [], labels: {}, difficulty: "normal" };
+    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, chapterLists: {}, templates: [], labels: {}, difficulty: "normal" };
   }
 
   function asObject(value) {
@@ -246,6 +246,15 @@
       if (typeof labels[key] === "string" && labels[key].trim()) book.labels[key] = labels[key].trim();
     });
     book.difficulty = src.difficulty === "easy" || src.difficulty === "hard" ? src.difficulty : "normal";
+    book.chapterLists = {};
+    const lists = asObject(src.chapterLists);
+    Object.keys(lists).forEach(trackId => {
+      if (!Array.isArray(lists[trackId])) return;
+      book.chapterLists[trackId] = lists[trackId].filter(chapter => chapter && chapter.id).map(chapter => ({
+        id: String(chapter.id),
+        title: chapter.title == null ? "" : String(chapter.title)
+      }));
+    });
     return book;
   }
 
@@ -396,12 +405,88 @@
     return card;
   }
 
+  function resolveChapterList(baseChapters, routeRows, book, trackId) {
+    const base = (baseChapters || []).filter(chapter => chapter && chapter.id).map(chapter => ({
+      id: String(chapter.id),
+      title: chapter.title == null ? "" : String(chapter.title)
+    }));
+    const saved = book && book.chapterLists && book.chapterLists[trackId];
+    if (Array.isArray(saved)) {
+      return saved.filter(chapter => chapter && chapter.id).map(chapter => ({
+        id: String(chapter.id),
+        title: chapter.title == null ? "" : String(chapter.title)
+      }));
+    }
+    const rows = routeRows || [];
+    const authored = rows.some(row => row && Object.prototype.hasOwnProperty.call(row, "title"));
+    if (!authored) return base;
+    const baseById = new Map(base.map(chapter => [chapter.id, chapter]));
+    const list = [];
+    const seen = new Set();
+    rows.forEach(row => {
+      if (!row || !row.chapterId || seen.has(row.chapterId)) return;
+      seen.add(row.chapterId);
+      const known = baseById.get(row.chapterId);
+      const title = row.title != null && row.title !== "" ? String(row.title) : ((known && known.title) || "");
+      list.push({ id: String(row.chapterId), title: title });
+    });
+    return list;
+  }
+
+  function createChapterId(list) {
+    const used = new Set((list || []).map(chapter => chapter.id));
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const id = "ch-user-" + Date.now().toString(36) + "-" + attempt.toString(36);
+      if (!used.has(id)) return id;
+    }
+    return "ch-user-" + Date.now().toString(36);
+  }
+
+  function nextChapterTitle(list) {
+    let max = 0;
+    (list || []).forEach((chapter, index) => {
+      const match = /^Chapter\s+(\d+)$/.exec(chapter.title || "");
+      const number = match ? Number(match[1]) : index + 1;
+      if (number > max) max = number;
+    });
+    return "Chapter " + (max + 1);
+  }
+
+  function insertChapter(list, afterId) {
+    const next = (list || []).map(chapter => ({ id: chapter.id, title: chapter.title || "" }));
+    const id = createChapterId(next);
+    const title = nextChapterTitle(next);
+    let at = next.findIndex(chapter => chapter.id === afterId);
+    if (at < 0) at = next.length - 1;
+    next.splice(at + 1, 0, { id: id, title: title });
+    return { list: next, id: id, title: title };
+  }
+
+  function renameChapter(list, id, title) {
+    return (list || []).map(chapter => chapter.id === id ? { id: chapter.id, title: title } : { id: chapter.id, title: chapter.title || "" });
+  }
+
+  function moveChapter(list, id, delta) {
+    const next = (list || []).map(chapter => ({ id: chapter.id, title: chapter.title || "" }));
+    const at = next.findIndex(chapter => chapter.id === id);
+    const to = at + delta;
+    if (at < 0 || to < 0 || to >= next.length) return next;
+    const item = next.splice(at, 1)[0];
+    next.splice(to, 0, item);
+    return next;
+  }
+
+  function deleteChapter(list, id) {
+    return (list || []).filter(chapter => chapter.id !== id).map(chapter => ({ id: chapter.id, title: chapter.title || "" }));
+  }
+
   function mergeTrack(route, chapterDefs, book, trackId) {
     const safeBook = normalizeCardBook(book);
     const routeIndex = indexRoute(route || {});
     const rows = (route && route[trackId]) || [];
+    const list = resolveChapterList(chapterDefs, rows, safeBook, trackId);
     const byChapter = new Map(rows.map(row => [row.chapterId, row.items || []]));
-    return (chapterDefs || []).map(chapter => {
+    return list.map(chapter => {
       const baseItems = byChapter.get(chapter.id) || [];
       const ids = mergeIdList(baseItems.map(item => item && item.id).filter(Boolean), safeBook, chapterKey(trackId, chapter.id));
       for (const id of Object.keys(safeBook.custom)) {
@@ -413,6 +498,7 @@
       const baseRow = rows.find(row => row.chapterId === chapter.id);
       return {
         chapterId: chapter.id,
+        title: chapter.title || "",
         sections: resolveSections(baseRow, safeBook, trackId, chapter.id),
         items: ids.map(id => resolveRouteCard(id, routeIndex, safeBook)).filter(Boolean)
       };
@@ -1315,6 +1401,7 @@
     for (const trackId of Object.keys(route || {})) {
       clean[trackId] = (route[trackId] || []).map(row => ({
         chapterId: row.chapterId,
+        title: row.title || "",
         sections: (row.sections || []).map(section => ({
           id: section.id,
           title: section.title || "",
@@ -1447,6 +1534,11 @@
     emptyCardBook,
     normalizeCardBook,
     mergeTrack,
+    resolveChapterList,
+    insertChapter,
+    renameChapter,
+    moveChapter,
+    deleteChapter,
     mergeCatalog,
     exportCatalogs,
     validateExportBundle,
