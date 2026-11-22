@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v11");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v12");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -261,6 +261,17 @@ assert.deepStrictEqual(childMerged[0].items.map(item => item.id), ["p", "c1", "c
 assert.strictEqual(childMerged[0].items[2].title, "C2b");
 assert.strictEqual(childMerged[0].items[2].parent, "p");
 assert.deepStrictEqual(progress.numberCards(childMerged[0].items), { p: "1", c1: "1-1", c2: "1-2" });
+assert.deepStrictEqual(progress.numberChapter([
+  { id: "a", section: "s1" },
+  { id: "a1", section: "s1", parent: "a" },
+  { id: "b", section: "s2" },
+  { id: "c", section: "s2" },
+  { id: "c1", section: "s2", parent: "c" }
+], [{ id: "s1" }, { id: "s2" }]), { a: "1", a1: "1-1", b: "2", c: "3", c1: "3-1" });
+assert.deepStrictEqual(progress.numberChapter([
+  { id: "a", section: "s1" },
+  { id: "b", section: "s2" }
+], [{ id: "s2" }, { id: "s1" }]), { b: "1", a: "2" });
 assert.strictEqual(progress.circledNumber(1), "①");
 assert.strictEqual(progress.circledNumber(20), "⑳");
 assert.strictEqual(progress.circledNumber(21), "(21)");
@@ -361,5 +372,34 @@ assert.strictEqual(progress.labelText(labeled, "delete"), "消す");
 assert.strictEqual(progress.labelText(labeled, "copy"), "コピー");
 const named = progress.resolveSections({ sections: [{ id: "s", title: "(2) 六番街", map: "", note: "" }] }, progress.emptyCardBook(), "main", "ch09");
 assert.strictEqual(named[0].title, "六番街");
+const broken = progress.blocksFromDetail("1行目\n2行目<script>alert(1)</script>");
+assert.ok(broken[0].html.includes("<br>"));
+assert.ok(!broken[0].html.includes("<script"));
+assert.ok(progress.blockHtml(broken).includes("1行目<br>2行目"));
+const rich = progress.sanitizeRich('<b onclick="x">太</b><span style="color:red;background-color:#fff3bf;font-size:1.25em;font-family:serif">字</span><i>斜</i>');
+assert.strictEqual(rich.includes("onclick"), false);
+assert.ok(rich.includes("<b>太</b>"));
+assert.ok(rich.includes("background-color:#fff3bf"));
+assert.ok(rich.includes("font-size:1.25em"));
+assert.ok(rich.includes("font-family:serif"));
+assert.ok(!rich.includes("color:red"));
+assert.deepStrictEqual(progress.normalizeBlocks([{ type: "image", src: "javascript:alert(1)" }]), []);
+const columns = progress.normalizeBlocks([{
+  type: "columns",
+  count: 2,
+  arrow: true,
+  columns: [[{ type: "text", html: "左" }], [{ type: "image", src: "https://example.com/a.png", width: "l", align: "left" }]]
+}]);
+assert.strictEqual(columns[0].arrow, true);
+assert.strictEqual(columns[0].columns[1][0].width, "l");
+const untouched = progress.upsertRouteCard(progress.emptyCardBook(), { id: "a", title: "t", detail: "そのまま", flag: "story" }, "a", {
+  title: "t", detail: "そのまま", flag: "story", deadline: "", source: "", trophy: "", map: "", parent: "", quest: "", section: "", template: "", items: [],
+  blocks: progress.blocksFromDetail("そのまま")
+}, "main", "ch01", ["a"], ["a"]);
+assert.strictEqual(untouched.patches.a, undefined);
+const imageFile = progress.assignImageFile("abc123abc123", "png", []);
+assert.strictEqual(imageFile.file, "images/user-abc123abc123.png");
+const again = progress.assignImageFile("abc123abc123", "png", imageFile.manifest);
+assert.strictEqual(again.added, null);
 
 console.log("test-guide: ok");

@@ -150,6 +150,7 @@
       }
       if (Object.prototype.hasOwnProperty.call(raw, "missable")) patch.missable = raw.missable === true;
       if (Array.isArray(raw.items)) patch.items = itemLinks(raw.items);
+      if (Array.isArray(raw.blocks)) patch.blocks = normalizeBlocks(raw.blocks);
       if (Object.keys(patch).length) book.patches[id] = patch;
     }
     for (const id of Object.keys(asObject(src.custom))) {
@@ -162,6 +163,7 @@
         card.chapterId = typeof raw.chapterId === "string" ? raw.chapterId : "";
         card.map = typeof raw.map === "string" ? raw.map : "";
         card.items = itemLinks(raw.items);
+        if (Array.isArray(raw.blocks)) card.blocks = normalizeBlocks(raw.blocks);
       } else {
         card.catalogId = typeof raw.catalogId === "string" ? raw.catalogId : "";
         card.name = raw.name == null ? "" : String(raw.name);
@@ -237,6 +239,7 @@
     if (out.flag !== "trophy") delete out.trophy;
     else if (!out.trophy) delete out.trophy;
     if (Object.prototype.hasOwnProperty.call(patch, "items")) out.items = itemLinks(patch.items);
+    if (Object.prototype.hasOwnProperty.call(patch, "blocks")) out.blocks = normalizeBlocks(patch.blocks);
     if (out.flag !== "item") delete out.items;
     if (!out.map) delete out.map;
     return out;
@@ -329,6 +332,7 @@
         if (custom.section) card.section = custom.section;
         if (custom.template) card.template = custom.template;
         if (custom.flag === "item" && custom.items && custom.items.length) card.items = itemLinks(custom.items);
+        if (custom.blocks && custom.blocks.length) card.blocks = normalizeBlocks(custom.blocks);
       return card;
     }
     const base = routeIndex.byId.get(id);
@@ -473,7 +477,8 @@
       quest: fields.quest || "",
       section: fields.section || "",
       template: fields.template || "",
-      items: fields.flag === "item" ? itemLinks(fields.items) : []
+      items: fields.flag === "item" ? itemLinks(fields.items) : [],
+      blocks: normalizeBlocks(fields.blocks)
     };
   }
 
@@ -486,6 +491,12 @@
       const nextItems = fields.flag === "item" ? itemLinks(fields.items) : [];
       const prevItems = itemLinks(baseItem && baseItem.items);
       if (JSON.stringify(nextItems) !== JSON.stringify(prevItems)) patch.items = nextItems;
+      const nextBlocks = blockPatchFor(baseItem, fields);
+      if (nextBlocks) patch.blocks = nextBlocks;
+      if (nextBlocks) {
+        const plain = plainFromBlocks(nextBlocks);
+        if (plain !== String(baseItem.detail || "")) patch.detail = plain;
+      }
       if (Object.keys(patch).length) next.patches[id] = patch;
       else delete next.patches[id];
     } else {
@@ -573,6 +584,10 @@
       });
     });
     return numbers;
+  }
+
+  function numberChapter(items, sections) {
+    return numberCards(displayItems(items, sections));
   }
 
   const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
@@ -750,6 +765,206 @@
     return custom.length ? custom : (defaults || DEFAULT_TEMPLATES);
   }
 
+  function escapeRichText(value) {
+    return String(value || "").replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+  }
+
+  function colorValue(value) {
+    const raw = String(value || "").trim();
+    const hex = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+      let h = hex[1].toLowerCase();
+      if (h.length === 3) h = h.split("").map(ch => ch + ch).join("");
+      return "#" + h;
+    }
+    const rgb = raw.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (!rgb) return "";
+    return "#" + rgb.slice(1, 4).map(part => Math.max(0, Math.min(255, Number(part))).toString(16).padStart(2, "0")).join("");
+  }
+
+  function spanAttrs(raw) {
+    const attr = String(raw || "");
+    const styleMatch = attr.match(/style\s*=\s*"([^"]*)"|style\s*=\s*'([^']*)'/i);
+    const parts = [];
+    if (styleMatch) {
+      String(styleMatch[1] || styleMatch[2] || "").split(";").forEach(bit => {
+        const splitAt = bit.indexOf(":");
+        if (splitAt < 0) return;
+        const key = bit.slice(0, splitAt).trim().toLowerCase();
+        const val = bit.slice(splitAt + 1).trim();
+        if (key === "color" || key === "background-color") {
+          const color = colorValue(val);
+          if (color) parts.push(key + ":" + color);
+        } else if (key === "font-size" && /^(?:0\.85em|1em|1\.25em)$/i.test(val)) {
+          parts.push("font-size:" + val.toLowerCase());
+        } else if (key === "font-family") {
+          const fam = val.toLowerCase();
+          if (fam.includes("mono")) parts.push("font-family:ui-monospace,monospace");
+          else if (fam.includes("serif") && !fam.includes("sans")) parts.push("font-family:serif");
+        }
+      });
+    }
+    const colorAttr = attr.match(/\scolor\s*=\s*"([^"]*)"|\scolor\s*=\s*'([^']*)'/i);
+    if (colorAttr && !parts.some(part => part.startsWith("color:"))) {
+      const color = colorValue(colorAttr[1] || colorAttr[2]);
+      if (color) parts.push("color:" + color);
+    }
+    return parts.length ? ' style="' + parts.join(";") + '"' : "";
+  }
+
+  function sanitizeRich(input) {
+    const html = String(input || "").replace(/<!--[\s\S]*?-->/g, "");
+    const out = [];
+    const stack = [];
+    const re = /<\/?([a-zA-Z0-9]+)([^<>]*)>|[^<]+/g;
+    let match;
+    while ((match = re.exec(html))) {
+      if (match[0][0] !== "<") {
+        out.push(escapeRichText(match[0]));
+        continue;
+      }
+      const name = match[1].toLowerCase();
+      const closing = match[0][1] === "/";
+      if (name === "br") {
+        if (!closing) out.push("<br>");
+        continue;
+      }
+      if (name === "div" || name === "p") {
+        if (closing && out.length && out[out.length - 1] !== "<br>") out.push("<br>");
+        continue;
+      }
+      const mapped = { b: "b", strong: "b", i: "i", em: "i", u: "u", s: "s", strike: "s", span: "span", font: "span" }[name];
+      if (!mapped) continue;
+      if (closing) {
+        const at = stack.lastIndexOf(mapped);
+        if (at < 0) continue;
+        while (stack.length > at) out.push("</" + stack.pop() + ">");
+        continue;
+      }
+      if (mapped === "span") {
+        const attrs = spanAttrs(match[2] || "");
+        if (!attrs) continue;
+        out.push("<span" + attrs + ">");
+      } else out.push("<" + mapped + ">");
+      stack.push(mapped);
+    }
+    while (stack.length) out.push("</" + stack.pop() + ">");
+    return out.join("").replace(/(?:<br>)+$/g, "");
+  }
+
+  function validImageValue(src) {
+    const value = String(src || "").trim();
+    return /^https:\/\//i.test(value) || /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(value) || /^(?:maps|images)\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(value);
+  }
+
+  function normalizeBlocks(value) {
+    if (!Array.isArray(value)) return [];
+    return value.map(normalizeBlock).filter(Boolean).slice(0, 24);
+  }
+
+  function normalizeBlock(block) {
+    if (!block || typeof block !== "object") return null;
+    const type = block.type;
+    if (type === "text" || type === "callout") {
+      const html = sanitizeRich(block.html || "");
+      return html ? { type, html } : null;
+    }
+    if (type === "image") {
+      const src = String(block.src || "").trim();
+      if (!validImageValue(src)) return null;
+      const width = ["s", "m", "l", "full"].indexOf(block.width) >= 0 ? block.width : "m";
+      const align = ["left", "center", "right"].indexOf(block.align) >= 0 ? block.align : "center";
+      return { type: "image", src, caption: String(block.caption || "").slice(0, 200), width, align };
+    }
+    if (type === "columns") {
+      const count = block.count === 3 ? 3 : 2;
+      const source = Array.isArray(block.columns) ? block.columns : [];
+      const columns = [];
+      for (let i = 0; i < count; i += 1) {
+        const children = Array.isArray(source[i]) ? source[i] : [];
+        columns.push(children.map(child => {
+          const next = normalizeBlock(child);
+          return next && (next.type === "text" || next.type === "image") ? next : null;
+        }).filter(Boolean).slice(0, 6));
+      }
+      if (!columns.some(col => col.length)) return null;
+      return { type: "columns", count, arrow: block.arrow === true && count === 2, columns };
+    }
+    if (type === "tiles") {
+      const items = (Array.isArray(block.items) ? block.items : []).map(item => {
+        const src = String(item && item.src || "").trim();
+        if (!validImageValue(src)) return null;
+        return { src, label: String(item && item.label || "").slice(0, 40) };
+      }).filter(Boolean).slice(0, 8);
+      return items.length ? { type: "tiles", items } : null;
+    }
+    return null;
+  }
+
+  function blocksFromDetail(detail) {
+    const text = String(detail || "");
+    if (!text) return [];
+    const html = sanitizeRich(text.replace(/\r\n/g, "\n").replace(/\n/g, "<br>"));
+    return html ? [{ type: "text", html }] : [];
+  }
+
+  function plainFromHtml(html) {
+    return String(html || "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&");
+  }
+
+  function plainFromBlocks(blocks) {
+    const parts = [];
+    normalizeBlocks(blocks).forEach(block => {
+      if (block.type === "text" || block.type === "callout") parts.push(plainFromHtml(block.html));
+      if (block.type === "image" && block.caption) parts.push(block.caption);
+      if (block.type === "columns") block.columns.forEach(col => parts.push(plainFromBlocks(col)));
+      if (block.type === "tiles") block.items.forEach(item => { if (item.label) parts.push(item.label); });
+    });
+    return parts.filter(part => part && part.trim()).join("\n");
+  }
+
+  function blockPatchFor(baseItem, fields) {
+    if (!fields || !Object.prototype.hasOwnProperty.call(fields, "blocks")) return null;
+    const nextBlocks = normalizeBlocks(fields.blocks);
+    const prevBlocks = normalizeBlocks(baseItem && baseItem.blocks);
+    if (!prevBlocks.length && JSON.stringify(nextBlocks) === JSON.stringify(blocksFromDetail(baseItem && baseItem.detail || ""))) return null;
+    if (JSON.stringify(nextBlocks) === JSON.stringify(prevBlocks)) return null;
+    return nextBlocks;
+  }
+
+  function blockHtml(blocks) {
+    return normalizeBlocks(blocks).map(renderBlock).join("");
+  }
+
+  function renderBlock(block) {
+    if (block.type === "text") return '<div class="blk-text">' + block.html + "</div>";
+    if (block.type === "callout") return '<div class="blk-callout">' + block.html + "</div>";
+    if (block.type === "image") return renderImage(block);
+    if (block.type === "tiles") {
+      return '<div class="blk-tiles">' + block.items.map(item => '<figure class="blk-tile">' + renderImage(item, true) + (item.label ? "<figcaption>" + escapeRichText(item.label) + "</figcaption>" : "") + "</figure>").join("") + "</div>";
+    }
+    const arrow = block.arrow ? '<div class="blk-arrow" aria-hidden="true">→</div>' : "";
+    const cols = block.columns.map(col => '<div class="blk-col">' + col.map(renderBlock).join("") + "</div>");
+    if (block.arrow) cols.splice(1, 0, arrow);
+    return '<div class="blk-cols c' + block.count + (block.arrow ? " has-arrow" : "") + '">' + cols.join("") + "</div>";
+  }
+
+  function renderImage(block, bare) {
+    const src = escapeRichText(block.src);
+    const caption = escapeRichText(block.caption || "");
+    const width = block.width || "m";
+    const align = block.align || "center";
+    const image = '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img src="' + src + '" alt="' + (caption || escapeRichText(block.label || "")) + '" loading="lazy"></button>';
+    if (bare) return image;
+    return '<figure class="blk-img w-' + width + " align-" + align + '">' + image + (caption ? "<figcaption>" + caption + "</figcaption>" : "") + "</figure>";
+  }
+
   function validateRouteFields(fields, flagIds, trophyIds) {
     const title = String(fields && fields.title || "").trim();
     const detail = String(fields && fields.detail || "").trim();
@@ -770,7 +985,9 @@
     const quest = String(fields && fields.quest || "").trim();
     const section = String(fields && fields.section || "").trim();
     const items = flag === "item" ? itemLinks(fields && fields.items) : [];
-    return { value: { title, detail, flag, source, deadline, trophy: flag === "trophy" ? trophy : "", map, parent, quest, section, template, items } };
+    const blocks = normalizeBlocks(fields && fields.blocks);
+    const plain = blocks.length ? plainFromBlocks(blocks) : "";
+    return { value: { title, detail: plain || detail, flag, source, deadline, trophy: flag === "trophy" ? trophy : "", map, parent, quest, section, template, items, blocks } };
   }
 
   function validateCatalogFields(fields) {
@@ -823,6 +1040,38 @@
     return { manifest: list, file, added: entry };
   }
 
+  function assignImageFile(hash, ext, manifest) {
+    const list = Array.isArray(manifest) ? manifest.slice() : [];
+    const found = list.find(item => item && item.hash === hash);
+    if (found) return { manifest: list, file: found.file, added: null };
+    const safeExt = /^(png|jpe?g|gif|webp)$/i.test(ext) ? ext.toLowerCase().replace("jpeg", "jpg") : "png";
+    const id = "user-" + String(hash || "").slice(0, 12);
+    const file = "images/" + id + "." + safeExt;
+    const entry = { id, label: "追加した画像", file, hash };
+    list.push(entry);
+    return { manifest: list, file, added: entry };
+  }
+
+  function mapBlockImages(blocks, mapOf) {
+    return normalizeBlocks(blocks).map(block => {
+      if (block.type === "image") {
+        const src = /^data:image\//i.test(block.src) ? (mapOf(block.src) || block.src) : block.src;
+        return Object.assign({}, block, { src });
+      }
+      if (block.type === "tiles") {
+        return Object.assign({}, block, {
+          items: block.items.map(item => Object.assign({}, item, {
+            src: /^data:image\//i.test(item.src) ? (mapOf(item.src) || item.src) : item.src
+          }))
+        });
+      }
+      if (block.type === "columns") {
+        return Object.assign({}, block, { columns: block.columns.map(col => mapBlockImages(col, mapOf)) });
+      }
+      return block;
+    });
+  }
+
   function replaceMapValues(route, catalogs, lookup) {
     const mapOf = typeof lookup === "function" ? lookup : (value => lookup[value] || value);
     const nextRoute = {};
@@ -831,9 +1080,14 @@
         chapterId: row.chapterId,
         sections: row.sections || [],
         items: (row.items || []).map(item => {
-          if (!item || !item.map || !/^data:image\//i.test(item.map)) return item;
-          const file = mapOf(item.map);
-          return Object.assign({}, item, { map: file || item.map });
+          if (!item) return item;
+          let next = item;
+          if (item.map && /^data:image\//i.test(item.map)) {
+            const file = mapOf(item.map);
+            next = Object.assign({}, next, { map: file || item.map });
+          }
+          if (next.blocks && next.blocks.length) next = Object.assign({}, next, { blocks: mapBlockImages(next.blocks, mapOf) });
+          return next;
         })
       }));
     }
@@ -888,6 +1142,7 @@
           if (!copy.section) delete copy.section;
           if (!copy.template) delete copy.template;
           if (!copy.items || !copy.items.length) delete copy.items;
+          if (!copy.blocks || !copy.blocks.length) delete copy.blocks;
           return copy;
         })
       }));
@@ -922,6 +1177,7 @@
     mergeCatalog,
     mergedRoute,
     numberCards,
+    numberChapter,
     circledNumber,
     templateHeadings,
     UI_LABELS,
@@ -939,6 +1195,13 @@
     orderWithMove,
     orderForSave,
     assignMapFile,
+    assignImageFile,
+    sanitizeRich,
+    normalizeBlocks,
+    blocksFromDetail,
+    plainFromBlocks,
+    blockHtml,
+    validImageValue,
     replaceMapValues,
     saveOrder,
     saveSections,
