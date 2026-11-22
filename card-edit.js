@@ -542,6 +542,8 @@
     if (form.elements.flag) form.elements.flag.value = (editing.flags || ["story"])[0] || "story";
     const trophy = document.getElementById("trophy-field");
     if (trophy) trophy.hidden = !selected.has("trophy");
+    const deadline = document.getElementById("deadline-field");
+    if (deadline) deadline.hidden = !(selected.has("deadline") || selected.has("missable"));
     const battle = document.getElementById("battle-field");
     if (battle) battle.hidden = !selected.has("battle");
     paintItemPicker();
@@ -551,17 +553,62 @@
   function paintBattle() {
     const host = document.getElementById("battle-field");
     if (!host) return;
+    if (!document.getElementById("enemy-pick-q")) {
+      host.innerHTML = `<p>戦闘タグのカードだけ、敵の情報を結びます。タグを外しても、選んだ敵は残ります。</p><input id="enemy-pick-q" role="combobox" aria-autocomplete="list" aria-controls="enemy-pick-results" aria-expanded="false" placeholder="敵の名前や番号" autocomplete="off" value="${escapeAttr(editing.enemyQuery || "")}"><div id="enemy-pick-results" role="listbox"></div><ul id="enemy-pick-chosen"></ul><label>メモ<textarea id="enemy-note">${escapeText(editing.enemyNote || "")}</textarea></label><label>戦闘用の画像<input id="enemy-image" value="${escapeAttr(editing.enemyImage || "")}" placeholder="https:// または空"></label>`;
+      bindEnemyPick();
+    }
+    refreshEnemyPick();
+  }
+
+  function bindEnemyPick() {
+    const query = document.getElementById("enemy-pick-q");
+    if (!query || query.dataset.bound) return;
+    query.dataset.bound = "1";
+    let composing = false;
+    let active = -1;
+    const refresh = () => {
+      if (composing) return;
+      editing.enemyQuery = query.value;
+      active = -1;
+      refreshEnemyPick();
+    };
+    query.addEventListener("compositionstart", () => { composing = true; });
+    query.addEventListener("compositionend", () => { composing = false; refresh(); });
+    query.addEventListener("input", refresh);
+    query.addEventListener("keydown", event => {
+      if (composing) return;
+      const options = [...document.querySelectorAll("#enemy-pick-results [data-enemy-pick]")];
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        if (!options.length) return;
+        active = event.key === "ArrowDown" ? Math.min(options.length - 1, active + 1) : Math.max(0, active - 1);
+        options.forEach((button, index) => button.setAttribute("aria-selected", index === active ? "true" : "false"));
+        options[active].focus();
+        query.focus();
+      } else if (event.key === "Enter" && active >= 0 && options[active]) {
+        event.preventDefault();
+        options[active].click();
+      } else if (event.key === "Escape") {
+        document.getElementById("enemy-pick-results").hidden = true;
+        query.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  function refreshEnemyPick() {
+    const results = document.getElementById("enemy-pick-results");
+    const chosen = document.getElementById("enemy-pick-chosen");
+    const query = document.getElementById("enemy-pick-q");
+    if (!results || !chosen) return;
     const enemies = globalThis.ENEMIES || [];
-    const chosen = (editing.enemies || []).map(id => {
+    const matches = GuideProgress.suggestMatches(enemies, query ? query.value : editing.enemyQuery, 8);
+    results.hidden = !(query && query.value.trim());
+    if (query) query.setAttribute("aria-expanded", results.hidden ? "false" : "true");
+    results.innerHTML = matches.map(enemy => `<button type="button" role="option" data-enemy-pick="${escapeAttr(enemy.id)}">${escapeText((enemy.no ? enemy.no + " " : "") + enemy.name)}</button>`).join("") || "<p>一致する敵がいません。</p>";
+    chosen.innerHTML = (editing.enemies || []).map(id => {
       const enemy = enemies.find(item => item.id === id);
       return `<li>${escapeText(enemy ? enemy.name : id)} <button type="button" data-enemy-remove="${escapeAttr(id)}">外す</button></li>`;
     }).join("");
-    host.innerHTML = `<p>戦闘タグのカードだけ、敵の情報を結びます。タグを外しても、選んだ敵は残ります。</p><input id="enemy-pick-q" placeholder="敵の名前や番号" value="${escapeAttr(editing.enemyQuery || "")}"><div id="enemy-pick-results"></div><ul>${chosen}</ul><label>メモ<textarea id="enemy-note">${escapeText(editing.enemyNote || "")}</textarea></label><label>戦闘用の画像<input id="enemy-image" value="${escapeAttr(editing.enemyImage || "")}" placeholder="https:// または空"></label>`;
-    const query = document.getElementById("enemy-pick-q");
-    const results = document.getElementById("enemy-pick-results");
-    const needle = (query && query.value || "").trim().toLowerCase();
-    results.innerHTML = enemies.filter(enemy => !needle || (enemy.no + enemy.name).toLowerCase().includes(needle)).slice(0, 8).map(enemy => `<button type="button" data-enemy-pick="${escapeAttr(enemy.id)}">${escapeText((enemy.no ? enemy.no + " " : "") + enemy.name)}</button>`).join("") || "<p>一致する敵がいません。</p>";
-    if (query) query.addEventListener("input", () => { editing.enemyQuery = query.value; paintBattle(); });
   }
 
   function onBlockClick(event) {
@@ -726,7 +773,7 @@
       `<textarea name="detail" hidden>${escapeText(seed.detail || "")}</textarea>`,
       '<input type="hidden" id="block-json" name="blocks" value="">',
       '<div id="flag-chips"></div><input type="hidden" name="flag" value="">',
-      field("期限", `<input name="deadline" value="${escapeAttr(seed.deadline || "")}" placeholder="期限・取り逃しのとき">`),
+      `<div id="deadline-field">${field("期限", `<input name="deadline" value="${escapeAttr(seed.deadline || "")}" placeholder="期限・取り逃しのとき">`)}</div>`,
       `<div id="trophy-field">${field("トロフィー", `<select name="trophy">${trophies}</select>`)}</div>`,
       '<div id="battle-field"></div>',
       mapFields(seed.map || ""),
@@ -1926,12 +1973,25 @@
     event.stopPropagation();
   }, true);
 
+  let itemComposing = false;
+  dialog.addEventListener("compositionstart", event => {
+    if (event.target && event.target.id === "item-picker-q") itemComposing = true;
+  });
+  dialog.addEventListener("compositionend", event => {
+    if (!event.target || event.target.id !== "item-picker-q") return;
+    itemComposing = false;
+    pickerState.query = event.target.value;
+    refreshItemResults();
+  });
   dialog.addEventListener("input", event => {
     if (!event.target) return;
-    if (event.target.id === "item-picker-q") pickerState.query = event.target.value;
+    if (event.target.id === "item-picker-q") {
+      pickerState.query = event.target.value;
+      if (!itemComposing) refreshItemResults();
+    }
     if (event.target.id === "item-picker-qty") pickerState.qty = event.target.value;
-    if (event.target.id === "item-picker-q" || event.target.id === "item-picker-hub") {
-      if (event.target.id === "item-picker-hub") pickerState.hub = event.target.value;
+    if (event.target.id === "item-picker-hub") {
+      pickerState.hub = event.target.value;
       refreshItemResults();
     }
   });
@@ -2102,6 +2162,7 @@
       download("ff7r-settings.json", JSON.stringify({
         app: GuideProgress.APP,
         labels: book().labels || {},
+        difficulty: book().difficulty || "normal",
         templates: GuideProgress.activeTemplates(book(), globalThis.TEMPLATES)
       }, null, 2), "application/json");
     }
@@ -2394,9 +2455,10 @@
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text());
-      if (parsed && (parsed.labels || parsed.templates) && !parsed.cards && !parsed.state) {
+      if (parsed && (parsed.labels || parsed.templates || parsed.difficulty) && !parsed.cards && !parsed.state) {
         const next = JSON.parse(JSON.stringify(book()));
         if (parsed.labels && typeof parsed.labels === "object") next.labels = parsed.labels;
+        if (parsed.difficulty) next.difficulty = parsed.difficulty;
         if (Array.isArray(parsed.templates)) next.templates = parsed.templates;
         GuideApp.setCardBook(next);
         return;

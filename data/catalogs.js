@@ -2517,22 +2517,9 @@ const CATALOGS = {
       }
     ]
   },
-  "skills": {
-    "title": "敵の技",
-    "lead": "敵の技を、覚えるキャラクターと入手元が分かる形で置く。",
-    "items": [
-      {
-        "id": "skill-ex-01",
-        "example": true,
-        "name": "例: 敵の技の名前",
-        "detail": "例: 誰が覚えるか、どの敵からかを書く。",
-        "source": ""
-      }
-    ]
-  },
   "materia": {
     "title": "マテリア",
-    "lead": "魔法、支援、コマンド、独立。召喚は召喚獣のタブ。INTERmissionだけにあるものは、本編の表には出していない。",
+    "lead": "魔法、支援、コマンド、独立。召喚はアイテムの召喚獣。INTERmissionだけにあるものは、本編の表には出していない。",
     "facet": "area",
     "items": [
       {

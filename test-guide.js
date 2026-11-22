@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v13");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v14");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -111,11 +111,9 @@ assert.strictEqual(
 );
 assert.ok(guide.ROUTE.hard.some(row => row.chapterId === "ch01" && row.items.some(item => item.id === "hard-ch01-01")));
 assert.ok(guide.ROUTE.intermission.some(row => row.items.some(item => item.id === "im01-01")));
-for (const name of ["skills"]) {
-  assert.ok(Array.isArray(guide.CATALOGS[name].items));
-  assert.ok(guide.CATALOGS[name].items.length >= 1);
-  assert.strictEqual(guide.CATALOGS[name].items[0].example, true);
-}
+assert.ok(!guide.CATALOGS.skills);
+assert.ok(guide.GAME.hubs.every(hub => hub.id !== "skills" && hub.id !== "summons"));
+assert.ok(guide.GAME.hubs.find(hub => hub.kind === "items").sections.some(section => section.catalog === "summons"));
 assert.ok(guide.CATALOGS.summons.items.length >= 6);
 assert.ok(guide.CATALOGS.summons.items.every(item => Array.isArray(item.growth) && item.growth.length === 7));
 const buster = guide.CATALOGS.weapons.items.find(item => item.name === "バスタードソード");
@@ -413,5 +411,18 @@ assert.deepStrictEqual(multiFlags.value.enemies, ["e001"]);
 assert.strictEqual(multiFlags.value.trophy, "trophy-ch01");
 const sized = progress.normalizeBlocks([{ type: "image", src: "https://example.com/a.png", pct: 33, width: "m", align: "left" }]);
 assert.strictEqual(sized[0].pct, 35);
+
+assert.deepStrictEqual(progress.suggestMatches([
+  { no: "001", name: "警備兵" },
+  { no: "002", name: "上級警備兵" },
+  { no: "015", name: "ガードハウンド" }
+], "警備", 8).map(item => item.no), ["001", "002"]);
+assert.strictEqual(progress.statForMode({ easy: "10", normal: "20", hard: "30" }, "hard").value, "30");
+assert.strictEqual(progress.statForMode({ normal: "20" }, "hard").note, "NORMALの値");
+assert.strictEqual(progress.normalizeCardBook({ difficulty: "hard" }).difficulty, "hard");
+const cardEdit = require("fs").readFileSync(require("path").join(__dirname, "card-edit.js"), "utf8");
+assert.ok(cardEdit.includes("refreshEnemyPick"));
+assert.ok(cardEdit.includes("compositionstart"));
+assert.ok(!cardEdit.includes("editing.enemyQuery = query.value; paintBattle()"));
 
 console.log("test-guide: ok");
