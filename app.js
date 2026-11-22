@@ -70,11 +70,20 @@
     }
   }
 
-  function setStatus(message, isError) {
-    const el = document.getElementById("save-status");
-    if (!el) return;
-    el.textContent = message;
-    el.classList.toggle("is-error", !!isError);
+  function undoAvailable() {
+    try { return !!localStorage.getItem(storage.backup); } catch (error) { return false; }
+  }
+
+  function setStatus(message, isError, offerUndo) {
+    const toast = document.getElementById("progress-toast");
+    if (!toast) return;
+    toast.hidden = false;
+    toast.classList.toggle("is-error", !!isError);
+    const text = document.getElementById("progress-toast-text");
+    if (text) text.textContent = message;
+    const undo = document.getElementById("toast-undo");
+    if (undo) undo.hidden = !(offerUndo && undoAvailable());
+    updateRestore();
   }
 
   function checked(id) {
@@ -93,11 +102,8 @@
   }
 
   function updateRestore() {
-    const button = document.getElementById("restore");
-    if (!button) return;
-    let available = false;
-    try { available = !!localStorage.getItem(storage.backup); } catch (error) {}
-    button.disabled = !available;
+    const row = document.getElementById("progress-undo-row");
+    if (row) row.hidden = !undoAvailable();
   }
 
   function cardEditing() {
@@ -415,10 +421,13 @@
     return `<button type="button" class="map-open" data-map-owner="${esc(owner || "card")}" data-owner-id="${esc(item.id)}" data-map="${esc(parts.key)}" data-map-src="${esc(parts.src)}"${href} data-map-label="${esc(parts.label)}">${esc(GuideProgress.labelText(cardBook, "map"))}</button>`;
   }
 
-  function routeCard(item, ord, children, numbers, headings, section) {
+  function routeCard(item, ord, numbers, headings, section, kidsMap, seen) {
+    const guard = seen || new Set();
+    if (!item || guard.has(item.id)) return "";
+    guard.add(item.id);
     const on = checked(item.id);
     const collapsed = ui.collapsed[item.id] === true;
-    const kids = children || [];
+    const kids = ((kidsMap && kidsMap[item.id]) || []).filter(child => child && !guard.has(child.id));
     const kidsOpen = ui.collapsed["kids:" + item.id] !== true;
     const questLink = item.quest ? `<button type="button" class="linkish" data-open-quest="${esc(item.quest)}">依頼の詳細</button>` : "";
     const flags = GuideProgress.cardFlags(item);
@@ -444,7 +453,7 @@
           ${sourceLine(item.source)}
           ${cardTools(item)}
         </div>
-        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-toggle" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}">${esc(GuideProgress.labelText(cardBook, "kids"))} ${kids.length}</button><div class="kids"${kidsOpen ? "" : " hidden"}>${kids.map(child => routeCard(child, numbers[child.id], [], numbers, headings, section)).join("")}</div></div>` : ""}
+        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-chevron" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}"><span class="chev" aria-hidden="true">⌄</span></button><div class="kids"${kidsOpen ? "" : " hidden"}>${kids.map(child => routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard)).join("")}</div></div>` : ""}
       </div>
     </article>`;
   }
@@ -497,34 +506,74 @@
   function blockCards(items, headings, section, numbers) {
     if (!numbers) numbers = GuideProgress.numberCards(items);
     const ids = new Set(items.map(item => item.id));
-    const childOf = {};
-    for (const item of items) {
-      if (item.parent && ids.has(item.parent) && item.parent !== item.id) childOf[item.id] = item.parent;
-    }
-    for (const id of Object.keys(childOf)) {
-      if (childOf[childOf[id]]) delete childOf[id];
-    }
     const kids = {};
-    const tops = [];
     for (const item of items) {
-      const parent = childOf[item.id];
-      if (parent) {
-        if (!kids[parent]) kids[parent] = [];
-        kids[parent].push(item);
-      } else tops.push(item);
+      if (!item.parent || !ids.has(item.parent) || item.parent === item.id) continue;
+      const chain = new Set([item.id]);
+      let cursor = item.parent;
+      let loop = false;
+      while (cursor && ids.has(cursor)) {
+        if (chain.has(cursor)) { loop = true; break; }
+        chain.add(cursor);
+        const parent = items.find(entry => entry.id === cursor);
+        cursor = parent && parent.parent;
+      }
+      if (loop) continue;
+      if (!kids[item.parent]) kids[item.parent] = [];
+      kids[item.parent].push(item);
     }
+    const childIds = new Set();
+    Object.keys(kids).forEach(id => kids[id].forEach(child => childIds.add(child.id)));
+    const tops = items.filter(item => !childIds.has(item.id));
     const filtering = ui.flag !== "all" || !!ui.query;
     let visible = 0;
-    const html = tops.map(item => {
-      const children = kids[item.id] || [];
+    const branch = item => {
+      const children = (kids[item.id] || []).map(branch).filter(Boolean);
       const self = !filtering || itemVisible(item);
-      const shownKids = filtering ? children.filter(itemVisible) : children;
-      if (!self && !shownKids.length) return "";
+      if (!self && !children.length) return null;
       if (self) visible += 1;
-      visible += shownKids.length;
-      return routeCard(item, numbers[item.id], shownKids, numbers, headings, section);
-    }).join("");
+      return { item, children };
+    };
+    const paint = node => {
+      const nested = {};
+      const walk = current => {
+        nested[current.item.id] = current.children.map(child => child.item);
+        current.children.forEach(walk);
+      };
+      walk(node);
+      return routeCard(node.item, numbers[node.item.id], numbers, headings, section, nested, new Set());
+    };
+    const html = tops.map(branch).filter(Boolean).map(paint).join("");
     return { html, visible, numbers };
+  }
+
+  function childIndex(card) {
+    const index = {};
+    const walk = node => {
+      const id = node.getAttribute("data-id");
+      const children = node.querySelectorAll(":scope > .ibody > .kids-wrap > .kids > article.it");
+      index[id] = Array.from(children).map(child => child.getAttribute("data-id"));
+      children.forEach(walk);
+    };
+    if (card) walk(card);
+    return index;
+  }
+
+  function paintFold(card) {
+    if (!card) return;
+    const id = card.getAttribute("data-id");
+    const collapsed = ui.collapsed[id] === true;
+    card.classList.toggle("is-collapsed", collapsed);
+    const body = card.querySelector(":scope > .ibody > .route-item-content");
+    if (body) body.hidden = collapsed;
+    const detail = card.querySelector(":scope > .ibody > .ihead .route-item-toggle");
+    if (detail) detail.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    const kidsClosed = ui.collapsed["kids:" + id] === true;
+    const kids = card.querySelector(":scope > .ibody > .kids-wrap > .kids");
+    if (kids) kids.hidden = kidsClosed;
+    const chevron = card.querySelector(":scope > .ibody > .kids-wrap > .kids-chevron");
+    if (chevron) chevron.setAttribute("aria-expanded", kidsClosed ? "false" : "true");
+    card.querySelectorAll(":scope > .ibody > .kids-wrap > .kids > article.it").forEach(paintFold);
   }
 
   function dragHandle(id) {
@@ -979,13 +1028,6 @@
           <input type="search" id="q" aria-label="ルートを検索" placeholder="この進行を検索" enterkeyhint="search">
           <label class="chapter-jump">章へ移動<select id="chapter-jump" aria-label="章へ移動"></select></label>
           <button type="button" class="ghost" id="expand" aria-expanded="true">すべて折りたたむ</button>
-          <button type="button" class="ghost safe" id="export">進行を書き出す</button>
-          <button type="button" class="ghost safe" id="import">進行を読み込む</button>
-          <button type="button" class="ghost safe" id="restore" disabled>直前のリセットを戻す</button>
-          <button type="button" class="ghost" id="reset">進行をすべて消す</button>
-          <label class="sr-only" for="import-file">読み込む進行JSONを選ぶ</label>
-          <input class="sr-only" type="file" id="import-file" accept="application/json,.json">
-          <div class="save-status" id="save-status" aria-live="polite"></div>
         </div>
         <p class="route-safety-key"><span class="red">赤</span>は期限と取り逃し。チェックは、今開いている進行（本編、HARD、INTERmission）ごとに別々に残る。</p>
         <div class="lookup-count" id="route-count" aria-live="polite"></div>
@@ -1004,7 +1046,7 @@
       </section>
       <section class="panel" id="p-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
         <h2>設定</h2>
-        <p class="lead">ボタンの名前、タブの名前、見出しの定型文をここで変える。変更はこのブラウザに残り、「書き出す」から取り出せる。</p>
+        <p class="lead">ボタンの名前、タブの名前、見出しの定型文をここで変える。チェックの保存もここです。変更はこのブラウザに残り、「書き出す」から取り出せる。</p>
         <div id="settings-body"></div>
       </section>`;
     document.getElementById("expand").addEventListener("click", () => {
@@ -1025,11 +1067,6 @@
       ui.query = event.target.value.trim();
       renderRoute();
     });
-    document.getElementById("export").addEventListener("click", exportProgress);
-    document.getElementById("import").addEventListener("click", () => document.getElementById("import-file").click());
-    document.getElementById("import-file").addEventListener("change", importProgress);
-    document.getElementById("restore").addEventListener("click", restoreProgress);
-    document.getElementById("reset").addEventListener("click", resetProgress);
     const enemyQuery = document.getElementById("enemy-q");
     if (enemyQuery) bindSearch(enemyQuery, () => {
       ui.enemyQuery = enemyQuery.value;
@@ -1207,7 +1244,14 @@
     }).join("");
     const templates = GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES || []);
     const difficulty = playDifficulty();
-    root.innerHTML = `<h3>難易度</h3><p class="lead">今進めているチャートの難易度です。カードとエネミー頁のHP、経験値、AP、ギルは、この難易度の列を使います。CLASSICは操作の種類で、数値の表はありません。</p><label class="setting-row"><span>難易度</span><select id="settings-difficulty"><option value="easy"${difficulty === "easy" ? " selected" : ""}>EASY</option><option value="normal"${difficulty === "normal" ? " selected" : ""}>NORMAL</option><option value="hard"${difficulty === "hard" ? " selected" : ""}>HARD</option></select></label><h3>ボタンとタブの名前</h3><div class="setting-list">${rows}</div>
+    root.innerHTML = `<h3>進行データ（チェックの保存）</h3>
+      <div class="progress-actions">
+        <div class="progress-action"><button type="button" class="ghost safe" id="export">進行を書き出す</button><p>機種変更やブラウザのデータ削除に備えて、チェック状況をファイルに保存します。</p></div>
+        <div class="progress-action"><button type="button" class="ghost safe" id="import">進行を読み込む</button><p>保存したファイルから、このブラウザのチェックを戻します。</p></div>
+        <div class="progress-action" id="progress-undo-row"${undoAvailable() ? "" : " hidden"}><button type="button" class="ghost safe" id="restore">直前のリセットを戻す</button><p>直前に消したチェックを、このブラウザに戻します。</p></div>
+        <div class="progress-action"><button type="button" class="ghost" id="reset">進行をすべて消す</button><p>このブラウザのチェックを消します。消す前に確認します。</p></div>
+      </div>
+      <h3>難易度</h3><p class="lead">今進めているチャートの難易度です。カードとエネミー頁のHP、経験値、AP、ギルは、この難易度の列を使います。CLASSICは操作の種類で、数値の表はありません。</p><label class="setting-row"><span>難易度</span><select id="settings-difficulty"><option value="easy"${difficulty === "easy" ? " selected" : ""}>EASY</option><option value="normal"${difficulty === "normal" ? " selected" : ""}>NORMAL</option><option value="hard"${difficulty === "hard" ? " selected" : ""}>HARD</option></select></label><h3>ボタンとタブの名前</h3><div class="setting-list">${rows}</div>
       <h3>見出しの定型文</h3>
       <p class="lead">1行が1つの定型文です。カードの見出しで選ぶと、章の中で 宝箱① のように番号が付きます。</p>
       <textarea id="settings-templates" rows="6">${esc(templates.map(item => item.label).join("\n"))}</textarea>
@@ -1274,6 +1318,14 @@
       }
       if (globalThis.GuideCardEdit && GuideCardEdit.paintGithub) GuideCardEdit.paintGithub();
     });
+    const exportProgressButton = document.getElementById("export");
+    if (exportProgressButton) exportProgressButton.addEventListener("click", exportProgress);
+    const importProgressButton = document.getElementById("import");
+    if (importProgressButton) importProgressButton.addEventListener("click", () => document.getElementById("import-file").click());
+    const restoreButton = document.getElementById("restore");
+    if (restoreButton) restoreButton.addEventListener("click", restoreProgress);
+    const resetButton = document.getElementById("reset");
+    if (resetButton) resetButton.addEventListener("click", resetProgress);
     const difficultySelect = document.getElementById("settings-difficulty");
     if (difficultySelect) difficultySelect.addEventListener("change", () => {
       const next = JSON.parse(JSON.stringify(cardBook));
@@ -1323,7 +1375,7 @@
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-    setStatus("進行を書き出した。");
+    setStatus("進行をファイルに保存した。");
   }
 
   async function importProgress(event) {
@@ -1344,7 +1396,8 @@
       saveBook();
       renderRoute();
       renderCatalogs();
-      setStatus("進行を読み込んだ。前の状態は「直前のリセットを戻す」で戻せる。");
+      if (ui.hub === "settings") renderSettings();
+      setStatus("進行を読み込んだ。直前のチェックは戻せます。", false, true);
     } catch (error) {
       setStatus("読み込めなかった。FF7リメイク用のJSONか確認する。", true);
     }
@@ -1356,10 +1409,12 @@
       if (!raw) throw new Error("empty");
       state = GuideProgress.normalizeState(JSON.parse(raw));
       state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
+      localStorage.removeItem(storage.backup);
       save();
       renderRoute();
       renderCatalogs();
-      setStatus("直前の控えを戻した。");
+      if (ui.hub === "settings") renderSettings();
+      setStatus("直前のチェックを戻した。");
     } catch (error) {
       setStatus("戻せる控えがない。", true);
     }
@@ -1372,7 +1427,8 @@
     save();
     renderRoute();
     renderCatalogs();
-    setStatus("進行を消した。戻すには「直前のリセットを戻す」。");
+    if (ui.hub === "settings") renderSettings();
+    setStatus("進行を消した。直前のチェックを戻せます。", false, true);
   }
 
   function openHit(id) {
@@ -1490,13 +1546,10 @@
     const toggle = event.target.closest("[data-toggle-item]");
     if (toggle) {
       const id = toggle.dataset.toggleItem;
-      const collapsed = ui.collapsed[id] !== true;
-      ui.collapsed[id] = collapsed;
       const card = toggle.closest(".it");
-      card.classList.toggle("is-collapsed", collapsed);
-      const body = card.querySelector(".route-item-content");
-      if (body) body.hidden = collapsed;
-      toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      const collapsed = ui.collapsed[id] !== true;
+      ui.collapsed = GuideProgress.foldCards(ui.collapsed, id, childIndex(card), collapsed);
+      paintFold(card);
       return;
     }
     const questToggle = event.target.closest("[data-toggle-quest]");
@@ -1509,8 +1562,12 @@
     const kidsToggle = event.target.closest("[data-toggle-kids]");
     if (kidsToggle) {
       const id = kidsToggle.getAttribute("data-toggle-kids");
-      ui.collapsed["kids:" + id] = ui.collapsed["kids:" + id] !== true;
-      renderRoute();
+      const closed = ui.collapsed["kids:" + id] !== true;
+      ui.collapsed["kids:" + id] = closed;
+      const wrap = kidsToggle.closest(".kids-wrap");
+      const kids = wrap && wrap.querySelector(":scope > .kids");
+      if (kids) kids.hidden = closed;
+      kidsToggle.setAttribute("aria-expanded", closed ? "false" : "true");
       return;
     }
     const questLink = event.target.closest("[data-open-quest]");
@@ -1749,6 +1806,11 @@
   } else if (GAME.hubs.some(hub => hub.id === initial)) ui.hub = initial;
   renderTabs();
   shell();
+  document.getElementById("import-file").addEventListener("change", importProgress);
+  document.getElementById("toast-undo").addEventListener("click", restoreProgress);
+  document.getElementById("progress-toast-close").addEventListener("click", () => {
+    document.getElementById("progress-toast").hidden = true;
+  });
   showHub(ui.hub);
   window.addEventListener("pagehide", () => {
     tabScroll[ui.hub] = window.scrollY || document.documentElement.scrollTop || 0;

@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v17");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v18");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -153,6 +153,21 @@ assert.deepStrictEqual(progress.numberCards([
   { id: "c", parent: "a" },
   { id: "d" }
 ]), { a: "1", b: "1-1", c: "1-2", d: "2" });
+assert.deepStrictEqual(progress.numberCards([
+  { id: "a" },
+  { id: "b", parent: "a" },
+  { id: "c", parent: "b" },
+  { id: "d" }
+]), { a: "1", b: "1-1", c: "1-1-1", d: "2" });
+const folded = progress.foldCards({}, "c", { p: ["c"], c: ["g"] }, true);
+assert.strictEqual(folded.c, true);
+assert.strictEqual(folded.g, true);
+assert.strictEqual(folded["kids:c"], true);
+assert.strictEqual(folded.p, undefined);
+const opened = progress.foldCards(folded, "p", { p: ["c"], c: ["g"] }, false);
+assert.strictEqual(opened.p, false);
+assert.strictEqual(opened.c, false);
+assert.strictEqual(opened.g, false);
 assert.ok(guide.CATALOGS.quests.items.length >= 26);
 assert.ok(guide.CATALOGS.quests.items.every(item => /^https:\/\//.test(item.source)));
 assert.ok(guide.CATALOGS.consumables.items.find(item => item.name === "ポーション").buy);
