@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v21");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v22");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -109,6 +109,25 @@ assert.strictEqual(
   guide.ROUTE.main.map(row => String(row.chapterId)).join(","),
   guide.GAME.chapters.main.map(chapter => String(chapter.id)).join(",")
 );
+const chapterBase = [{ id: "ch01", title: "Chapter 1" }];
+const chapterRoute = { main: [{ chapterId: "ch01", items: [{ id: "card-1", flag: "story", title: "t", detail: "d" }], sections: [{ id: "s1", title: "本章", map: "", note: "" }] }] };
+const chapterBook = progress.emptyCardBook();
+const addedChapter = progress.insertChapter(progress.resolveChapterList(chapterBase, chapterRoute.main, chapterBook, "main"), "ch01");
+chapterBook.chapterLists.main = addedChapter.list;
+const chapterMerged = progress.mergeTrack(chapterRoute, chapterBase, chapterBook, "main");
+assert.strictEqual(chapterMerged.length, 2);
+assert.strictEqual(chapterMerged[1].chapterId, addedChapter.id);
+assert.strictEqual(chapterMerged[1].title, addedChapter.title);
+assert.ok(chapterMerged[1].sections.length >= 1);
+const chapterSource = progress.routeModuleSource({ main: chapterMerged });
+assert.ok(chapterSource.includes(addedChapter.id));
+assert.ok(chapterSource.includes(addedChapter.title));
+const chapterGlobal = {};
+new Function("globalThis", chapterSource)(chapterGlobal);
+const chapterAgain = progress.resolveChapterList(chapterBase, chapterGlobal.ROUTE.main, progress.emptyCardBook(), "main");
+assert.deepStrictEqual(chapterAgain.map(chapter => chapter.id), addedChapter.list.map(chapter => chapter.id));
+assert.deepStrictEqual(progress.moveChapter(addedChapter.list, addedChapter.id, -1).map(chapter => chapter.id), [addedChapter.id, "ch01"]);
+assert.deepStrictEqual(progress.deleteChapter(addedChapter.list, addedChapter.id).map(chapter => chapter.id), ["ch01"]);
 assert.ok(guide.ROUTE.hard.some(row => row.chapterId === "ch01" && row.items.some(item => item.id === "hard-ch01-01")));
 assert.ok(guide.ROUTE.intermission.some(row => row.items.some(item => item.id === "im01-01")));
 assert.ok(!guide.CATALOGS.skills);

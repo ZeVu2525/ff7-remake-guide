@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v21") fail("キャッシュ名が ff7r-guide-v21 ではない");
+  if (GAME.cache !== "ff7r-guide-v22") fail("キャッシュ名が ff7r-guide-v22 ではない");
   const mapFiles = guide.MAP_FILES;
   if (!Array.isArray(mapFiles)) fail("data/maps.js の MAP_FILES が配列ではない");
   else mapFiles.forEach(entry => {
@@ -67,7 +67,7 @@ function validateGuide(guide) {
     fail("編集モードがゲーム設定と繋がっていない");
   }
   const cardEdit = fs.readFileSync(path.join(root, "card-edit.js"), "utf8");
-  if (!cardEdit.includes("GAME.storage.cardEdits") || !cardEdit.includes("編集を終了") || !cardEdit.includes("書き出す")) {
+  if (!cardEdit.includes("GAME.storage.cardEdits") || !cardEdit.includes("編集をすべて戻す") || !cardEdit.includes("書き出す")) {
     fail("カード編集がゲーム設定と繋がっていない");
   }
   if (cardEdit.includes("event.target === dialog) dialog.hidden = true") || !cardEdit.includes("保存していない変更があります")) {
@@ -97,15 +97,6 @@ function validateGuide(guide) {
     if (!Array.isArray(ROUTE[name])) fail("ルートがない: " + name);
   }
 
-  const main = GAME.chapters.main || [];
-  if (main.length !== 18) fail("本編の章は 18 個である必要がある");
-  main.forEach((chapter, index) => {
-    const number = index + 1;
-    const id = "ch" + String(number).padStart(2, "0");
-    if (!chapter || chapter.id !== id) fail("章IDがずれている: " + (chapter && chapter.id));
-    if (!chapter || chapter.title !== "Chapter " + number) fail("章名は番号だけにする: " + (chapter && chapter.title));
-  });
-
   const ids = new Map();
   function claim(id, where) {
     if (typeof id !== "string" || !id) {
@@ -118,14 +109,12 @@ function validateGuide(guide) {
   }
 
   for (const trackId of ["main", "hard", "intermission"]) {
-    const known = new Set((GAME.chapters[trackId] || []).map(chapter => chapter.id));
     const seen = new Set();
     for (const row of ROUTE[trackId]) {
       if (!row || typeof row.chapterId !== "string") {
         fail(trackId + " の章に chapterId がない");
         continue;
       }
-      if (!known.has(row.chapterId)) fail(trackId + " の未知の章: " + row.chapterId);
       if (seen.has(row.chapterId)) fail(trackId + " の章が重複: " + row.chapterId);
       seen.add(row.chapterId);
       if (!Array.isArray(row.items)) {
@@ -150,11 +139,7 @@ function validateGuide(guide) {
         if (item.trophy && item.flag !== "trophy") fail(item.id + " の trophy はトロフィーカードだけに付ける");
       }
     }
-    if (trackId === "main") {
-      for (const chapter of GAME.chapters.main) {
-        if (!seen.has(chapter.id)) fail("本編ルートに章の枠がない: " + chapter.id);
-      }
-    }
+    if (!seen.size) fail(trackId + " に章がない");
   }
 
   const catalogs = ["quests", "trophies", "summons", "materia", "weapons", "keyItems", "consumables", "accessories", "armor"];

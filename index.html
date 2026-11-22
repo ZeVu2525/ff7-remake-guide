@@ -74,12 +74,12 @@ h1 span{display:block;margin-top:2px;color:#a9bfd0;font-size:13px;font-weight:60
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:99px}
 .pct{flex:0 0 auto;font-variant-numeric:tabular-nums;font-size:14px;color:#c6d7e3;white-space:nowrap}
 .header-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
-.edit-switch{position:absolute;top:14px;right:16px;z-index:5;display:inline-flex;align-items:center;gap:6px;color:#a9bfd0;font-size:12px;font-weight:700;cursor:pointer}
+.edit-switch{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;margin-left:8px;color:#a9bfd0;font-size:11px;font-weight:700;cursor:pointer}
 .edit-switch input{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0)}
-.edit-switch i{position:relative;width:36px;height:22px;border-radius:99px;background:#3d5160}
-.edit-switch i::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s ease}
+.edit-switch i{position:relative;width:30px;height:18px;border-radius:99px;background:#3d5160}
+.edit-switch i::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s ease}
 .edit-switch input:checked + i{background:#1f9d55}
-.edit-switch input:checked + i::after{transform:translateX(14px)}
+.edit-switch input:checked + i::after{transform:translateX(12px)}
 .edit-switch input:focus-visible + i{outline:2px solid #fff;outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.edit-switch i::after{transition:none}}
 .global-search{position:relative;flex:1 1 180px;min-width:0}
@@ -90,8 +90,8 @@ h1 span{display:block;margin-top:2px;color:#a9bfd0;font-size:13px;font-weight:60
 .howto-open{flex:0 0 auto;padding:0 12px;font-weight:700;cursor:pointer}
 .theme-control{flex:1 1 180px;min-width:0;display:flex;align-items:center;gap:8px;color:#a9bfd0;font-size:13px;font-weight:700;white-space:nowrap}
 .theme-control select{width:100%;min-width:0;max-width:100%;padding:6px 8px;font-size:16px}
-.tabs-shell{position:sticky;top:var(--text-edit-bar-h,0px);z-index:40;background:var(--nav);border-bottom:1px solid var(--navline);padding:0 12px}
-.tabs{display:flex;flex-wrap:wrap;gap:0}
+.tabs-shell{position:sticky;top:var(--text-edit-bar-h,0px);z-index:40;display:flex;align-items:center;gap:4px;background:var(--nav);border-bottom:1px solid var(--navline);padding:0 8px 0 12px}
+.tabs{display:flex;flex:1 1 auto;flex-wrap:wrap;gap:0;min-width:0}
 .tabs button{flex:1 1 120px;min-height:48px;padding:8px 10px;border:0;border-bottom:3px solid transparent;background:transparent;color:#a9bfd0;cursor:pointer;white-space:nowrap}
 .tabs button:hover{color:#fff;background:var(--nav2)}
 .tabs button.on{color:#6ed9ff;border-bottom-color:#39c9ff;font-weight:750}
@@ -160,7 +160,9 @@ html[data-theme="dark"] .it.flag-tips,html[data-theme="accent"] .it.flag-tips{ba
 .setting-row button,#settings-templates-save{min-height:40px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:inherit;font:inherit;cursor:pointer}
 #settings-templates{width:min(640px,100%);margin:8px 0;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:inherit;font:inherit}
 .subch-tools{display:flex;flex-wrap:wrap;gap:4px}
-.subch-tools button{min-height:32px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg2);color:inherit;font-size:13px;cursor:pointer}
+.subch-tools button,.chapter-tools button{min-height:32px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg2);color:inherit;font-size:13px;cursor:pointer}
+.chapter-heading{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chapter-tools{display:flex;flex-wrap:wrap;gap:4px}
 .ihead-main{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
 .tag-spot{display:inline-flex;flex-wrap:wrap;gap:4px}
 .pick-label{display:inline-flex;align-items:center;gap:4px;min-height:36px;font-weight:700}
@@ -356,7 +358,6 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
         <label class="global-search"><span class="sr-only">全体を検索</span><input id="guide-search" type="search" autocomplete="off" spellcheck="false" placeholder="全体を検索" enterkeyhint="search"><span id="guide-search-count" aria-live="polite"></span></label>
         <button type="button" id="open-howto" class="howto-open">使い方</button>
         <label class="theme-control">表示<select id="theme-select" aria-label="表示"></select></label>
-        <label class="edit-switch"><span>編集</span><input type="checkbox" id="edit-toggle" role="switch" aria-label="編集"><i aria-hidden="true"></i></label>
       </div>
     </div>
   </div>
@@ -364,6 +365,7 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <div id="guide-search-results" role="listbox" aria-label="検索結果" hidden></div>
 <div class="tabs-shell">
   <nav class="tabs" id="tabs" role="tablist" aria-label="ガイドの画面"></nav>
+  <label class="edit-switch"><span>編集</span><input type="checkbox" id="edit-toggle" role="switch" aria-label="編集"><i aria-hidden="true"></i></label>
 </div>
 <button class="dash ok" id="dash" type="button">読み込み中</button>
 <div id="howto" class="howto" hidden>
@@ -380,7 +382,7 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
     <h3>保存</h3>
     <p>チェックはブラウザの中に残る。別の端末へ移すときは、設定タブの「進行を書き出す」で JSON を保存し、向こうで「進行を読み込む」。GitHub には送られない。</p>
     <h3>編集モード</h3>
-    <p>右上の「編集」を押すか、アドレスの末尾に <code>?edit=1</code> を付ける。表示されている文をクリックして直せる。直しは進行とは別の場所に残る。「編集モードを終了」で戻る。</p>
+    <p>タブの右の「編集」を押すか、アドレスの末尾に <code>?edit=1</code> を付ける。表示されている文をクリックして直せる。直しは進行とは別の場所に残る。</p>
     <h3>カード編集</h3>
     <p><code>?cards=1</code> か、ページ下の「カード編集」で、カードの追加、修正、削除、並べ替えができる。原稿はそのままで、このブラウザの差分だけが残る。左のつまみをドラッグすると、青い線の位置に動く。閉じた章や空の章の見出しへ落とすと、その章に入る。「上へ」「下へ」「移動」も使える。「ルートJSを書き出す」で <code>data/route.js</code> に貼れる形を保存できる。</p>
     <h3>iPhone</h3>
@@ -397,17 +399,17 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <footer>
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v21"></script>
-<script src="data/route.js?v=ff7r-guide-v21"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v21"></script>
-<script src="data/maps.js?v=ff7r-guide-v21"></script>
-<script src="data/templates.js?v=ff7r-guide-v21"></script>
-<script src="data/settings.js?v=ff7r-guide-v21"></script>
-<script src="data/images.js?v=ff7r-guide-v21"></script>
-<script src="data/enemies.js?v=ff7r-guide-v21"></script>
-<script src="progress.js?v=ff7r-guide-v21"></script>
-<script src="app.js?v=ff7r-guide-v21"></script>
-<script src="edit-mode.js?v=ff7r-guide-v21"></script>
-<script src="card-edit.js?v=ff7r-guide-v21"></script>
+<script src="data/game.js?v=ff7r-guide-v22"></script>
+<script src="data/route.js?v=ff7r-guide-v22"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v22"></script>
+<script src="data/maps.js?v=ff7r-guide-v22"></script>
+<script src="data/templates.js?v=ff7r-guide-v22"></script>
+<script src="data/settings.js?v=ff7r-guide-v22"></script>
+<script src="data/images.js?v=ff7r-guide-v22"></script>
+<script src="data/enemies.js?v=ff7r-guide-v22"></script>
+<script src="progress.js?v=ff7r-guide-v22"></script>
+<script src="app.js?v=ff7r-guide-v22"></script>
+<script src="edit-mode.js?v=ff7r-guide-v22"></script>
+<script src="card-edit.js?v=ff7r-guide-v22"></script>
 </body>
 </html>
