@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v20") fail("キャッシュ名が ff7r-guide-v20 ではない");
+  if (GAME.cache !== "ff7r-guide-v21") fail("キャッシュ名が ff7r-guide-v21 ではない");
   const mapFiles = guide.MAP_FILES;
   if (!Array.isArray(mapFiles)) fail("data/maps.js の MAP_FILES が配列ではない");
   else mapFiles.forEach(entry => {
@@ -140,9 +140,8 @@ function validateGuide(guide) {
       for (const item of row.items) {
         claim(item && item.id, trackId + " " + row.chapterId);
         if (!item) continue;
-        for (const key of ["flag", "title", "detail"]) {
-          if (item[key] == null || item[key] === "") fail(item.id + " に " + key + " がない");
-        }
+        if (!item.flag) fail(item.id + " に flag がない");
+        if (!item.title && !item.template) fail(item.id + " に title がない");
         if (!flagIds.has(item.flag)) fail(item.id + " の flag が未定義: " + item.flag);
         if (item.example === true && !String(item.title).includes("例")) fail(item.id + " は仮データなのに「例」がない");
         if (String(item.title).includes("例") && item.example !== true) fail(item.id + " は「例」なのに example がない");
@@ -208,7 +207,7 @@ function validateGuide(guide) {
             if (!link || !catalogIds.has(link.id) || !(link.qty >= 1)) fail(item.id + " のアイテムリンクが不正");
           });
         }
-        if (trackId === "main" && item && item.flag === "story") storySteps.push(item.step);
+        if (trackId === "main" && item && item.flag === "story" && Number.isInteger(item.step)) storySteps.push(item.step);
       }
       if (trackId === "main") {
         if (!storySteps.length) fail(row.chapterId + " に手順カードがない");

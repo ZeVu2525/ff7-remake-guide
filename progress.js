@@ -462,6 +462,62 @@
     return ids.map(id => resolveCatalogCard(id, baseById, safeBook)).filter(Boolean);
   }
 
+  function exportCatalogs(baseCatalogs, book) {
+    const base = baseCatalogs || {};
+    const safe = normalizeCardBook(book);
+    const names = new Set(Object.keys(base));
+    for (const id of Object.keys(safe.custom || {})) {
+      const custom = safe.custom[id];
+      if (custom && custom.kind === "catalog" && custom.catalogId) names.add(custom.catalogId);
+    }
+    const catalogs = {};
+    names.forEach(name => {
+      const source = base[name] && typeof base[name] === "object" ? base[name] : { items: [] };
+      catalogs[name] = Object.assign({}, source, {
+        items: mergeCatalog(source, safe, name).map(item => {
+          const copy = Object.assign({}, item);
+          delete copy.custom;
+          return copy;
+        })
+      });
+    });
+    return catalogs;
+  }
+
+  function validateExportBundle(route, catalogs, baseCatalogs) {
+    const errors = [];
+    const required = ["quests", "trophies", "summons", "materia", "weapons", "keyItems", "consumables", "accessories", "armor"];
+    required.forEach(name => {
+      const items = catalogs && catalogs[name] && catalogs[name].items;
+      if (!Array.isArray(items) || !items.length) errors.push(name + " の台帳が空です");
+    });
+    const base = baseCatalogs || {};
+    Object.keys(base).forEach(name => {
+      const baseCount = (base[name] && base[name].items || []).length;
+      const nextCount = (catalogs && catalogs[name] && catalogs[name].items || []).length;
+      if (baseCount > 0 && nextCount === 0) errors.push(name + " の台帳が落ちています");
+    });
+    const ids = new Set();
+    Object.keys(catalogs || {}).forEach(name => {
+      (catalogs[name].items || []).forEach(item => { if (item && item.id) ids.add(item.id); });
+    });
+    const seen = new Set();
+    Object.keys(route || {}).forEach(trackId => {
+      (route[trackId] || []).forEach(row => {
+        (row.items || []).forEach(item => {
+          (item && item.items || []).forEach(link => {
+            if (link && ids.has(link.id) && link.qty >= 1) return;
+            const key = (item && item.id || "") + ":" + (link && link.id || "");
+            if (seen.has(key)) return;
+            seen.add(key);
+            errors.push((item && item.id || "カード") + " の " + (link && link.id || "アイテム") + " が台帳にありません");
+          });
+        });
+      });
+    });
+    return errors;
+  }
+
   function orderWithMove(ids, movingId, beforeId, after) {
     const next = (Array.isArray(ids) ? ids : []).filter(id => id && id !== movingId);
     if (!beforeId) {
@@ -1392,6 +1448,8 @@
     normalizeCardBook,
     mergeTrack,
     mergeCatalog,
+    exportCatalogs,
+    validateExportBundle,
     mergedRoute,
     cardFlags,
     suggestMatches,

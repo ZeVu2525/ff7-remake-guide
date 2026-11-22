@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v20");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v21");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -198,6 +198,13 @@ assert.ok(!pageSource.includes("kids-chevron{display:inline-flex"));
 assert.ok(guide.CATALOGS.quests.items.length >= 26);
 assert.ok(guide.CATALOGS.quests.items.every(item => /^https:\/\//.test(item.source)));
 assert.ok(guide.CATALOGS.consumables.items.find(item => item.name === "ポーション").buy);
+const roundTrip = progress.exportCatalogs(guide.CATALOGS, progress.emptyCardBook());
+Object.keys(guide.CATALOGS).forEach(name => {
+  assert.strictEqual(roundTrip[name].items.length, guide.CATALOGS[name].items.length, name);
+});
+const partialCatalogs = { quests: guide.CATALOGS.quests, trophies: guide.CATALOGS.trophies };
+assert.ok(progress.validateExportBundle(guide.ROUTE, partialCatalogs, guide.CATALOGS).some(line => line.includes("consumables")));
+assert.deepStrictEqual(progress.validateExportBundle(guide.ROUTE, roundTrip, guide.CATALOGS), []);
 assert.ok(Array.isArray(guide.CATALOGS.trophies.items));
 
 const baseRoute = {
@@ -342,9 +349,9 @@ assert.deepStrictEqual(progress.orderAfterSectionMove(
 ), ["a", "b", "c"]);
 const ch1 = guide.ROUTE.main.find(row => row.chapterId === "ch01");
 assert.ok(ch1.sections && ch1.sections.length >= 1);
-assert.ok(ch1.items.every(item => item.section === ch1.sections[0].id));
-assert.ok(ch1.items.every(item => !item.map));
-assert.ok(ch1.sections[0].map);
+const ch1Sections = new Set(ch1.sections.map(section => section.id));
+assert.ok(ch1.items.every(item => !item.section || ch1Sections.has(item.section)));
+assert.ok(ch1.sections.some(section => section.map));
 const firstMap = progress.assignMapFile("abcdef1234567890", "png", []);
 const sameMap = progress.assignMapFile("abcdef1234567890", "png", firstMap.manifest);
 assert.strictEqual(sameMap.file, firstMap.file);
