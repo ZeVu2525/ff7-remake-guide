@@ -373,7 +373,15 @@
       if (!enemy) return `<p class="enemy-mini"><button type="button" data-open-enemy="${esc(id)}">${esc(id)}</button></p>`;
       const hp = GuideProgress.statForMode(enemy.hp, mode);
       const loot = enemy.items || {};
-      return `<div class="enemy-mini"><p><button type="button" class="linkish" data-open-enemy="${esc(enemy.id)}">${esc(enemy.name)}</button></p><p>HP ${esc(hp.value || "—")}${hp.note ? " <small>(" + esc(hp.note) + ")</small>" : ""}</p><p>弱点 ${esc(weakNames(enemy))}</p><p>ドロップ（通常） ${linkedLoot(loot.drop)}</p><p>ドロップ（レア） ${linkedLoot(loot.rare)}</p><p>盗む ${linkedLoot(loot.steal)}</p><p class="enemy-tactic">解説 ${esc(enemy.tactic || item.enemyNote || "")}</p></div>`;
+      const stat = (label, value) => `<div class="enemy-stat"><span>${esc(label)}</span><b>${value}</b></div>`;
+      return `<div class="enemy-mini"><div class="enemy-stats">${[
+        stat("エネミー名", `<button type="button" class="linkish" data-open-enemy="${esc(enemy.id)}">${esc(enemy.name)}</button>`),
+        stat("HP", esc(hp.value || "—") + (hp.note ? " <small>(" + esc(hp.note) + ")</small>" : "")),
+        stat("弱点", esc(weakNames(enemy))),
+        stat("ドロップ（通常）", linkedLoot(loot.drop)),
+        stat("ドロップ（レア）", linkedLoot(loot.rare)),
+        stat("盗む", linkedLoot(loot.steal))
+      ].join("")}</div><p class="enemy-tactic"><span>解説</span>${esc(enemy.tactic || "")}</p></div>`;
     }).join("");
     const note = item.enemyNote ? `<p class="enemy-note">${esc(item.enemyNote)}</p>` : "";
     return `<div class="enemy-card">${cards}${note}</div>`;
