@@ -84,7 +84,7 @@ const ROUTE = {
           title: "改札前にいる警備兵2体をまとめて片付ける",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter01.html",
           section: "ch01-sec-1",
-          map: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter01/01.png",
+          map: "jun-ch01-01.png",
           flags: [
             "story",
             "battle"
@@ -123,14 +123,14 @@ const ROUTE = {
           ],
           parent: "ch01-s03",
           section: "ch01-sec-1",
-          map: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter01/01.png"
+          map: "jun-ch01-01.png"
         },
         {
           id: "user-mwq78sd6-mm7t",
           flag: "item",
           title: "神羅ボックス①②",
           detail: "先に進んで右側と進行方向にある神羅ボックスを破壊する",
-          map: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter01/01.png",
+          map: "jun-ch01-01.png",
           parent: "ch01-s03"
         },
         {
@@ -368,7 +368,7 @@ const ROUTE = {
                 [
                   {
                     type: "image",
-                    src: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter01/buppanasu.png",
+                    src: "jun-ch01-buppanasu.png",
                     width: "full",
                     align: "center",
                     pct: 100
@@ -1876,7 +1876,8 @@ const ROUTE = {
           title: "2つ目のライトを消して、非常用電力を確保",
           detail: "2つ目のライト。次の手順は、2つ目のライトを消して、非常用電力を確保。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter06.html",
-          section: "ch06-sec-1"
+          section: "ch06-sec-1",
+          map: "jun-ch06-06-0302.png"
         },
         {
           id: "ch06-s12",
@@ -1912,7 +1913,8 @@ const ROUTE = {
           title: "3つ目のライトを消して、非常用電力を確保",
           detail: "3つ目のライト。次の手順は、3つ目のライトを消して、非常用電力を確保。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter06.html",
-          section: "ch06-sec-1"
+          section: "ch06-sec-1",
+          map: "jun-ch06-06-0303.png"
         },
         {
           id: "ch06-s16",
@@ -1957,7 +1959,8 @@ const ROUTE = {
           title: "メインリフトの先へで、ビッグスと合流",
           detail: "メインリフトの先へ。メインリフトの先へで、ビッグスと合流。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter06.html",
-          section: "ch06-sec-1"
+          section: "ch06-sec-1",
+          map: "jun-ch06-06-04.png"
         }
       ]
     },
@@ -1996,7 +1999,8 @@ const ROUTE = {
           title: "魔晄炉からの脱出で、爆弾をセット",
           detail: "魔晄炉からの脱出。魔晄炉からの脱出で、爆弾をセット。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter07.html",
-          section: "ch07-sec-1"
+          section: "ch07-sec-1",
+          map: "jun-ch07-07-01.png"
         },
         {
           id: "ch07-s04",
@@ -2461,7 +2465,8 @@ const ROUTE = {
           title: "開かないゲート",
           detail: "廃棄指定区のレバーを調べると、向こう側がまだ閉まっていることが分かる。スチールマウンテンの先、ボルトナットヒルズの梯子を登って反対側のレバーを引くと近道が開く。報酬はない。本線を進めていれば、同じ道で開けられる。",
           source: "https://blog.rebosoku.com/archives/ff7remake_chapter8ex.html",
-          section: "ch08-sec-1"
+          section: "ch08-sec-1",
+          map: "jun-ch08-08-02.png"
         },
         {
           id: "ch08-s14",
@@ -2646,7 +2651,8 @@ const ROUTE = {
           title: "子供たちとともにで、子供たちを救出",
           detail: "子供たちとともに。子供たちとともにで、子供たちを救出。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter08.html",
-          section: "ch08-sec-1"
+          section: "ch08-sec-1",
+          map: "jun-ch08-08-04.png"
         },
         {
           id: "ch08-10",
@@ -2943,7 +2949,8 @@ const ROUTE = {
           title: "さすらいのジョニー",
           detail: "武器屋方面の南でジョニーが走る。わかるとサム側に寄り、この会話はあとでジョニーのトロフィーに必要になる。いいや、または無視するとマム側に寄る。一度無視しても、話を進める前なら北にいるジョニーに話しかけて続けられる。",
           source: "https://blog.rebosoku.com/archives/ff7remake_chapter9-2.html",
-          section: "ch09-sec-3"
+          section: "ch09-sec-3",
+          map: "jun-ch09-09-0301.png"
         },
         {
           id: "ch09-06",
@@ -3431,7 +3438,8 @@ const ROUTE = {
           title: "水門を渡るで、水門を渡ろう",
           detail: "水門を渡る。水門を渡るで、水門を渡ろう。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter10.html",
-          section: "ch10-sec-1"
+          section: "ch10-sec-1",
+          map: "jun-ch10-10-02.png"
         },
         {
           id: "ch10-s11",
@@ -3552,7 +3560,8 @@ const ROUTE = {
           title: "何者かの気配で、扉の先を確認",
           detail: "何者かの気配。何者かの気配で、扉の先を確認。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter11.html",
-          section: "ch11-sec-1"
+          section: "ch11-sec-1",
+          map: "jun-ch11-11-01.png"
         },
         {
           id: "ch11-s03",
@@ -4076,7 +4085,8 @@ const ROUTE = {
           title: "七番街へと続く道で、陥没通路を抜け",
           detail: "七番街へと続く道。七番街へと続く道で、陥没通路を抜け。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter13.html",
-          section: "ch13-sec-1"
+          section: "ch13-sec-1",
+          map: "jun-ch13-13-0201.png"
         },
         {
           id: "ch13-s06",
@@ -4085,7 +4095,8 @@ const ROUTE = {
           title: "七番街へと続く道で、崩れた道を迂回",
           detail: "七番街へと続く道。七番街へと続く道で、崩れた道を迂回。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter13.html",
-          section: "ch13-sec-1"
+          section: "ch13-sec-1",
+          map: "jun-ch13-13-0202.png"
         },
         {
           id: "ch13-s07",
@@ -4186,7 +4197,8 @@ const ROUTE = {
           title: "帰るべき場所で、ウェッジを救出",
           detail: "帰るべき場所。帰るべき場所で、ウェッジを救出。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter13.html",
-          section: "ch13-sec-1"
+          section: "ch13-sec-1",
+          map: "jun-ch13-13-03.png"
         },
         {
           id: "ch13-s13",
@@ -5027,7 +5039,8 @@ const ROUTE = {
           title: "カードキー入手で、端末を調べる",
           detail: "カードキー入手。カードキー入手で、端末を調べる。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter16.html",
-          section: "ch16-sec-1"
+          section: "ch16-sec-1",
+          map: "jun-ch16-16-0201.png"
         },
         {
           id: "ch16-s06",
@@ -5171,7 +5184,8 @@ const ROUTE = {
           title: "協力者で、扉を調べ",
           detail: "協力者。協力者で、扉を調べ。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter16.html",
-          section: "ch16-sec-1"
+          section: "ch16-sec-1",
+          map: "jun-ch16-16-0501.png"
         },
         {
           id: "ch16-s22",
@@ -5207,7 +5221,8 @@ const ROUTE = {
           title: "協力者から事情を聞く",
           detail: "協力者。次の手順は、協力者から事情を聞く。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter16.html",
-          section: "ch16-sec-1"
+          section: "ch16-sec-1",
+          map: "jun-ch16-16-0502.png"
         },
         {
           id: "ch16-s26",
@@ -5243,7 +5258,8 @@ const ROUTE = {
           title: "敵情視察で、通気口を調べる",
           detail: "敵情視察。敵情視察で、通気口を調べる。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter16.html",
-          section: "ch16-sec-1"
+          section: "ch16-sec-1",
+          map: "jun-ch16-16-0601.png"
         },
         {
           id: "ch16-s30",
@@ -5599,7 +5615,8 @@ const ROUTE = {
           title: "スィッチを調べて、第二研究室の扉を開ける",
           detail: "第二研究室。次の手順は、スィッチを調べて、第二研究室の扉を開ける。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter17.html",
-          section: "ch17-sec-1"
+          section: "ch17-sec-1",
+          map: "jun-ch17-17-0501.png"
         },
         {
           id: "ch17-s28",
@@ -5835,7 +5852,8 @@ const ROUTE = {
           title: "対峙で、ハシゴを上る",
           detail: "対峙。対峙で、ハシゴを上る。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter17.html",
-          section: "ch17-sec-1"
+          section: "ch17-sec-1",
+          map: "jun-ch17-17-0802.png"
         },
         {
           id: "ch17-s51",

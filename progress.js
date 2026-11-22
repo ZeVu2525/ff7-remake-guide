@@ -1119,9 +1119,42 @@
     return out.join("").replace(/(?:<br>)+$/g, "");
   }
 
+  function imageKeyFromUrl(url) {
+    const match = String(url || "").match(/finalfantasy-jun-site\.com\/ff7_remake\/([^?#]+)/i);
+    if (!match) return "";
+    const path = match[1];
+    const story = path.match(/^story\/chapter(\d+)\/([^/]+)$/i);
+    if (story) return "jun-ch" + String(story[1]).padStart(2, "0") + "-" + story[2].toLowerCase();
+    const quest = path.match(/^quest\/images\/([^/]+)$/i);
+    if (quest) return "jun-quest-" + quest[1].toLowerCase();
+    const field = path.match(/^field\/images\/([^/]+)$/i);
+    if (field) return "jun-field-" + field[1].toLowerCase();
+    const base = path.split("/").pop();
+    return base ? "jun-" + base.toLowerCase() : "";
+  }
+
+  function isLibraryKey(value) {
+    return /^jun-[a-z0-9._-]+\.(?:png|jpe?g|gif|webp)$/i.test(String(value || "").trim());
+  }
+
+  function hideMapAfterError(dragging, failedSrc, currentSrc) {
+    if (dragging) return false;
+    if (!currentSrc || !failedSrc || failedSrc !== currentSrc) return false;
+    return true;
+  }
+
+  function excludeLibraryExports(files) {
+    return (files || []).filter(file => {
+      const path = String(file && file.path || "");
+      if (!path || path === "ff7r-maps.zip") return false;
+      if (/^image-library\//.test(path)) return false;
+      return true;
+    });
+  }
+
   function validImageValue(src) {
     const value = String(src || "").trim();
-    return /^https:\/\//i.test(value) || /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(value) || /^(?:maps|images)\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(value);
+    return /^https:\/\//i.test(value) || /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(value) || /^(?:maps|images)\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(value) || isLibraryKey(value);
   }
 
   function normalizeBlocks(value) {
@@ -1243,7 +1276,10 @@
     const width = block.width || "m";
     const align = block.align || "center";
     const pct = block.pct ? ' style="width:' + block.pct + '%"' : "";
-    const image = '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img src="' + src + '" alt="' + (caption || escapeRichText(block.label || "")) + '" loading="lazy" decoding="async"></button>';
+    const library = isLibraryKey(block.src);
+    const image = library
+      ? '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img data-lib="' + src + '" alt="' + (caption || "画像が未登録") + '" decoding="async"></button>'
+      : '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img src="' + src + '" alt="' + (caption || escapeRichText(block.label || "")) + '" loading="lazy" decoding="async"></button>';
     if (bare) return image;
     return '<figure class="blk-img w-' + width + " align-" + align + '" data-bpath="' + path + '"' + pct + ">" + image + '<i class="blk-resize" data-bpath="' + path + '"></i>' + (caption ? "<figcaption>" + caption + "</figcaption>" : "") + "</figure>";
   }
@@ -1566,6 +1602,10 @@
     numberCards,
     foldCards,
     foldAll,
+    imageKeyFromUrl,
+    isLibraryKey,
+    hideMapAfterError,
+    excludeLibraryExports,
     clampMapFrame,
     defaultMapFrame,
     numberChapter,

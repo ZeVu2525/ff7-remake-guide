@@ -405,14 +405,14 @@
     const repo = files.find(entry => entry && (entry.id === map || entry.file === map));
     if (repo || (map && /^maps\//.test(map))) {
       const file = repo ? repo.file : map;
-      return { key: (repo && repo.id) || id || map, src: file, href: "", label: (repo && repo.label) || label || "地図" };
+      return { key: (repo && repo.id) || id || map, src: file, href: "", label: (repo && repo.label) || label || "地図", library: false };
     }
     const preset = (GAME.maps || []).find(entry => entry.id === map);
-    const src = !map ? "" : (preset ? "https://finalfantasy-jun-site.com/ff7_remake/field/images/" + map + ".png" : map);
-    const href = preset
-      ? "https://finalfantasy-jun-site.com/ff7_remake/field/" + map + ".html"
-      : (/^https:\/\//i.test(map) ? map : "");
-    return { key: preset ? map : (id || "custom"), src, href, label: preset ? preset.label : (label || "地図") };
+    if (preset) return { key: preset.id, src: "jun-field-" + preset.id + ".png", href: "", label: preset.label, library: true };
+    const fromHotlink = GuideProgress.imageKeyFromUrl(map);
+    if (fromHotlink) return { key: fromHotlink, src: fromHotlink, href: "", label: label || "地図", library: true };
+    if (GuideProgress.isLibraryKey(map)) return { key: map, src: map, href: "", label: label || "地図", library: true };
+    return { key: id || map || "custom", src: map || "", href: "", label: label || "地図", library: false };
   }
 
   function mapButton(item, owner) {
@@ -636,6 +636,7 @@
     if (!chapter) return;
     const body = section.querySelector(".chb");
     if (body) body.innerHTML = chapterBodyHtml(chapter).html;
+    if (globalThis.GuideImages) GuideImages.hydrate(section);
     section.style.minHeight = "";
     section.dataset.ready = "1";
     delete section.dataset.lazy;
@@ -713,6 +714,7 @@
     } else if (lazyObserver) {
       lazyObserver.disconnect();
     }
+    if (globalThis.GuideImages) GuideImages.hydrate(host);
     document.getElementById("route-count").textContent = visible + " / " + total + " 件を表示";
     const jump = document.getElementById("chapter-jump");
     const previous = jump.value;
@@ -1346,6 +1348,55 @@
     if (hub && hub.kind === "settings") renderSettings();
   }
 
+  function bytesLabel(size) {
+    if (size < 1024) return size + " B";
+    if (size < 1024 * 1024) return (size / 1024).toFixed(1) + " KB";
+    return (size / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  async function paintImageLibrary() {
+    const usage = document.getElementById("image-library-usage");
+    const list = document.getElementById("image-library-list");
+    if (!list || !globalThis.GuideImages) return;
+    const rows = await GuideImages.list();
+    const used = rows.reduce((sum, row) => sum + row.size, 0);
+    if (usage) usage.textContent = "保存中 " + rows.length + " 件、" + bytesLabel(used) + "。";
+    list.innerHTML = rows.map(row => `<div class="image-lib-row"><img data-lib="${esc(row.id)}" alt=""><span>${esc(row.name)} <small>${esc(bytesLabel(row.size))}</small></span><button type="button" data-lib-rename="${esc(row.id)}">名前</button><button type="button" data-lib-delete="${esc(row.id)}">削除</button></div>`).join("") || "<p>まだ画像がありません。</p>";
+    GuideImages.hydrate(list);
+  }
+
+  async function storeImageFiles(fileList) {
+    const files = [...(fileList || [])].filter(file => /^image\/(png|jpeg|gif|webp)$/.test(file.type) || /\.(png|jpe?g|gif|webp)$/i.test(file.name));
+    for (const file of files) {
+      const key = GuideImages.safeName(file.name);
+      await GuideImages.putFile(key, file, file.name);
+    }
+    return files.length;
+  }
+
+  async function inflateRaw(bytes) {
+    if (typeof DecompressionStream !== "function") return null;
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  async function storeZip(file) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const entries = GuideZip.unzip(bytes);
+    let count = 0;
+    for (const entry of entries) {
+      if (!/\.(png|jpe?g|gif|webp)$/i.test(entry.name)) continue;
+      let raw = entry.bytes;
+      if (entry.method === 8) raw = await inflateRaw(entry.bytes);
+      if (!raw || (entry.method && entry.method !== 0 && entry.method !== 8)) continue;
+      const name = entry.name.split("/").pop();
+      const blob = new Blob([raw], { type: "image/png" });
+      await GuideImages.putFile(GuideImages.safeName(name), blob, name);
+      count += 1;
+    }
+    return count;
+  }
+
   function renderSettings() {
     const root = document.getElementById("settings-body");
     if (!root) return;
@@ -1368,6 +1419,20 @@
       <p class="lead">1行が1つの定型文です。カードの見出しで選ぶと、章の中で 宝箱① のように番号が付きます。</p>
       <textarea id="settings-templates" rows="6">${esc(templates.map(item => item.label).join("\n"))}</textarea>
       <p><button type="button" id="settings-templates-save">定型文を保存</button></p>
+      <h3>画像ライブラリ</h3>
+      <p class="lead">地図とカードの画像は、このブラウザの中だけに保存します。書き出しや GitHub には画像そのものは入りません。ファイル名が jun-ch01-01.png のようなキーと一致すると、その地図が表示されます。</p>
+      <p id="image-library-usage" class="lead"></p>
+      <p>
+        <button type="button" id="image-library-add">画像を追加</button>
+        <button type="button" id="image-library-zip">画像をまとめて読み込む</button>
+        <button type="button" id="image-library-folder-open">フォルダから読み込む</button>
+        <button type="button" id="image-library-export">画像をまとめて書き出す</button>
+      </p>
+      <p class="lead" id="image-library-drop" tabindex="0">ここに画像をドロップするか、この欄を選んで貼り付けできます。まとめて読み込むときは zip、複数ファイル、またはフォルダを選べます。iPhone では「画像をまとめて読み込む」から zip か写真を選びます。</p>
+      <input id="image-library-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
+      <input id="image-library-bundle" type="file" accept=".zip,image/png,image/jpeg,image/gif,image/webp,application/zip" multiple hidden>
+      <input id="image-library-folder" type="file" webkitdirectory multiple hidden>
+      <div id="image-library-list"></div>
       <h3>GitHub連携（管理者）</h3>
       <p class="lead">Fine-grained の Personal Access Token を、このリポジトリだけに、Contents は Read and write だけにして作ってください。トークンはこのブラウザの中だけに残り、書き出すファイルには入りません。</p>
       <label class="setting-row"><span>トークン</span><input id="github-token" type="password" autocomplete="off" placeholder="github_pat_..."></label>
@@ -1378,6 +1443,69 @@
       <p id="github-status" class="lead"></p>
       <h3>今後の設定</h3>
       <p class="lead">表示や操作で、あとから設定が必要になったものはこの画面に足します。</p>`;
+    paintImageLibrary();
+    const libraryDrop = document.getElementById("image-library-drop");
+    document.getElementById("image-library-add").addEventListener("click", () => document.getElementById("image-library-file").click());
+    document.getElementById("image-library-zip").addEventListener("click", () => document.getElementById("image-library-bundle").click());
+    document.getElementById("image-library-folder-open").addEventListener("click", () => document.getElementById("image-library-folder").click());
+    document.getElementById("image-library-file").addEventListener("change", async event => {
+      await storeImageFiles(event.target.files);
+      event.target.value = "";
+      paintImageLibrary();
+      if (globalThis.GuideImages) GuideImages.hydrate(document);
+    });
+    document.getElementById("image-library-folder").addEventListener("change", async event => {
+      await storeImageFiles(event.target.files);
+      event.target.value = "";
+      paintImageLibrary();
+      if (globalThis.GuideImages) GuideImages.hydrate(document);
+    });
+    document.getElementById("image-library-bundle").addEventListener("change", async event => {
+      for (const file of [...event.target.files]) {
+        if (/\.zip$/i.test(file.name)) await storeZip(file);
+        else await storeImageFiles([file]);
+      }
+      event.target.value = "";
+      paintImageLibrary();
+      if (globalThis.GuideImages) GuideImages.hydrate(document);
+    });
+    document.getElementById("image-library-export").addEventListener("click", async () => {
+      const rows = await GuideImages.allBlobs();
+      const files = [];
+      for (const row of rows) files.push({ name: row.id, bytes: new Uint8Array(await row.blob.arrayBuffer()) });
+      const zip = GuideZip.zipStore(files);
+      const blob = new Blob([zip], { type: "application/zip" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "ff7r-images.zip";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    });
+    if (libraryDrop) {
+      libraryDrop.addEventListener("dragover", event => event.preventDefault());
+      libraryDrop.addEventListener("drop", async event => {
+        event.preventDefault();
+        await storeImageFiles(event.dataTransfer.files);
+        paintImageLibrary();
+      });
+      libraryDrop.addEventListener("paste", async event => {
+        const files = [...(event.clipboardData && event.clipboardData.files || [])];
+        if (!files.length) return;
+        event.preventDefault();
+        await storeImageFiles(files);
+        paintImageLibrary();
+      });
+    }
+    document.getElementById("image-library-list").addEventListener("click", async event => {
+      const rename = event.target.closest("[data-lib-rename]");
+      const remove = event.target.closest("[data-lib-delete]");
+      if (rename) {
+        const next = window.prompt("表示名", rename.dataset.libRename);
+        if (next) await GuideImages.rename(rename.dataset.libRename, next);
+      }
+      if (remove) await GuideImages.remove(remove.dataset.libDelete);
+      if (rename || remove) paintImageLibrary();
+    });
     const githubStatus = document.getElementById("github-status");
     const savedGithub = (() => {
       try { return JSON.parse(localStorage.getItem(GuideProgress.GITHUB_STORE) || "null"); } catch (error) { return null; }
@@ -1610,6 +1738,24 @@
   }
 
   document.addEventListener("click", event => {
+    const addImage = event.target.closest("[data-lib-add]");
+    if (addImage && globalThis.GuideImages) {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/png,image/jpeg,image/gif,image/webp";
+      input.addEventListener("change", async () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        await GuideImages.putFile(addImage.dataset.libAdd, file, addImage.dataset.libAdd);
+        const note = addImage.closest(".lib-missing");
+        const image = note && note.previousElementSibling;
+        if (image) delete image.dataset.libReady;
+        if (note) note.remove();
+        GuideImages.hydrate(document);
+      });
+      input.click();
+      return;
+    }
     const hub = event.target.closest("#tabs [data-hub]");
     if (hub) {
       showHub(hub.dataset.hub);
@@ -2060,7 +2206,7 @@
   const mapPop = document.createElement("div");
   mapPop.id = "map-pop";
   mapPop.hidden = true;
-  mapPop.innerHTML = '<div class="map-pop-bar" id="map-pop-handle"><span id="map-pop-title">地図</span><button type="button" id="map-pop-close" aria-label="閉じる">×</button></div><div class="map-pop-body"><img alt="" loading="lazy" decoding="async"><p class="map-fallback" hidden>画像を表示できないので、下のリンクから開いてください。</p><p class="map-actions"><button type="button" id="map-enlarge">拡大</button> <a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p></div><button type="button" class="map-pop-resize" aria-label="大きさを変える"></button>';
+  mapPop.innerHTML = '<div class="map-pop-bar" id="map-pop-handle"><span id="map-pop-title">地図</span><button type="button" id="map-pop-close" aria-label="閉じる">×</button></div><div class="map-pop-body"><img alt="" decoding="async"><p class="map-missing" hidden>地図画像が未登録 <button type="button" id="map-missing-add">この地図を追加</button></p><p class="map-fallback" hidden>画像を表示できないので、ファイルを選び直してください。</p><p class="map-actions"><button type="button" id="map-enlarge">拡大</button> <a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p></div><button type="button" class="map-pop-resize" aria-label="大きさを変える"></button><input id="map-missing-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>';
   document.body.appendChild(mapPop);
   function mapViewport() {
     return { width: window.innerWidth, height: window.innerHeight };
@@ -2084,7 +2230,11 @@
     return next;
   }
   mapPop.querySelector("img").addEventListener("error", () => {
-    mapPop.querySelector("img").hidden = true;
+    const image = mapPop.querySelector("img");
+    const failed = image.currentSrc || image.src;
+    if (image.naturalWidth > 0) return;
+    if (!GuideProgress.hideMapAfterError(!!mapDrag, failed, image.dataset.shown || failed)) return;
+    image.hidden = true;
     mapPop.querySelector(".map-fallback").hidden = false;
   });
 
@@ -2092,6 +2242,31 @@
     if (!force && mapPop.dataset.pin === "1") return;
     mapPop.hidden = true;
     mapPop.dataset.pin = "0";
+  }
+
+  async function showPinnedMap(image, src) {
+    image.dataset.shown = src || "";
+    const missing = mapPop.querySelector(".map-missing");
+    if (missing) missing.hidden = true;
+    if (GuideProgress.isLibraryKey(src) && globalThis.GuideImages) {
+      const url = await GuideImages.objectUrl(src);
+      if (!url) {
+        image.removeAttribute("src");
+        image.hidden = true;
+        if (missing) {
+          missing.hidden = false;
+          missing.dataset.key = src;
+        }
+        return;
+      }
+      image.hidden = false;
+      image.src = url;
+      image.dataset.shown = url;
+      return;
+    }
+    if (!src) return;
+    image.hidden = false;
+    image.src = src;
   }
 
   function toggleMap(button) {
@@ -2103,7 +2278,7 @@
     const label = button.getAttribute("data-map-label") || "地図";
     const image = mapPop.querySelector("img");
     const link = mapPop.querySelector("a");
-    const src = button.getAttribute("data-map-src") || ("https://finalfantasy-jun-site.com/ff7_remake/field/images/" + id + ".png");
+    const src = button.getAttribute("data-map-src") || "";
     const href = button.getAttribute("data-map-href") || "";
     mapPop.dataset.map = id;
     mapPop.dataset.src = src;
@@ -2111,8 +2286,10 @@
     mapPop.dataset.pin = "1";
     image.hidden = false;
     mapPop.querySelector(".map-fallback").hidden = true;
+    const missing = mapPop.querySelector(".map-missing");
+    if (missing) missing.hidden = true;
     image.alt = label + "の地図";
-    image.src = src;
+    showPinnedMap(image, src);
     if (href) {
       link.hidden = false;
       link.href = href;
@@ -2142,12 +2319,14 @@
   function applyZoom() {
     zoomImg.style.transform = "translate(" + zoomState.x + "px," + zoomState.y + "px) scale(" + zoomState.scale + ")";
   }
-  function openZoom(src, href, label) {
+  async function openZoom(src, href, label) {
     zoomState.scale = 1;
     zoomState.x = 0;
     zoomState.y = 0;
     zoomState.pointers.clear();
-    zoomImg.src = src;
+    let shown = src;
+    if (GuideProgress.isLibraryKey(src) && globalThis.GuideImages) shown = await GuideImages.objectUrl(src) || "";
+    if (shown) zoomImg.src = shown;
     zoomImg.alt = (label || "地図") + "の拡大";
     mapZoom.querySelector("#map-zoom-label").textContent = label || "地図";
     const link = mapZoom.querySelector("#map-zoom-link");
@@ -2166,6 +2345,17 @@
     zoomState.pointers.clear();
   }
   mapZoom.querySelector("#map-zoom-close").addEventListener("click", closeZoom);
+  mapPop.querySelector("#map-missing-add").addEventListener("click", () => mapPop.querySelector("#map-missing-file").click());
+  mapPop.querySelector("#map-missing-file").addEventListener("change", async event => {
+    const file = event.target.files && event.target.files[0];
+    const key = mapPop.querySelector(".map-missing").dataset.key;
+    event.target.value = "";
+    if (!file || !key || !globalThis.GuideImages) return;
+    await GuideImages.putFile(key, file, key);
+    const image = mapPop.querySelector("img");
+    image.hidden = false;
+    showPinnedMap(image, key);
+  });
   mapPop.querySelector("#map-enlarge").addEventListener("click", event => {
     event.stopPropagation();
     openZoom(mapPop.dataset.src, mapPop.dataset.href, mapPop.querySelector("img").alt.replace(/の地図$/, ""));

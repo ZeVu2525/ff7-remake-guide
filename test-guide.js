@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v24");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v25");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -205,6 +205,31 @@ assert.ok(phoneMap.left + phoneMap.width <= 382);
 assert.ok(phoneMap.top + phoneMap.height <= 692);
 const shifted = progress.defaultMapFrame({ width: 1200, height: 800 }, { left: 900, top: 520, right: 1000, bottom: 560 });
 assert.ok(shifted.top < 80);
+assert.strictEqual(progress.imageKeyFromUrl("https://finalfantasy-jun-site.com/ff7_remake/story/chapter01/01.png"), "jun-ch01-01.png");
+assert.strictEqual(progress.imageKeyFromUrl("https://finalfantasy-jun-site.com/ff7_remake/story/chapter03/q01.png"), "jun-ch03-q01.png");
+assert.strictEqual(progress.imageKeyFromUrl("https://finalfantasy-jun-site.com/ff7_remake/quest/images/15b.png"), "jun-quest-15b.png");
+assert.strictEqual(progress.imageKeyFromUrl("https://finalfantasy-jun-site.com/ff7_remake/field/images/chapter01.png"), "jun-field-chapter01.png");
+assert.strictEqual(progress.isLibraryKey("jun-ch01-01.png"), true);
+assert.strictEqual(progress.isLibraryKey("https://example.com/a.png"), false);
+assert.strictEqual(progress.hideMapAfterError(true, "blob:map", "blob:map"), false);
+assert.strictEqual(progress.hideMapAfterError(false, "blob:old", "blob:map"), false);
+assert.strictEqual(progress.hideMapAfterError(false, "blob:map", "blob:map"), true);
+assert.deepStrictEqual(progress.excludeLibraryExports([
+  { path: "data/route.js" },
+  { path: "image-library/jun-ch01-01.png" },
+  { path: "ff7r-maps.zip" },
+  { path: "maps/own.png" }
+]).map(file => file.path), ["data/route.js", "maps/own.png"]);
+const zip = require("./zip-store.js");
+const packed = zip.zipStore([{ name: "jun-ch01-01.png", bytes: new TextEncoder().encode("png-bytes") }]);
+const unpacked = zip.unzip(packed);
+assert.strictEqual(unpacked.length, 1);
+assert.strictEqual(unpacked[0].name, "jun-ch01-01.png");
+assert.strictEqual(new TextDecoder().decode(unpacked[0].bytes), "png-bytes");
+const routeSource = require("fs").readFileSync(require("path").join(__dirname, "data/route.js"), "utf8");
+const catalogSource = require("fs").readFileSync(require("path").join(__dirname, "data/catalogs.js"), "utf8");
+assert.ok(!/finalfantasy-jun-site\.com[^"']+\.png/.test(routeSource + catalogSource));
+assert.ok(routeSource.includes("jun-ch01-01.png"));
 const shoved = progress.clampMapFrame({ left: 5000, top: -40, width: 9000, height: 20 }, { width: 800, height: 600 });
 assert.ok(shoved.left >= 8);
 assert.ok(shoved.top >= 8);

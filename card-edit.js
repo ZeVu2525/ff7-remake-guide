@@ -257,11 +257,11 @@
     const repo = repoMaps().find(item => item.id === value || item.file === value);
     if (repo) return repo.file;
     if (/^maps\//.test(value)) return value;
-    if (/^chapter[0-9-]+$/.test(value)) return "https://finalfantasy-jun-site.com/ff7_remake/field/images/" + value + ".png";
-    return value;
+    if (/^chapter[0-9-]+$/.test(value)) return "jun-field-" + value + ".png";
+    return GuideProgress.imageKeyFromUrl(value) || value;
   }
 
-  function paintMapPreview() {
+  async function paintMapPreview() {
     const image = document.getElementById("map-preview");
     const warn = document.getElementById("map-size-warn");
     if (!image) return;
@@ -273,14 +273,17 @@
       return;
     }
     image.hidden = false;
-    image.alt = "地図のプレビュー";
-    image.src = mapPreviewSrc(value);
-    if (warn) {
-      if (/^data:/i.test(value) && value.length > 400 * 1024) {
-        warn.hidden = false;
-        warn.textContent = "この画像は約" + Math.round(value.length / 1024) + "KBです。ブラウザの保存容量を使います。";
-      } else warn.hidden = true;
+    const shown = mapPreviewSrc(value);
+    if (GuideProgress.isLibraryKey(shown) && globalThis.GuideImages) {
+      const url = await GuideImages.objectUrl(shown);
+      image.alt = url ? "地図のプレビュー" : "地図画像が未登録";
+      if (url) image.src = url;
+      else image.removeAttribute("src");
+    } else {
+      image.alt = "地図のプレビュー";
+      image.src = shown;
     }
+    if (warn) warn.hidden = true;
   }
 
   function mapFields(current) {
@@ -294,9 +297,9 @@
     return [
       field("掲載元の地図", `<select name="mapPreset">${options}</select>`),
       field("保存した地図", `<select name="mapRepo">${repoOptions}</select>`),
-      field("地図の画像", `<input name="mapUrl" value="${escapeAttr(custom)}" placeholder="https:// の画像URL。空なら上の地図">`),
+      field("地図の画像", `<input name="mapUrl" value="${escapeAttr(custom)}" placeholder="jun-ch01-01.png または maps/ のファイル">`),
       '<label class="map-file">画像ファイル<input id="map-file" name="mapFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp"></label>',
-      '<p id="map-file-note">新しい画像は、書き出しのときに maps/ 用のファイルとして保存します。同じ中身は同じファイルを使います。400KBを超えると警告し、1.2MBを超える画像は入れられません。</p>',
+      '<p id="map-file-note">選んだ画像は、このブラウザの画像ライブラリにファイル名で保存します。書き出しや GitHub には画像そのものは入りません。</p>',
       '<p id="map-size-warn" hidden></p>',
       '<img id="map-preview" alt="地図のプレビュー" hidden>',
       '<button type="button" id="map-clear">地図を外す</button>'
@@ -342,7 +345,7 @@
       error.textContent = "";
       paintMapPreview();
     });
-    if (file) file.addEventListener("change", () => {
+    if (file) file.addEventListener("change", async () => {
       const picked = file.files && file.files[0];
       if (!picked) return;
       if (!/^image\/(png|jpeg|gif|webp)$/.test(picked.type)) {
@@ -350,23 +353,14 @@
         file.value = "";
         return;
       }
-      if (picked.size > MAP_FILE_MAX) {
-        error.textContent = "画像が大きすぎます。1.2MBまでにしてください。";
-        file.value = "";
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = String(reader.result || "");
-        if (!url) return;
-        url.value = result;
-        if (preset) preset.value = "";
-        if (form.elements.mapRepo) form.elements.mapRepo.value = "";
-        error.textContent = "";
-        paintMapPreview();
-      };
-      reader.onerror = () => { error.textContent = "画像を読めませんでした。"; };
-      reader.readAsDataURL(picked);
+      if (!globalThis.GuideImages) return;
+      const key = GuideImages.safeName(picked.name);
+      await GuideImages.putFile(key, picked, picked.name);
+      if (url) url.value = key;
+      if (preset) preset.value = "";
+      if (form.elements.mapRepo) form.elements.mapRepo.value = "";
+      error.textContent = "";
+      paintMapPreview();
     });
     paintMapPreview();
   }
@@ -455,19 +449,22 @@
     const current = block.src || "";
     const repo = saved.find(item => item.file === current);
     const options = ['<option value="">保存済みの画像は使わない</option>'].concat(saved.map(item => `<option value="${escapeAttr(item.file)}"${repo && item.file === repo.file ? " selected" : ""}>${escapeText(item.label || item.file)}</option>`)).join("");
-    const warn = /^data:/i.test(current) && current.length > 400 * 1024 ? `<p class="map-warn">この画像は約${Math.round(current.length / 1024)}KBです。</p>` : "";
+    const libraryCurrent = GuideProgress.isLibraryKey(current) ? current : "";
+    const preview = libraryCurrent
+      ? `<img class="blk-preview" alt="画像が未登録" data-lib="${escapeAttr(libraryCurrent)}">`
+      : (current ? `<img class="blk-preview" alt="" src="${escapeAttr(current)}">` : "");
     return [
       `<div class="blk-file">`,
       `<select data-img-repo>${options}</select>`,
-      `<input data-img-url value="${escapeAttr(repo ? "" : current)}" placeholder="https:// またはファイル">`,
+      `<select data-img-lib data-current="${escapeAttr(libraryCurrent)}"><option value="">このブラウザの画像は使わない</option></select>`,
+      `<input data-img-url value="${escapeAttr(repo ? "" : current)}" placeholder="jun- のキー、maps/ または images/">`,
       `<input data-img-file type="file" accept="image/png,image/jpeg,image/gif,image/webp">`,
       tile ? `<input data-tile-label value="${escapeAttr(block.label || "")}" placeholder="ラベル">` : [
         `<input data-img-caption value="${escapeAttr(block.caption || "")}" placeholder="説明（空でもよい）">`,
         `<select data-img-width><option value="s"${block.width === "s" ? " selected" : ""}>小</option><option value="m"${!block.width || block.width === "m" ? " selected" : ""}>中</option><option value="l"${block.width === "l" ? " selected" : ""}>大</option><option value="full"${block.width === "full" ? " selected" : ""}>幅いっぱい</option></select>`,
         `<select data-img-align><option value="left"${block.align === "left" ? " selected" : ""}>左</option><option value="center"${!block.align || block.align === "center" ? " selected" : ""}>中央</option><option value="right"${block.align === "right" ? " selected" : ""}>右</option></select>`
       ].join(""),
-      current ? `<img class="blk-preview" alt="" src="${escapeAttr(current)}">` : "",
-      warn,
+      preview,
       `</div>`
     ].join("");
   }
@@ -502,6 +499,17 @@
     if (!host || !editing) return;
     host.innerHTML = (editing.blocks || []).map((block, index) => blockRow(block, String(index))).join("") + `<p class="blk-add">${addButtons("")}</p>`;
     syncBlocks();
+    fillLibrarySelects(host);
+    if (globalThis.GuideImages) GuideImages.hydrate(host);
+  }
+
+  async function fillLibrarySelects(root) {
+    if (!globalThis.GuideImages) return;
+    const rows = await GuideImages.list();
+    root.querySelectorAll("[data-img-lib]").forEach(select => {
+      const current = select.getAttribute("data-current") || "";
+      select.innerHTML = '<option value="">このブラウザの画像は使わない</option>' + rows.map(row => `<option value="${escapeAttr(row.id)}"${row.id === current ? " selected" : ""}>${escapeText(row.name)}</option>`).join("");
+    });
   }
 
   function makeBlock(type) {
@@ -709,7 +717,7 @@
       target.value = target.tagName === "SELECT" ? "" : target.value;
       return;
     }
-    if (target.hasAttribute("data-img-repo")) {
+    if (target.hasAttribute("data-img-repo") || target.hasAttribute("data-img-lib")) {
       const input = target.parentElement.querySelector("[data-img-url]");
       if (target.value && input) input.value = target.value;
       syncBlocks();
@@ -718,24 +726,18 @@
     }
     if (target.hasAttribute("data-img-file")) {
       const picked = target.files && target.files[0];
-      if (!picked) return;
+      if (!picked || !globalThis.GuideImages) return;
       if (!/^image\/(png|jpeg|gif|webp)$/.test(picked.type)) {
         error.textContent = "PNG、JPEG、GIF、WebPの画像にしてください。";
         return;
       }
-      if (picked.size > MAP_FILE_MAX) {
-        error.textContent = "画像が大きすぎます。1.2MBまでにしてください。";
-        return;
-      }
       const input = target.parentElement.querySelector("[data-img-url]");
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (input) input.value = String(reader.result || "");
+      GuideImages.putFile(GuideImages.safeName(picked.name), picked, picked.name).then(key => {
+        if (input) input.value = key;
         error.textContent = "";
         syncBlocks();
         paintBlocks();
-      };
-      reader.readAsDataURL(picked);
+      });
       return;
     }
     if (target.hasAttribute("data-col-count") || target.hasAttribute("data-col-arrow")) {
@@ -2533,6 +2535,8 @@
       "<li>編集データの控えは、差分だけのJSONです。「読み込む」でこのブラウザに戻せます。</li>",
       "<li>地図は maps/ の画像と data/maps.js です。掲載元の地図画像は入れません。</li>",
       "<li>カードの画像は images/ と data/images.js です。掲載元の画像は入れません。</li>",
+      "<li>設定の「画像ライブラリ」にある画像は、書き出しにも GitHub にも入りません。残るのは jun-ch01-01.png のようなファイル名だけです。</li>",
+      "<li>地図の zip は「画像をまとめて読み込む」で入れます。iPhone ではファイル App から zip を選ぶか、写真を複数選べます。</li>",
       "<li>定型文は data/templates.js です。宝箱① のような見出しの元です。設定タブでも直せます。</li>",
       "<li>設定はボタン名などのJSONです。「読み込む」でこのブラウザに戻せます。</li>",
       "<li>表示文の修正は、画面の文章を直接直した分です。</li>",
@@ -2564,7 +2568,7 @@
       if (!item.blob) continue;
       files.push({ path: item.file, base64: bytesToBase64(new Uint8Array(await item.blob.arrayBuffer())) });
     }
-    return files.map(file => ({ path: file.path, base64: file.base64 || GuideProgress.utf8ToBase64(file.text) }));
+    return GuideProgress.excludeLibraryExports(files.map(file => ({ path: file.path, base64: file.base64 || GuideProgress.utf8ToBase64(file.text) })));
   }
 
   function stamp() {

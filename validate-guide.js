@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v24") fail("キャッシュ名が ff7r-guide-v24 ではない");
+  if (GAME.cache !== "ff7r-guide-v25") fail("キャッシュ名が ff7r-guide-v25 ではない");
   const mapFiles = guide.MAP_FILES;
   if (!Array.isArray(mapFiles)) fail("data/maps.js の MAP_FILES が配列ではない");
   else mapFiles.forEach(entry => {
@@ -51,7 +51,7 @@ function validateGuide(guide) {
   for (const file of GAME.cacheFiles) {
     if (!sw.includes(file)) fail("sw.js の対象に " + file + " がない");
   }
-  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "data/templates.js", "data/settings.js", "data/images.js", "data/enemies.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
+  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "data/templates.js", "data/settings.js", "data/images.js", "data/enemies.js", "zip-store.js", "progress.js", "image-library.js", "app.js", "edit-mode.js", "card-edit.js"]) {
     if (!html.includes(file + "?v=" + GAME.cache)) fail("index.html の " + file + " に版のクエリがない");
   }
   if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw") || !app.includes("すべて表示") || !app.includes("data-map") || !app.includes("data-open-item") || !app.includes("data-item-section") || !app.includes("map-zoom") || !progress.includes('"kids": "中のカード"') || !app.includes("data-open-weapon") || !app.includes("kids-disclosure") || !app.includes("kids-chevron") || !app.includes("aria-controls") || !html.includes("prefers-reduced-motion") || !app.includes("進行データ（チェックの保存）") || !html.includes("progress-toast")) {
@@ -67,6 +67,13 @@ function validateGuide(guide) {
     fail("編集モードがゲーム設定と繋がっていない");
   }
   const cardEdit = fs.readFileSync(path.join(root, "card-edit.js"), "utf8");
+  const hotlink = /finalfantasy-jun-site\.com[^"']+\.png/;
+  if (hotlink.test(fs.readFileSync(path.join(root, "data/route.js"), "utf8") + fs.readFileSync(path.join(root, "data/catalogs.js"), "utf8") + app + cardEdit)) {
+    fail("地図が外部サイトの画像を読みに行く");
+  }
+  if (!progress.includes("excludeLibraryExports") || !cardEdit.includes("excludeLibraryExports") || !app.includes("画像ライブラリ")) {
+    fail("画像ライブラリが書き出しから外れていない");
+  }
   if (!cardEdit.includes("GAME.storage.cardEdits") || !cardEdit.includes("編集をすべて戻す") || !cardEdit.includes("書き出す")) {
     fail("カード編集がゲーム設定と繋がっていない");
   }
@@ -180,7 +187,7 @@ function validateGuide(guide) {
       const storySteps = [];
       for (const item of row.items || []) {
         if (item && item.trophy && !trophyIds.has(item.trophy)) fail(item.id + " の trophy が台帳にない: " + item.trophy);
-        if (item && item.map && !mapIds.has(item.map) && !/^https:\/\//i.test(item.map) && !/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(item.map) && !/^maps\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(item.map)) fail(item.id + " の地図が未定義: " + item.map);
+        if (item && item.map && !mapIds.has(item.map) && !/^https:\/\//i.test(item.map) && !/^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(item.map) && !/^maps\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(item.map) && !/^jun-[a-z0-9._-]+\.(?:png|jpe?g|gif|webp)$/i.test(item.map)) fail(item.id + " の地図が未定義: " + item.map);
         if (item && item.parent) {
           const parent = (row.items || []).find(other => other && other.id === item.parent);
           if (!parent) fail(item.id + " の親がない");
