@@ -349,7 +349,7 @@
     const links = item.items.map(link => {
       const found = catalogRecordById(link.id);
       const name = found ? found.name : link.id;
-      return `<button type="button" class="linkish" data-open-item="${esc(link.id)}">${esc(name)} ×${esc(String(link.qty || 1))}</button>`;
+      return `<button type="button" class="linkish${found ? "" : " is-missing-item"}" data-open-item="${esc(link.id)}">${esc(name)} ×${esc(String(link.qty || 1))}</button>`;
     }).join("");
     return `<p class="item-links">${links}</p>`;
   }
@@ -453,7 +453,7 @@
           ${sourceLine(item.source)}
           ${cardTools(item)}
         </div>
-        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}"><span>${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）</span><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard)).join("")}</div></div></div>` : ""}
+        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）"><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard)).join("")}</div></div></div>` : ""}
       </div>
     </article>`;
   }

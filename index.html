@@ -63,7 +63,7 @@ button,input,select{font:inherit}
 .skip-link{position:absolute;left:12px;top:-64px;z-index:300;padding:10px 14px;background:var(--accent2);color:#fff;font-weight:700;text-decoration:none}
 .skip-link:focus{top:0}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-header{background:var(--nav);color:#f7fbfe;border-bottom:1px solid var(--navline);padding:14px 16px 12px}
+header{position:relative;background:var(--nav);color:#f7fbfe;border-bottom:1px solid var(--navline);padding:14px 16px 12px}
 .hrow,.tabs,main,footer{max-width:var(--shell);margin-left:auto;margin-right:auto}
 .hrow{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px}
 h1{flex:1 1 220px;min-width:0;margin:0;font-size:clamp(18px,2.4vw,26px);line-height:1.25;font-weight:750;letter-spacing:-.02em}
@@ -74,6 +74,14 @@ h1 span{display:block;margin-top:2px;color:#a9bfd0;font-size:13px;font-weight:60
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:99px}
 .pct{flex:0 0 auto;font-variant-numeric:tabular-nums;font-size:14px;color:#c6d7e3;white-space:nowrap}
 .header-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+.edit-switch{position:absolute;top:14px;right:16px;z-index:5;display:inline-flex;align-items:center;gap:6px;color:#a9bfd0;font-size:12px;font-weight:700;cursor:pointer}
+.edit-switch input{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0)}
+.edit-switch i{position:relative;width:36px;height:22px;border-radius:99px;background:#3d5160}
+.edit-switch i::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s ease}
+.edit-switch input:checked + i{background:#1f9d55}
+.edit-switch input:checked + i::after{transform:translateX(14px)}
+.edit-switch input:focus-visible + i{outline:2px solid #fff;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.edit-switch i::after{transition:none}}
 .global-search{position:relative;flex:1 1 180px;min-width:0}
 .global-search input{width:100%;min-width:0;min-height:44px;padding:8px 64px 8px 12px;border:1px solid var(--navline);border-radius:8px;background:var(--nav2);color:#f7fbfe;font-size:16px}
 .global-search input::placeholder{color:#a9bfd0}
@@ -158,7 +166,7 @@ html[data-theme="dark"] .it.flag-tips,html[data-theme="accent"] .it.flag-tips{ba
 .pick-label{display:inline-flex;align-items:center;gap:4px;min-height:36px;font-weight:700}
 .ord{flex:0 0 auto;min-width:2.4em;margin-top:2px;color:var(--fg3);font-variant-numeric:tabular-nums;font-weight:800}
 .kids-wrap{margin-top:6px}
-.kids-disclosure{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:40px;margin:0;padding:6px 8px;border:0;border-radius:6px;background:transparent;color:var(--fg2);font:inherit;font-size:14px;font-weight:650;text-align:left;cursor:pointer}
+.kids-disclosure{display:inline-flex;align-items:center;justify-content:center;width:36px;min-height:36px;margin:0;padding:4px;border:0;border-radius:6px;background:transparent;color:var(--fg2);cursor:pointer}
 .kids-disclosure:hover,.kids-disclosure:focus-visible{background:color-mix(in srgb,var(--fg) 7%,transparent)}
 .kids-chevron{width:18px;height:18px;flex:none;transition:transform .18s ease}
 .kids-disclosure[aria-expanded="true"] .kids-chevron{transform:rotate(180deg)}
@@ -291,6 +299,7 @@ html[data-theme="dark"] .blk-callout,html[data-theme="accent"] .blk-callout{back
 .enemy-phase{margin:0 0 8px;padding:8px 10px;background:var(--bg3);border-left:4px solid #1677a8}
 @media(max-width:700px){.blk-cols,.blk-cols.c2,.blk-cols.c3,.blk-cols.has-arrow{grid-template-columns:1fr !important}}
 button.linkish{display:inline;padding:0;border:0;background:transparent;color:var(--accent);font:inherit;font-weight:700;cursor:pointer;overflow-wrap:anywhere}
+button.linkish.is-missing-item,.is-missing-item{color:var(--red)}
 .route-item-toggle{background:var(--bg3);color:var(--fg2)}
 .empty-chapter{margin:0;padding:14px;color:var(--fg3)}
 .it.is-target{outline:2px solid var(--accent);outline-offset:-2px}
@@ -347,6 +356,7 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
         <label class="global-search"><span class="sr-only">全体を検索</span><input id="guide-search" type="search" autocomplete="off" spellcheck="false" placeholder="全体を検索" enterkeyhint="search"><span id="guide-search-count" aria-live="polite"></span></label>
         <button type="button" id="open-howto" class="howto-open">使い方</button>
         <label class="theme-control">表示<select id="theme-select" aria-label="表示"></select></label>
+        <label class="edit-switch"><span>編集</span><input type="checkbox" id="edit-toggle" role="switch" aria-label="編集"><i aria-hidden="true"></i></label>
       </div>
     </div>
   </div>
@@ -370,7 +380,7 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
     <h3>保存</h3>
     <p>チェックはブラウザの中に残る。別の端末へ移すときは、設定タブの「進行を書き出す」で JSON を保存し、向こうで「進行を読み込む」。GitHub には送られない。</p>
     <h3>編集モード</h3>
-    <p>アドレスの末尾に <code>?edit=1</code> を付けるか、ページ下の「編集モード」を押す。表示されている文をクリックして直せる。直しは進行とは別の場所に残る。「編集モードを終了」で戻る。</p>
+    <p>右上の「編集」を押すか、アドレスの末尾に <code>?edit=1</code> を付ける。表示されている文をクリックして直せる。直しは進行とは別の場所に残る。「編集モードを終了」で戻る。</p>
     <h3>カード編集</h3>
     <p><code>?cards=1</code> か、ページ下の「カード編集」で、カードの追加、修正、削除、並べ替えができる。原稿はそのままで、このブラウザの差分だけが残る。左のつまみをドラッグすると、青い線の位置に動く。閉じた章や空の章の見出しへ落とすと、その章に入る。「上へ」「下へ」「移動」も使える。「ルートJSを書き出す」で <code>data/route.js</code> に貼れる形を保存できる。</p>
     <h3>iPhone</h3>
@@ -386,19 +396,18 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 </div>
 <footer>
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
-  <button type="button" id="edit-toggle" aria-pressed="false">編集：オフ</button>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v20"></script>
-<script src="data/route.js?v=ff7r-guide-v20"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v20"></script>
-<script src="data/maps.js?v=ff7r-guide-v20"></script>
-<script src="data/templates.js?v=ff7r-guide-v20"></script>
-<script src="data/settings.js?v=ff7r-guide-v20"></script>
-<script src="data/images.js?v=ff7r-guide-v20"></script>
-<script src="data/enemies.js?v=ff7r-guide-v20"></script>
-<script src="progress.js?v=ff7r-guide-v20"></script>
-<script src="app.js?v=ff7r-guide-v20"></script>
-<script src="edit-mode.js?v=ff7r-guide-v20"></script>
-<script src="card-edit.js?v=ff7r-guide-v20"></script>
+<script src="data/game.js?v=ff7r-guide-v21"></script>
+<script src="data/route.js?v=ff7r-guide-v21"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v21"></script>
+<script src="data/maps.js?v=ff7r-guide-v21"></script>
+<script src="data/templates.js?v=ff7r-guide-v21"></script>
+<script src="data/settings.js?v=ff7r-guide-v21"></script>
+<script src="data/images.js?v=ff7r-guide-v21"></script>
+<script src="data/enemies.js?v=ff7r-guide-v21"></script>
+<script src="progress.js?v=ff7r-guide-v21"></script>
+<script src="app.js?v=ff7r-guide-v21"></script>
+<script src="edit-mode.js?v=ff7r-guide-v21"></script>
+<script src="card-edit.js?v=ff7r-guide-v21"></script>
 </body>
 </html>

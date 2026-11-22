@@ -132,9 +132,10 @@
   function paintToggle() {
     const button = document.getElementById("edit-toggle");
     const on = document.body.classList.contains("is-card-edit");
-    if (!button) return;
-    button.setAttribute("aria-pressed", on ? "true" : "false");
-    button.textContent = on ? "編集：オン" : "編集：オフ";
+    if (button) {
+      button.checked = on;
+      button.setAttribute("aria-checked", on ? "true" : "false");
+    }
     const labels = globalThis.GuideProgress && GuideProgress.labelText;
     if (!labels) return;
     const current = book();
@@ -180,7 +181,10 @@
 
   function setOn(on) {
     if (!on && !dialog.hidden && formDirty()) {
-      if (!window.confirm("保存していない変更があります。破棄して閉じますか。")) return;
+      if (!window.confirm("保存していない変更があります。破棄して閉じますか。")) {
+        paintToggle();
+        return;
+      }
     }
     document.body.classList.toggle("is-card-edit", !!on);
     if (globalThis.GuideText && GuideText.setOn) GuideText.setOn(!!on);
@@ -843,6 +847,10 @@
     }
     host.hidden = false;
     const choices = GuideApp.itemChoices();
+    if (!choices.length) {
+      host.innerHTML = "<p class=\"is-missing-item\">台帳を読み込めないので、アイテムを探せません。</p>";
+      return;
+    }
     const hubs = [];
     choices.forEach(item => {
       if (!hubs.some(hub => hub.id === item.hubId)) hubs.push({ id: item.hubId, label: item.hubLabel });
@@ -851,7 +859,7 @@
     if (!hubs.some(hub => hub.id === pickerState.hub) && hubs[0]) pickerState.hub = hubs[0].id;
     const selected = (editing.links || []).map(link => {
       const found = choices.find(item => item.id === link.id);
-      return `<li><span>${escapeText((found ? found.name : link.id) + " ×" + link.qty)}</span> <button type="button" data-link-remove="${escapeAttr(link.id)}">外す</button></li>`;
+      return `<li><span class="${found ? "" : "is-missing-item"}">${escapeText((found ? found.name : link.id) + " ×" + link.qty)}</span> <button type="button" data-link-remove="${escapeAttr(link.id)}">外す</button></li>`;
     }).join("");
     host.innerHTML = [
       "<p>先にアイテムを選び、そのあと個数を決めて追加します。</p>",
@@ -2130,19 +2138,13 @@
 
   document.getElementById("card-edit-exit").addEventListener("click", () => setOn(false));
   function mergedCatalogs() {
-    const catalogs = {};
-    for (const hub of GAME.hubs) {
-      if (hub.kind !== "catalog") continue;
-      const base = CATALOGS[hub.catalog] || {};
-      catalogs[hub.catalog] = Object.assign({}, base, {
-        items: GuideProgress.mergeCatalog(base, book(), hub.catalog).map(item => {
-          const copy = Object.assign({}, item);
-          delete copy.custom;
-          return copy;
-        })
-      });
-    }
-    return catalogs;
+    return GuideProgress.exportCatalogs(globalThis.CATALOGS, book());
+  }
+
+  function rejectPartialCatalogs(route, catalogs) {
+    const errors = GuideProgress.validateExportBundle(route, catalogs, globalThis.CATALOGS);
+    if (!errors.length) return;
+    throw new Error("書き出せません。台帳が欠けています。\n" + errors.slice(0, 8).join("\n"));
   }
 
   function collectDataUrls(route, catalogs) {
@@ -2246,6 +2248,7 @@
 
   async function exportChosen(flags) {
     const prepared = await prepareMaps(GuideProgress.mergedRoute(ROUTE, GAME.chapters, book()), mergedCatalogs());
+    if (flags.catalog) rejectPartialCatalogs(prepared.route, prepared.catalogs);
     const images = await prepareImages(prepared.route);
     prepared.route = images.route;
     if (flags.route) download("data-route.js", GuideProgress.routeModuleSource(prepared.route), "text/javascript");
@@ -2525,7 +2528,7 @@
         templates: data.get("exp-templates") === "on",
         settings: data.get("exp-settings") === "on",
         text: data.get("exp-text") === "on"
-      }).catch(() => window.alert("書き出しに失敗しました。"));
+      }).catch(error => window.alert(error && error.message ? error.message : "書き出しに失敗しました。"));
     });
   });
   document.getElementById("card-edit-info").addEventListener("click", () => {
@@ -2554,6 +2557,7 @@
     const prepared = await prepareMaps(GuideProgress.mergedRoute(ROUTE, GAME.chapters, book()), mergedCatalogs());
     const images = await prepareImages(prepared.route);
     prepared.route = images.route;
+    rejectPartialCatalogs(prepared.route, prepared.catalogs);
     const templates = GuideProgress.activeTemplates(book(), globalThis.TEMPLATES);
     const files = [
       { path: "data/route.js", text: GuideProgress.routeModuleSource(prepared.route) },
@@ -2650,7 +2654,7 @@
   });
 
   const footerToggle = document.getElementById("edit-toggle");
-  if (footerToggle) footerToggle.addEventListener("click", () => setOn(!document.body.classList.contains("is-card-edit")));
+  if (footerToggle) footerToggle.addEventListener("change", () => setOn(footerToggle.checked));
   let start = false;
   try { start = localStorage.getItem(MODE_KEY) === "1" || localStorage.getItem(GAME.storage.textEditMode) === "1"; } catch (e) {}
   try {
