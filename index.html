@@ -81,6 +81,11 @@ h1 span{display:block;margin-top:2px;color:#a9bfd0;font-size:13px;font-weight:60
 .edit-switch input:checked + i{background:#1f9d55}
 .edit-switch input:checked + i::after{transform:translateX(12px)}
 .edit-switch input:focus-visible + i{outline:2px solid #fff;outline-offset:2px}
+.edit-hist{flex:0 0 auto;min-width:32px;min-height:28px;margin-left:2px;padding:0 6px;border:1px solid #8fb6cc;border-radius:8px;background:transparent;color:#d5e6f2;font:700 16px/1 inherit;cursor:pointer}
+.edit-hist[hidden]{display:none}
+.edit-hist:disabled{opacity:.35;cursor:default}
+.edit-toast{position:fixed;z-index:360;left:50%;bottom:84px;transform:translateX(-50%);max-width:min(420px,calc(100% - 24px));padding:10px 14px;border-radius:999px;background:#10202c;color:#fff;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.28)}
+.edit-toast[hidden]{display:none}
 @media (prefers-reduced-motion:reduce){.edit-switch i::after{transition:none}}
 .global-search{position:relative;flex:1 1 180px;min-width:0}
 .global-search input{width:100%;min-width:0;min-height:44px;padding:8px 64px 8px 12px;border:1px solid var(--navline);border-radius:8px;background:var(--nav2);color:#f7fbfe;font-size:16px}
@@ -405,6 +410,8 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <div class="tabs-shell">
   <nav class="tabs" id="tabs" role="tablist" aria-label="ガイドの画面"></nav>
   <label class="edit-switch"><span>編集</span><input type="checkbox" id="edit-toggle" role="switch" aria-label="編集"><i aria-hidden="true"></i></label>
+  <button type="button" id="edit-undo" class="edit-hist" aria-label="元に戻す" hidden disabled>↶</button>
+  <button type="button" id="edit-redo" class="edit-hist" aria-label="やり直す" hidden disabled>↷</button>
 </div>
 <button class="dash ok" id="dash" type="button">読み込み中</button>
 <div id="howto" class="howto" hidden>
@@ -438,19 +445,19 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <footer>
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v27"></script>
-<script src="data/route.js?v=ff7r-guide-v27"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v27"></script>
-<script src="data/maps.js?v=ff7r-guide-v27"></script>
-<script src="data/templates.js?v=ff7r-guide-v27"></script>
-<script src="data/settings.js?v=ff7r-guide-v27"></script>
-<script src="data/images.js?v=ff7r-guide-v27"></script>
-<script src="data/enemies.js?v=ff7r-guide-v27"></script>
-<script src="zip-store.js?v=ff7r-guide-v27"></script>
-<script src="progress.js?v=ff7r-guide-v27"></script>
-<script src="image-library.js?v=ff7r-guide-v27"></script>
-<script src="app.js?v=ff7r-guide-v27"></script>
-<script src="edit-mode.js?v=ff7r-guide-v27"></script>
-<script src="card-edit.js?v=ff7r-guide-v27"></script>
+<script src="data/game.js?v=ff7r-guide-v28"></script>
+<script src="data/route.js?v=ff7r-guide-v28"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v28"></script>
+<script src="data/maps.js?v=ff7r-guide-v28"></script>
+<script src="data/templates.js?v=ff7r-guide-v28"></script>
+<script src="data/settings.js?v=ff7r-guide-v28"></script>
+<script src="data/images.js?v=ff7r-guide-v28"></script>
+<script src="data/enemies.js?v=ff7r-guide-v28"></script>
+<script src="zip-store.js?v=ff7r-guide-v28"></script>
+<script src="progress.js?v=ff7r-guide-v28"></script>
+<script src="image-library.js?v=ff7r-guide-v28"></script>
+<script src="app.js?v=ff7r-guide-v28"></script>
+<script src="edit-mode.js?v=ff7r-guide-v28"></script>
+<script src="card-edit.js?v=ff7r-guide-v28"></script>
 </body>
 </html>
