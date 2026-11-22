@@ -13,9 +13,9 @@
     "#card-edit-bar #card-edit-exit{flex:1 1 100%;min-height:44px;background:#f6e7c1;color:#10202c;border-color:#f6e7c1;font-weight:700}",
     "body.is-card-edit{padding-bottom:128px}",
     ".card-edit-tools,.card-edit-chapter{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}",
-    ".card-edit-tools button,.card-edit-chapter button{min-height:40px;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:var(--fg);font:inherit;cursor:pointer}",
+    ".card-edit-tools button,.card-edit-chapter button,.subch-tools button{min-height:32px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:var(--fg);font-size:13px;line-height:1.3;cursor:pointer}",
     ".card-edit-tools button[data-card-delete]{color:var(--red)}",
-    ".card-drag-handle{flex:0 0 auto;touch-action:none;cursor:grab;width:44px;height:44px;padding:0;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:var(--fg);font:700 18px/1 sans-serif}",
+    ".card-drag-handle{flex:0 0 auto;touch-action:none;cursor:grab;width:32px;height:32px;padding:0;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:var(--fg);font-size:14px;font-weight:700;line-height:1}",
     ".card-drag-handle:active,body.is-card-dragging .card-drag-handle{cursor:grabbing}",
     "body.is-card-dragging{user-select:none;cursor:grabbing}",
     "article.it.is-dragging{opacity:.4}",
@@ -54,12 +54,16 @@
     "#block-editor{display:grid;gap:8px}",
     ".blk-row{padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2)}",
     ".blk-tools{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
-    ".blk-tools button,.blk-add button,.rt-bar button{min-height:32px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:inherit;font:inherit;cursor:pointer}",
+    ".blk-tools button,.blk-add button,.rt-bar button{min-height:28px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:inherit;font-size:12px;line-height:1.3;cursor:pointer}",
     ".rt-bar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
     ".rt-bar [data-rt=color]{width:22px;min-height:22px;padding:0}",
     ".rt-edit{min-height:72px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);white-space:pre-wrap}",
     ".blk-file input{max-width:100%}",
     ".blk-preview{max-width:180px;max-height:120px;margin-top:6px;background:#fff}",
+    "#tag-pop{position:fixed;z-index:280;display:grid;gap:4px;min-width:180px;max-width:min(280px,80vw);padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);box-shadow:0 8px 24px rgba(0,0,0,.25)}",
+    "#tag-pop label{display:flex;gap:8px;align-items:center;min-height:36px;margin:0;font-weight:700}",
+    "body.is-card-edit .tag-spot{cursor:pointer}",
+    "@media(pointer:coarse){.card-edit-tools button,.card-edit-chapter button,.subch-tools button,.blk-tools button,.rt-bar button{min-height:40px;padding:4px 10px}.card-drag-handle{width:40px;height:40px}}",
     "@media(max-width:640px){#card-edit-bar button{flex:1 1 calc(50% - 6px)}#card-edit-exit{flex-basis:100%}}"
   ].join("");
   document.head.appendChild(style);
@@ -1076,6 +1080,18 @@
   dialog.addEventListener("click", event => {
     if (event.target === dialog) event.stopPropagation();
   });
+  document.addEventListener("click", event => {
+    const pop = document.getElementById("tag-pop");
+    if (!pop || event.target.closest("#tag-pop, [data-tag-spot]")) return;
+    pop.remove();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    const pop = document.getElementById("tag-pop");
+    if (!pop || dialog.hidden === false) return;
+    pop.remove();
+    event.preventDefault();
+  }, true);
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape" || dialog.hidden) return;
     event.preventDefault();
@@ -1084,6 +1100,8 @@
 
   document.addEventListener("click", event => {
     if (!document.body.classList.contains("is-card-edit")) return;
+    const tagSpot = event.target.closest("[data-tag-spot]");
+    if (tagSpot) { openTagPop(tagSpot.getAttribute("data-tag-spot"), tagSpot); event.preventDefault(); return; }
     const copy = event.target.closest("[data-card-copy]");
     if (copy) { duplicateCard(copy.getAttribute("data-card-copy")); return; }
     const sectionEdit = event.target.closest("[data-section-edit]");
@@ -1094,6 +1112,13 @@
     if (sectionDown) { moveSection(sectionDown.getAttribute("data-section-down"), 1); return; }
     const sectionDelete = event.target.closest("[data-section-delete]");
     if (sectionDelete) { removeSection(sectionDelete.getAttribute("data-section-delete")); return; }
+    const sectionInsert = event.target.closest("[data-section-insert]");
+    if (sectionInsert) {
+      const sectionId = sectionInsert.getAttribute("data-section-insert");
+      const place = sectionPlace(sectionId);
+      if (place) addSection(place.trackId, place.chapterId, sectionId);
+      return;
+    }
     const sectionAdd = event.target.closest("[data-section-add]");
     if (sectionAdd) { addSection(sectionAdd.getAttribute("data-card-track"), sectionAdd.getAttribute("data-section-add")); return; }
     const moveHere = event.target.closest("[data-move-here]");
@@ -1304,15 +1329,58 @@
     GuideApp.setCardBook(next);
   }
 
-  function addSection(trackId, chapterId) {
+  function openTagPop(id, anchor) {
+    const old = document.getElementById("tag-pop");
+    if (old) old.remove();
+    const place = locate(id);
+    const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
+    if (!item || !anchor) return;
+    const selected = new Set(GuideProgress.cardFlags(item));
+    const pop = document.createElement("div");
+    pop.id = "tag-pop";
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", "タグ");
+    pop.innerHTML = GAME.flags.map(flag => `<label><input type="checkbox" data-tag-flip="${flag.id}"${selected.has(flag.id) ? " checked" : ""}>${escapeText(flag.label)}</label>`).join("");
+    document.body.appendChild(pop);
+    const rect = anchor.getBoundingClientRect();
+    const width = Math.min(240, window.innerWidth - 16);
+    pop.style.width = width + "px";
+    pop.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) + "px";
+    pop.style.top = Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 220)) + "px";
+    pop.addEventListener("change", event => {
+      const box = event.target.closest && event.target.closest("[data-tag-flip]");
+      if (!box) return;
+      const flags = [...pop.querySelectorAll("[data-tag-flip]")].filter(input => input.checked).map(input => input.getAttribute("data-tag-flip"));
+      if (!flags.length) {
+        box.checked = true;
+        return;
+      }
+      saveCardFlags(id, flags);
+    });
+  }
+
+  function saveCardFlags(id, flags) {
+    const place = locate(id);
+    const item = place && routeRecord(place.trackId, place.chapterId, id);
+    if (!item) return;
+    const fields = cardFields(item, item.parent || "");
+    fields.flags = flags;
+    fields.flag = flags[0];
+    const base = GuideApp.findBaseRoute(id);
+    GuideApp.setCardBook(GuideProgress.upsertRouteCard(
+      book(), base && base.item, id, fields, place.trackId, place.chapterId,
+      GuideApp.currentIds(place.trackId, place.chapterId),
+      GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id)
+    ));
+  }
+
+  function addSection(trackId, chapterId, afterId) {
     const sections = chapterSections(trackId, chapterId);
     const id = chapterId + "-sec-" + Date.now().toString(36);
-    sections.push({
-      id: id,
-      title: "",
-      map: "",
-      note: ""
-    });
+    const section = { id: id, title: "", map: "", note: "" };
+    const at = afterId ? sections.findIndex(item => item.id === afterId) : -1;
+    if (at >= 0) sections.splice(at + 1, 0, section);
+    else sections.push(section);
     storeSections(trackId, chapterId, sections);
     const node = document.querySelector('[data-section="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
     if (node) {
