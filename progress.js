@@ -880,6 +880,46 @@
     return { left: left, top: top, width: width, height: height };
   }
 
+  function fitMapPanel(request, viewport) {
+    const ratio = Number(request && request.ratio) > 0 ? Number(request.ratio) : 1;
+    const padX = Number(request && request.padX) >= 0 ? Number(request.padX) : 16;
+    const chrome = Number(request && request.chrome) >= 0 ? Number(request.chrome) : 48;
+    const viewW = Math.max(0, Number(viewport && viewport.width) || 0);
+    const viewH = Math.max(0, Number(viewport && viewport.height) || 0);
+    const minImage = 96;
+    const maxImageW = Math.max(minImage, viewW - 16 - padX);
+    const maxImageH = Math.max(minImage / ratio, viewH - 16 - chrome);
+    let imageWidth = Number(request && request.imageWidth) || Math.min(320, maxImageW);
+    let imageHeight = imageWidth / ratio;
+    if (imageWidth > maxImageW) {
+      imageWidth = maxImageW;
+      imageHeight = imageWidth / ratio;
+    }
+    if (imageHeight > maxImageH) {
+      imageHeight = maxImageH;
+      imageWidth = imageHeight * ratio;
+    }
+    if (imageWidth < minImage && minImage <= maxImageW && minImage / ratio <= maxImageH) {
+      imageWidth = minImage;
+      imageHeight = imageWidth / ratio;
+    }
+    const width = Math.round(imageWidth + padX);
+    const height = Math.round(imageHeight + chrome);
+    let left = request && request.anchorRight != null ? Number(request.anchorRight) - width : Number(request && request.left);
+    let top = request && request.anchorBottom != null ? Number(request.anchorBottom) - height : Number(request && request.top);
+    if (!Number.isFinite(left)) left = 8;
+    if (!Number.isFinite(top)) top = 8;
+    left = Math.min(Math.max(8, left), Math.max(8, viewW - width - 8));
+    top = Math.min(Math.max(8, top), Math.max(8, viewH - height - 8));
+    return {
+      left: Math.round(left),
+      top: Math.round(top),
+      width: width,
+      height: height,
+      imageWidth: Math.round(width - padX)
+    };
+  }
+
   function defaultMapFrame(viewport, anchor) {
     const box = viewport || { width: 0, height: 0 };
     const mobile = (Number(box.width) || 0) < 720;
@@ -1962,6 +2002,7 @@
     libraryExportPlan,
     replaceLibraryKey,
     clampMapFrame,
+    fitMapPanel,
     defaultMapFrame,
     numberChapter,
     circledNumber,

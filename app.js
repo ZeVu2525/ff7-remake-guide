@@ -2641,29 +2641,86 @@
   const mapPop = document.createElement("div");
   mapPop.id = "map-pop";
   mapPop.hidden = true;
-  mapPop.innerHTML = '<div class="map-pop-bar" id="map-pop-handle"><span id="map-pop-title">地図</span><button type="button" id="map-pop-close" aria-label="閉じる">×</button></div><div class="map-pop-body"><img alt="" decoding="async"><p class="map-missing" hidden>地図画像が未登録 <button type="button" id="map-missing-add">この地図を追加</button></p><p class="map-fallback" hidden>画像を表示できないので、ファイルを選び直してください。</p><p class="map-actions"><button type="button" id="map-enlarge">拡大</button> <a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p></div><button type="button" class="map-pop-resize" aria-label="大きさを変える"></button><input id="map-missing-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>';
+  mapPop.innerHTML = '<div class="map-pop-bar" id="map-pop-handle"><span id="map-pop-title">地図</span><button type="button" id="map-pop-close" aria-label="閉じる">×</button></div><div class="map-pop-body"><div class="map-pop-stage"><img alt="" decoding="async"><p class="map-missing" hidden>地図画像が未登録 <button type="button" id="map-missing-add">この地図を追加</button></p><p class="map-fallback" hidden>画像を表示できないので、ファイルを選び直してください。</p></div><p class="map-actions"><button type="button" id="map-enlarge">拡大</button> <a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p></div><button type="button" class="map-pop-resize" data-resize="n" aria-label="上の辺"></button><button type="button" class="map-pop-resize" data-resize="e" aria-label="右の辺"></button><button type="button" class="map-pop-resize" data-resize="s" aria-label="下の辺"></button><button type="button" class="map-pop-resize" data-resize="w" aria-label="左の辺"></button><button type="button" class="map-pop-resize" data-resize="nw" aria-label="左上"></button><button type="button" class="map-pop-resize" data-resize="ne" aria-label="右上"></button><button type="button" class="map-pop-resize" data-resize="sw" aria-label="左下"></button><button type="button" class="map-pop-resize" data-resize="se" aria-label="右下"></button><input id="map-missing-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>';
   document.body.appendChild(mapPop);
   function mapViewport() {
     return { width: window.innerWidth, height: window.innerHeight };
   }
-  function readMapFrame(anchor) {
+  function readMapMemory() {
     try {
       const parsed = JSON.parse(localStorage.getItem(MAP_PANEL_KEY) || "null");
-      if (parsed && typeof parsed.left === "number") return GuideProgress.clampMapFrame(parsed, mapViewport());
+      if (parsed && typeof parsed.left === "number") return parsed;
     } catch (error) {}
+    return null;
+  }
+  function readMapFrame(anchor) {
+    const saved = readMapMemory();
+    if (saved) return GuideProgress.clampMapFrame(saved, mapViewport());
     return GuideProgress.defaultMapFrame(mapViewport(), anchor);
   }
   function writeMapFrame(frame) {
-    try { localStorage.setItem(MAP_PANEL_KEY, JSON.stringify(frame)); } catch (error) {}
+    try {
+      const saved = readMapMemory() || {};
+      localStorage.setItem(MAP_PANEL_KEY, JSON.stringify({
+        left: frame.left,
+        top: frame.top,
+        width: frame.width,
+        height: frame.height,
+        imageWidth: frame.imageWidth || saved.imageWidth
+      }));
+    } catch (error) {}
+  }
+  function mapPadX() {
+    const body = mapPop.querySelector(".map-pop-body");
+    const bodyStyle = body ? getComputedStyle(body) : null;
+    const popStyle = getComputedStyle(mapPop);
+    const pad = bodyStyle ? (parseFloat(bodyStyle.paddingLeft) || 0) + (parseFloat(bodyStyle.paddingRight) || 0) : 16;
+    return pad + (parseFloat(popStyle.borderLeftWidth) || 0) + (parseFloat(popStyle.borderRightWidth) || 0);
+  }
+  function mapChrome() {
+    const bar = mapPop.querySelector(".map-pop-bar");
+    const actions = mapPop.querySelector(".map-actions");
+    const body = mapPop.querySelector(".map-pop-body");
+    const style = body ? getComputedStyle(body) : null;
+    const popStyle = getComputedStyle(mapPop);
+    const pad = style ? (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0) : 16;
+    const border = (parseFloat(popStyle.borderTopWidth) || 0) + (parseFloat(popStyle.borderBottomWidth) || 0);
+    return (bar ? bar.offsetHeight : 40) + (actions ? actions.offsetHeight : 0) + pad + border;
   }
   function placeMapFrame(frame) {
-    const next = GuideProgress.clampMapFrame(frame, mapViewport());
+    const next = frame.imageWidth ? frame : GuideProgress.clampMapFrame(frame, mapViewport());
     mapPop.style.left = next.left + "px";
     mapPop.style.top = next.top + "px";
     mapPop.style.width = next.width + "px";
     mapPop.style.height = next.height + "px";
+    const stage = mapPop.querySelector(".map-pop-stage");
+    if (stage && next.imageWidth && next.height) {
+      stage.style.height = Math.max(1, next.height - mapChrome()) + "px";
+    }
     return next;
   }
+  function rememberedImageWidth() {
+    const saved = readMapMemory();
+    if (saved && saved.imageWidth > 0) return saved.imageWidth;
+    if (saved && saved.width > 0) return Math.max(96, saved.width - mapPadX());
+    return 0;
+  }
+  function refitMapToImage() {
+    const image = mapPop.querySelector("img");
+    if (!image || !image.naturalWidth || !image.naturalHeight || mapPop.hidden) return;
+    const rect = mapPop.getBoundingClientRect();
+    const fitted = GuideProgress.fitMapPanel({
+      left: rect.left,
+      top: rect.top,
+      imageWidth: rememberedImageWidth() || Math.max(96, rect.width - mapPadX()),
+      ratio: image.naturalWidth / image.naturalHeight,
+      chrome: mapChrome(),
+      padX: mapPadX()
+    }, mapViewport());
+    placeMapFrame(fitted);
+    writeMapFrame(fitted);
+  }
+  mapPop.querySelector("img").addEventListener("load", () => refitMapToImage());
   mapPop.querySelector("img").addEventListener("error", () => {
     const image = mapPop.querySelector("img");
     const failed = image.currentSrc || image.src;
@@ -2698,14 +2755,16 @@
         }
         return;
       }
-      image.hidden = false;
-      image.src = url;
-      image.dataset.shown = url;
-      return;
-    }
+    image.hidden = false;
+    image.src = url;
+    image.dataset.shown = url;
+    if (image.complete) refitMapToImage();
+    return;
+  }
     if (!src) return;
     image.hidden = false;
     image.src = src;
+    if (image.complete) refitMapToImage();
   }
 
   function toggleMap(button, fromHover) {
@@ -2748,6 +2807,7 @@
       const anchor = (card || button).getBoundingClientRect();
       placeMapFrame(readMapFrame({ left: anchor.left, top: anchor.top, right: anchor.right, bottom: anchor.bottom }));
     }
+    refitMapToImage();
   }
 
   const mapZoom = document.createElement("div");
@@ -2810,7 +2870,6 @@
     hideMap(true);
   });
   const mapHandle = mapPop.querySelector("#map-pop-handle");
-  const mapResize = mapPop.querySelector(".map-pop-resize");
   let mapDrag = null;
   mapHandle.addEventListener("pointerdown", event => {
     if (event.target.closest("button, a")) return;
@@ -2818,46 +2877,102 @@
     const rect = mapPop.getBoundingClientRect();
     mapDrag = { id: event.pointerId, kind: "move", dx: event.clientX - rect.left, dy: event.clientY - rect.top };
   });
-  mapResize.addEventListener("pointerdown", event => {
-    event.stopPropagation();
-    try { mapResize.setPointerCapture(event.pointerId); } catch (error) {}
-    const rect = mapPop.getBoundingClientRect();
-    mapDrag = { id: event.pointerId, kind: "resize", left: rect.left, top: rect.top, x: event.clientX, y: event.clientY, width: rect.width, height: rect.height };
+  mapPop.querySelectorAll("[data-resize]").forEach(handle => {
+    handle.addEventListener("pointerdown", event => {
+      if (!mapPinned) return;
+      event.stopPropagation();
+      event.preventDefault();
+      try { handle.setPointerCapture(event.pointerId); } catch (error) {}
+      const rect = mapPop.getBoundingClientRect();
+      const image = mapPop.querySelector("img");
+      const ratio = image && image.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 1;
+      mapDrag = {
+        id: event.pointerId,
+        kind: "resize",
+        edge: handle.getAttribute("data-resize"),
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        x: event.clientX,
+        y: event.clientY,
+        imageWidth: Math.max(96, rect.width - mapPadX()),
+        ratio: ratio,
+        chrome: mapChrome()
+      };
+    });
   });
+  function resizedImageWidth(drag, event) {
+    const edge = drag.edge || "se";
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    const signedDx = edge.indexOf("w") >= 0 ? -dx : dx;
+    const signedDy = edge.indexOf("n") >= 0 ? -dy : dy;
+    const widthDrag = edge.indexOf("e") >= 0 || edge.indexOf("w") >= 0;
+    const heightDrag = edge.indexOf("n") >= 0 || edge.indexOf("s") >= 0;
+    if (widthDrag && heightDrag) {
+      if (Math.abs(signedDx) >= Math.abs(signedDy)) return drag.imageWidth + signedDx;
+      return (drag.imageWidth / drag.ratio + signedDy) * drag.ratio;
+    }
+    if (widthDrag) return drag.imageWidth + signedDx;
+    return (drag.imageWidth / drag.ratio + signedDy) * drag.ratio;
+  }
   function moveMapPanel(event) {
     if (!mapDrag || mapDrag.id !== event.pointerId) return;
     if (mapDrag.kind === "resize") {
-      placeMapFrame({
-        left: mapDrag.left,
-        top: mapDrag.top,
-        width: mapDrag.width + (event.clientX - mapDrag.x),
-        height: mapDrag.height + (event.clientY - mapDrag.y)
-      });
+      const edge = mapDrag.edge || "se";
+      const fitted = GuideProgress.fitMapPanel({
+        left: edge.indexOf("w") >= 0 ? undefined : mapDrag.left,
+        top: edge.indexOf("n") >= 0 ? undefined : mapDrag.top,
+        anchorRight: edge.indexOf("w") >= 0 ? mapDrag.right : undefined,
+        anchorBottom: edge.indexOf("n") >= 0 ? mapDrag.bottom : undefined,
+        imageWidth: resizedImageWidth(mapDrag, event),
+        ratio: mapDrag.ratio,
+        chrome: mapDrag.chrome,
+        padX: mapPadX()
+      }, mapViewport());
+      placeMapFrame(fitted);
       return;
     }
-    placeMapFrame({
-      left: event.clientX - mapDrag.dx,
-      top: event.clientY - mapDrag.dy,
-      width: mapPop.offsetWidth,
-      height: mapPop.offsetHeight
-    });
+    const view = mapViewport();
+    const width = mapPop.offsetWidth;
+    const height = mapPop.offsetHeight;
+    const left = Math.min(Math.max(8, event.clientX - mapDrag.dx), Math.max(8, view.width - width - 8));
+    const top = Math.min(Math.max(8, event.clientY - mapDrag.dy), Math.max(8, view.height - height - 8));
+    mapPop.style.left = left + "px";
+    mapPop.style.top = top + "px";
   }
   function endMapPanel(event) {
     if (!mapDrag || mapDrag.id !== event.pointerId) return;
     mapDrag = null;
     const rect = mapPop.getBoundingClientRect();
-    writeMapFrame(placeMapFrame({ left: rect.left, top: rect.top, width: rect.width, height: rect.height }));
+    const image = mapPop.querySelector("img");
+    const ratio = image && image.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 0;
+    if (ratio) {
+      const fitted = GuideProgress.fitMapPanel({
+        left: rect.left,
+        top: rect.top,
+        imageWidth: Math.max(96, rect.width - mapPadX()),
+        ratio: ratio,
+        chrome: mapChrome(),
+        padX: mapPadX()
+      }, mapViewport());
+      writeMapFrame(placeMapFrame(fitted));
+      return;
+    }
+    writeMapFrame({ left: rect.left, top: rect.top, width: rect.width, height: rect.height, imageWidth: rememberedImageWidth() });
   }
   mapHandle.addEventListener("pointermove", moveMapPanel);
   mapHandle.addEventListener("pointerup", endMapPanel);
   mapHandle.addEventListener("pointercancel", endMapPanel);
-  mapResize.addEventListener("pointermove", moveMapPanel);
-  mapResize.addEventListener("pointerup", endMapPanel);
-  mapResize.addEventListener("pointercancel", endMapPanel);
+  mapPop.querySelectorAll("[data-resize]").forEach(handle => {
+    handle.addEventListener("pointermove", moveMapPanel);
+    handle.addEventListener("pointerup", endMapPanel);
+    handle.addEventListener("pointercancel", endMapPanel);
+  });
   window.addEventListener("resize", () => {
     if (mapPop.hidden) return;
-    const rect = mapPop.getBoundingClientRect();
-    writeMapFrame(placeMapFrame({ left: rect.left, top: rect.top, width: rect.width, height: rect.height }));
+    refitMapToImage();
   });
   const stage = mapZoom.querySelector("#map-zoom-stage");
   stage.addEventListener("wheel", event => {

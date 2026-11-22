@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v30");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v31");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -248,6 +248,16 @@ const catalogSource = require("fs").readFileSync(require("path").join(__dirname,
 assert.ok(!/finalfantasy-jun-site\.com[^"']+\.png/.test(routeSource + catalogSource));
 assert.ok(routeSource.includes("maps/jun-ch01-01.png"));
 assert.ok(routeSource.includes("images/jun-ch01-buppanasu.png"));
+const fitted = progress.fitMapPanel({ left: 20, top: 30, imageWidth: 200, ratio: 2, chrome: 80, padX: 16 }, { width: 1200, height: 800 });
+assert.strictEqual(fitted.width, 216);
+assert.strictEqual(fitted.height, 180);
+assert.strictEqual(fitted.left, 20);
+assert.strictEqual(fitted.top, 30);
+const fromLeft = progress.fitMapPanel({ anchorRight: 400, top: 40, imageWidth: 200, ratio: 2, chrome: 80, padX: 16 }, { width: 1200, height: 800 });
+assert.strictEqual(fromLeft.left + fromLeft.width, 400);
+const squeezed = progress.fitMapPanel({ left: 8, top: 8, imageWidth: 5000, ratio: 2, chrome: 80, padX: 16 }, { width: 400, height: 700 });
+assert.ok(squeezed.width <= 384);
+assert.ok(Math.abs((squeezed.width - 16) / (squeezed.height - 80) - 2) < 0.08);
 const shoved = progress.clampMapFrame({ left: 5000, top: -40, width: 9000, height: 20 }, { width: 800, height: 600 });
 assert.ok(shoved.left >= 8);
 assert.ok(shoved.top >= 8);
