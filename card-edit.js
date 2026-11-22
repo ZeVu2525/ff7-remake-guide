@@ -1680,7 +1680,7 @@
       window.alert("先にカードの「選択」を付けてください。Shiftを押しながら選ぶと範囲になります。");
       return;
     }
-    const options = sections.map((item, index) => `<option value="${escapeAttr(item.id)}">(${index + 1}) ${escapeText(GuideProgress.sectionName(item.title) || "区分")}</option>`).join("");
+    const options = sections.map((item, index) => `<option value="${escapeAttr(item.id)}">${index + 1} ${escapeText(GuideProgress.sectionName(item.title) || "区分")}</option>`).join("");
     editing = { chooser: true };
     document.getElementById("card-edit-title").textContent = "選択を移動";
     document.getElementById("card-edit-id").textContent = ids.length + "件。親を選ぶと、その子カードも一緒に移ります。";

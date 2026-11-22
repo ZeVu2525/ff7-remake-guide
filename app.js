@@ -496,6 +496,7 @@
       visible += built.visible;
       const closed = ui.collapsed["section:" + ui.trackId + ":" + section.id] === true;
       const name = GuideProgress.sectionName(section.title);
+      const number = index + 1;
       const colors = GuideProgress.calloutColors(cardBook, section);
       const callout = section.note ? `<p class="subhead-callout" style="background:${colors.bg};border-color:${colors.border}">${esc(section.note)}</p>` : "";
       const tools = cardEditing() ? `<span class="subch-tools">
@@ -506,10 +507,9 @@
         <button type="button" data-move-here="${esc(section.id)}"${GuideSelect.size ? "" : " disabled"}>${esc(GuideProgress.labelText(cardBook, "moveSelected"))}</button>
         <button type="button" data-section-delete="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "delete"))}</button>
       </span>` : "";
-      return `<section class="subch${closed ? " closed" : ""}" data-section="${esc(section.id)}">
+      return `<section class="subch${closed ? " closed" : ""}" data-section="${esc(section.id)}" style="--badge-line:${colors.border}">
         <div class="subch-bar">
-          <button type="button" class="subch-toggle" data-toggle-section="${esc(section.id)}" aria-expanded="${closed ? "false" : "true"}"><span class="caret">▼</span><span class="subch-num">(${index + 1})</span></button>
-          ${name ? `<span class="subch-name">${esc(name)}</span>` : ""}
+          <button type="button" class="subch-toggle" data-toggle-section="${esc(section.id)}" aria-expanded="${closed ? "false" : "true"}"><span class="caret" aria-hidden="true">▼</span><span class="subch-heading"><span class="subch-num${number >= 10 ? " is-wide" : ""}"><span>${number}</span></span>${name ? `<span class="subch-name">${esc(name)}</span>` : ""}</span></button>
           ${mapButton({ id: section.id, map: section.map }, "section")}
           ${tools}
         </div>
