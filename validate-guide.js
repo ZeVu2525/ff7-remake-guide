@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v18") fail("キャッシュ名が ff7r-guide-v18 ではない");
+  if (GAME.cache !== "ff7r-guide-v20") fail("キャッシュ名が ff7r-guide-v20 ではない");
   const mapFiles = guide.MAP_FILES;
   if (!Array.isArray(mapFiles)) fail("data/maps.js の MAP_FILES が配列ではない");
   else mapFiles.forEach(entry => {
@@ -54,7 +54,7 @@ function validateGuide(guide) {
   for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "data/templates.js", "data/settings.js", "data/images.js", "data/enemies.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
     if (!html.includes(file + "?v=" + GAME.cache)) fail("index.html の " + file + " に版のクエリがない");
   }
-  if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw") || !app.includes("すべて表示") || !app.includes("data-map") || !app.includes("data-open-item") || !app.includes("data-item-section") || !app.includes("map-zoom") || !progress.includes('"kids": "中のカード"') || !app.includes("data-open-weapon") || !app.includes("kids-chevron") || !app.includes("進行データ（チェックの保存）") || !html.includes("progress-toast")) {
+  if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw") || !app.includes("すべて表示") || !app.includes("data-map") || !app.includes("data-open-item") || !app.includes("data-item-section") || !app.includes("map-zoom") || !progress.includes('"kids": "中のカード"') || !app.includes("data-open-weapon") || !app.includes("kids-disclosure") || !app.includes("kids-chevron") || !app.includes("aria-controls") || !html.includes("prefers-reduced-motion") || !app.includes("進行データ（チェックの保存）") || !html.includes("progress-toast")) {
     fail("画面がサービスワーカーの更新を見ていない");
   }
   const routeTools = app.slice(app.indexOf('id="route-tools"'), app.indexOf('id="route"'));
