@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v28");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v29");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -551,6 +551,38 @@ assert.ok(listHtml.includes("blk-list-head"));
 assert.ok(listHtml.includes("98式機関砲"));
 assert.ok(listHtml.includes("99式小型ミサイル"));
 assert.strictEqual(progress.plainInsertHtml("太字\n<b>次</b>"), "太字<br>&lt;b&gt;次&lt;/b&gt;");
+const textBlock = { type: "text", html: "98式機関砲<br>電磁フィールド" };
+const asList = progress.convertBlock(textBlock, "list");
+assert.strictEqual(asList.loss, false);
+assert.deepStrictEqual(asList.block.items, ["98式機関砲", "電磁フィールド"]);
+const backText = progress.convertBlock(asList.block, "text");
+assert.ok(backText.block.html.includes("98式機関砲"));
+assert.ok(backText.block.html.includes("電磁フィールド"));
+const callout = progress.convertBlock(textBlock, "callout");
+assert.strictEqual(callout.loss, false);
+assert.strictEqual(callout.block.html, textBlock.html);
+const toImage = progress.convertBlock(textBlock, "image");
+assert.strictEqual(toImage.loss, true);
+assert.strictEqual(toImage.block.caption, "98式機関砲");
+const headed = progress.headerCopyFields({ title: "宝箱", flag: "story", flags: ["story", "item"], section: "s1", map: "maps/01.png", blocks: [{ type: "image", src: "maps/01.png" }] });
+assert.strictEqual(headed.title, "宝箱");
+assert.deepStrictEqual(headed.flags, ["story", "item"]);
+assert.deepStrictEqual(headed.blocks, [{ type: "text", html: "" }]);
+assert.strictEqual(headed.map, "");
+const nest = progress.nestMany(["b", "c"], [
+  { id: "a" },
+  { id: "b" },
+  { id: "c" },
+  { id: "d", parent: "a" }
+], "a");
+assert.deepStrictEqual(nest.order, ["a", "d", "b", "c"]);
+assert.deepStrictEqual(nest.parents, { b: "a", c: "a" });
+assert.strictEqual(progress.nestMany(["p"], [{ id: "p" }, { id: "k", parent: "p" }, { id: "t" }], "t"), null);
+const childClosed = progress.foldChildDetails({ p: false, "kids:p": false }, "p", { p: ["c"], c: ["g"] });
+assert.strictEqual(childClosed.p, false);
+assert.strictEqual(childClosed["kids:p"], false);
+assert.strictEqual(childClosed.c, true);
+assert.strictEqual(childClosed.g, true);
 assert.ok(progress.plainFromBlocks(listed).includes("第一段階で使用するアクション"));
 const historyBefore = JSON.stringify({ book: progress.emptyCardBook() });
 const historyDeleted = JSON.stringify({ book: progress.removeCard(progress.emptyCardBook(), "card-a") });

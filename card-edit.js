@@ -51,6 +51,14 @@
     "#card-edit-toggle{min-height:32px;margin-left:8px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit;font-size:12px;cursor:pointer}",
     "#card-drag-ghost .drag-count{display:inline-flex;align-items:center;justify-content:center;min-width:1.4em;margin-left:6px;padding:0 6px;border-radius:99px;background:#39c9ff;color:#04222d;font-weight:800}",
     "#block-editor{display:grid;gap:8px}",
+    ".card-edit-tabs{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:4px;margin:0 0 8px;padding:4px 0;background:var(--bg2)}",
+    ".card-edit-tabs button{flex:1 1 auto;min-height:40px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}",
+    ".card-edit-tabs button.on{background:#14324a;color:#fff;border-color:#14324a}",
+    ".card-tab-panel[hidden]{display:none}",
+    "#card-menu{position:fixed;z-index:290;display:grid;min-width:160px;padding:6px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);box-shadow:0 8px 24px rgba(0,0,0,.28)}",
+    "#card-menu button{min-height:40px;padding:6px 10px;border:0;border-radius:8px;background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}",
+    "#card-menu button:hover,#card-menu button:focus-visible{background:color-mix(in srgb,var(--fg) 8%,transparent)}",
+    ".blk-row.is-block-focus{outline:2px solid #39c9ff}",
     ".blk-row{padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2)}",
     ".blk-tools{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
     ".blk-handle{touch-action:none;cursor:grab}",
@@ -396,6 +404,13 @@
     return [];
   }
 
+  function setBlock(path, block) {
+    const parts = String(path || "").split(".").map(Number);
+    if (!editing || !editing.blocks) return;
+    if (parts.length === 1) editing.blocks[parts[0]] = block;
+    else if (editing.blocks[parts[0]] && editing.blocks[parts[0]].columns) editing.blocks[parts[0]].columns[parts[1]][parts[2]] = block;
+  }
+
   function blockAt(path) {
     const parts = String(path || "").split(".").map(Number);
     const block = editing && editing.blocks && editing.blocks[parts[0]];
@@ -519,7 +534,12 @@
 
   function blockRow(block, path) {
     const top = path.indexOf(".") < 0;
-    const tools = `<div class="blk-tools">${top ? `<button type="button" class="blk-handle" data-drag-block="${escapeAttr(path)}" aria-label="並べ替え">≡</button>` : ""}<button type="button" data-del-block="${escapeAttr(path)}">この部分を消す</button></div>`;
+    const nested = path.indexOf(".") >= 0;
+    const kinds = nested
+      ? [["text", "文章"], ["callout", "囲み"], ["image", "画像"], ["list", "リスト"], ["tiles", "小画像"]]
+      : [["text", "文章"], ["callout", "囲み"], ["image", "画像"], ["list", "リスト"], ["columns", "2列"], ["tiles", "小画像"]];
+    const typeSelect = `<select data-block-type="${escapeAttr(path)}" aria-label="種類">${kinds.map(item => `<option value="${item[0]}"${block.type === item[0] ? " selected" : ""}>${item[1]}</option>`).join("")}</select>`;
+    const tools = `<div class="blk-tools">${top ? `<button type="button" class="blk-handle" data-drag-block="${escapeAttr(path)}" aria-label="並べ替え">≡</button>` : ""}${typeSelect}<button type="button" data-del-block="${escapeAttr(path)}">この部分を消す</button></div>`;
     let body = "";
     if (block.type === "text" || block.type === "callout") body = richBox(block.html);
     else if (block.type === "list") body = listField(block);
@@ -639,6 +659,7 @@
     if (battle) battle.hidden = !selected.has("battle");
     paintItemPicker();
     if (selected.has("battle")) paintBattle();
+    paintTagHint();
   }
 
   function paintBattle() {
@@ -814,6 +835,19 @@
       });
       return;
     }
+    if (target.hasAttribute("data-block-type")) {
+      syncBlocks();
+      const path = target.getAttribute("data-block-type");
+      const current = blockAt(path);
+      const converted = GuideProgress.convertBlock(current, target.value);
+      if (converted.loss && !window.confirm("この種類に変えると、残せる文章は残します。画像などは外れます。変えますか。")) {
+        paintBlocks();
+        return;
+      }
+      setBlock(path, converted.block);
+      paintBlocks();
+      return;
+    }
     if (target.hasAttribute("data-col-count") || target.hasAttribute("data-col-arrow")) {
       syncBlocks();
       paintBlocks();
@@ -822,7 +856,15 @@
     syncBlocks();
   }
 
-  fields.addEventListener("click", onBlockClick);
+  fields.addEventListener("click", event => {
+    const tab = event.target.closest && event.target.closest("[data-card-tab]");
+    if (tab) {
+      syncBlocks();
+      showEditorTab(tab.getAttribute("data-card-tab"));
+      return;
+    }
+    onBlockClick(event);
+  });
   fields.addEventListener("change", onBlockChange);
   fields.addEventListener("input", event => {
     if (event.target && event.target.closest && event.target.closest("#block-editor")) syncBlocks();
@@ -920,34 +962,43 @@
     error.textContent = "";
     document.getElementById("card-edit-title").textContent = seed.id ? "カードを直す" : "カードを追加";
     document.getElementById("card-edit-id").textContent = seed.id ? "ID: " + seed.id : "IDは保存時に付きます。あとから変わりません。";
-    const flags = GAME.flags.map(flag => `<option value="${flag.id}"${flag.id === seed.flag ? " selected" : ""}>${flag.label}</option>`).join("");
     const trophies = ['<option value="">選ばない</option>'].concat(GuideApp.trophyChoices().map(item => `<option value="${item.id}"${item.id === seed.trophy ? " selected" : ""}>${item.name}</option>`)).join("");
     const chapterRows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[seed.trackId] || [], book(), seed.trackId) || [];
     const chapterRow = chapterRows.find(row => row.chapterId === seed.chapterId);
-    const parents = ((chapterRow && chapterRow.items) || []).filter(item => item.id !== seed.id && !item.parent);
-    const parentOptions = ['<option value="">親なし（章の直下）</option>'].concat(parents.map(item => `<option value="${escapeAttr(item.id)}"${item.id === seed.parent ? " selected" : ""}>${escapeText(item.title || item.id)}</option>`)).join("");
     editing.links = (seed.items || []).map(link => ({ id: link.id, qty: link.qty || 1 }));
+    editing.section = seed.section || "";
+    editing.parent = seed.parent || "";
     const templates = GuideProgress.activeTemplates(book(), globalThis.TEMPLATES);
     const templateOptions = ['<option value="">自由入力</option>'].concat(templates.map(item => `<option value="${escapeAttr(item.id)}"${item.id === seed.template ? " selected" : ""}>${escapeText(item.label)}</option>`)).join("");
     const sectionList = chapterSections(seed.trackId, seed.chapterId);
-    const sectionId = seed.section || (sectionList[0] && sectionList[0].id) || "";
-    const sectionOptions = sectionList.map(item => `<option value="${escapeAttr(item.id)}"${item.id === sectionId ? " selected" : ""}>${escapeText(item.title)}</option>`).join("");
+    const sectionName = (sectionList.find(item => item.id === editing.section) || {}).title || "";
+    const tabs = ["main", "blocks", "image", "options"].map(id => {
+      const label = { main: "メイン", blocks: "ブロック", image: "画像", options: "タグオプション" }[id];
+      return `<button type="button" data-card-tab="${id}">${label}</button>`;
+    }).join("");
     fields.innerHTML = [
+      `<div class="card-edit-tabs" role="tablist">${tabs}</div>`,
+      `<div data-tab-panel="main">`,
+      `<p class="lead">章: ${escapeText((chapterRow && chapterRow.title) || seed.chapterId || "")}${sectionName ? " / " + escapeText(sectionName) : ""}</p>`,
       field("見出しの定型文", `<select name="template">${templateOptions}</select>`),
       field("見出し", `<input name="title" value="${escapeAttr(seed.title || "")}" placeholder="定型文を選んだときは空でも保存できます">`),
       '<p id="template-preview"></p>',
-      '<p>本文は、文章・画像・リスト・列・囲みを上から順に並べます。文章の中の改行も、カードにそのまま出ます。貼り付けは文字と改行だけが入ります。</p>',
+      '<div id="flag-chips"></div><input type="hidden" name="flag" value="">',
+      `</div>`,
+      `<div data-tab-panel="blocks">`,
+      '<p>本文は、文章・画像・リスト・列・囲みを上から順に並べます。種類は各ブロックの欄で変えられます。貼り付けは文字と改行だけが入ります。</p>',
       '<div id="block-editor"></div>',
       `<textarea name="detail" hidden>${escapeText(seed.detail || "")}</textarea>`,
       '<input type="hidden" id="block-json" name="blocks" value="">',
-      '<div id="flag-chips"></div><input type="hidden" name="flag" value="">',
+      `</div>`,
+      `<div data-tab-panel="image">${mapFields(seed.map || "")}</div>`,
+      `<div data-tab-panel="options">`,
+      '<p id="tag-options-hint" class="lead">タグを選ぶと、期限やアイテムなどの欄がここに出ます。</p>',
       `<div id="deadline-field">${field("期限", `<input name="deadline" value="${escapeAttr(seed.deadline || "")}" placeholder="期限・取り逃しのとき">`)}</div>`,
       `<div id="trophy-field">${field("トロフィー", `<select name="trophy">${trophies}</select>`)}</div>`,
       '<div id="battle-field"></div>',
-      mapFields(seed.map || ""),
-      field("子チャプター", `<select name="section">${sectionOptions}</select>`),
-      field("親カード", `<select name="parent">${parentOptions}</select>`),
-      '<div id="item-picker"></div>'
+      '<div id="item-picker"></div>',
+      `</div>`
     ].join("");
     editing.blocks = freshBlocks(seed);
     editing.flags = GuideProgress.cardFlags(seed);
@@ -962,7 +1013,44 @@
     bindMapField();
     dialog.hidden = false;
     captureBaseline();
-    form.elements.title.focus();
+    showEditorTab(seed.focusBlock ? "blocks" : (seed.tab || rememberedEditorTab()));
+    if (seed.focusBlock) focusEditorBlock(seed.focusBlock);
+    else if ((seed.tab || rememberedEditorTab()) === "main" && form.elements.title) form.elements.title.focus();
+  }
+
+  function rememberedEditorTab() {
+    try {
+      const saved = sessionStorage.getItem("ff7r-card-editor-tab");
+      if (saved === "blocks" || saved === "image" || saved === "options" || saved === "main") return saved;
+    } catch (error) {}
+    return "main";
+  }
+
+  function showEditorTab(id) {
+    const tab = id || "main";
+    fields.querySelectorAll("[data-card-tab]").forEach(button => button.classList.toggle("on", button.getAttribute("data-card-tab") === tab));
+    fields.querySelectorAll("[data-tab-panel]").forEach(panel => { panel.hidden = panel.getAttribute("data-tab-panel") !== tab; });
+    try { sessionStorage.setItem("ff7r-card-editor-tab", tab); } catch (error) {}
+    if (tab === "options") paintTagHint();
+  }
+
+  function focusEditorBlock(path) {
+    const row = fields.querySelector('[data-block-path="' + path + '"]');
+    if (!row) return;
+    row.classList.add("is-block-focus");
+    row.scrollIntoView({ block: "nearest" });
+    const focus = row.querySelector("[contenteditable='true'], textarea, input");
+    if (focus) focus.focus();
+  }
+
+  function paintTagHint() {
+    const hint = document.getElementById("tag-options-hint");
+    if (!hint) return;
+    const shown = ["deadline-field", "trophy-field", "battle-field", "item-picker"].some(id => {
+      const node = document.getElementById(id);
+      return node && !node.hidden;
+    });
+    hint.hidden = shown;
   }
 
   const pickerState = { hub: "consumables", query: "", selected: "", qty: "1" };
@@ -973,6 +1061,7 @@
     if (!(editing && editing.flags && editing.flags.indexOf("item") >= 0)) {
       host.hidden = true;
       host.innerHTML = "";
+      paintTagHint();
       return;
     }
     host.hidden = false;
@@ -1001,6 +1090,7 @@
       `<ul id="item-picker-selected">${selected}</ul>`
     ].join("");
     refreshItemResults();
+    paintTagHint();
   }
 
   function refreshItemResults() {
@@ -1051,7 +1141,7 @@
   function saveRoute(event) {
     const data = new FormData(form);
     const flagIds = GAME.flags.map(flag => flag.id);
-    const sectionId = String(data.get("section") || editing.section || "");
+    const sectionId = editing.section || "";
     const section = chapterSections(editing.trackId, editing.chapterId).find(item => item.id === sectionId);
     syncBlocks();
     if (missingImage(editing.blocks)) {
@@ -1067,8 +1157,8 @@
       source: editing.source || "",
       trophy: data.get("trophy"),
       map: section && rawMap === section.map ? "" : rawMap,
-      parent: data.get("parent"),
-      section: data.get("section") || editing.section || "",
+      parent: editing.parent || "",
+      section: editing.section || "",
       flag: (editing.flags || ["story"])[0],
       flags: editing.flags,
       template: data.get("template") || "",
@@ -1281,7 +1371,37 @@
     event.stopPropagation();
   }, true);
 
+  let cardPress = null;
+  document.addEventListener("contextmenu", event => {
+    if (!document.body.classList.contains("is-card-edit") || dialog.hidden === false) return;
+    const card = event.target.closest && event.target.closest("article.it[data-id]");
+    if (!card || event.target.closest("input, textarea, a")) return;
+    event.preventDefault();
+    openCardMenu(card.getAttribute("data-id"), event.clientX, event.clientY);
+  });
+  document.addEventListener("pointerdown", event => {
+    if (event.pointerType === "mouse" || !document.body.classList.contains("is-card-edit")) return;
+    const card = event.target.closest && event.target.closest("article.it[data-id]");
+    if (!card || event.target.closest("button, a, input, textarea")) return;
+    const point = { x: event.clientX, y: event.clientY, id: card.getAttribute("data-id") };
+    cardPress = setTimeout(() => openCardMenu(point.id, point.x, point.y), 550);
+  });
+  document.addEventListener("pointerup", () => { clearTimeout(cardPress); });
+  document.addEventListener("pointermove", event => {
+    if (!cardPress) return;
+    if (Math.hypot(event.movementX || 0, event.movementY || 0) > 8) clearTimeout(cardPress);
+  });
   document.addEventListener("click", event => {
+    const menuCopy = event.target.closest && event.target.closest("[data-menu-copy]");
+    const menuHead = event.target.closest && event.target.closest("[data-menu-head]");
+    if (menuCopy || menuHead) {
+      const id = (menuCopy || menuHead).getAttribute(menuCopy ? "data-menu-copy" : "data-menu-head");
+      closeCardMenu();
+      if (menuCopy) duplicateCard(id);
+      else headerCopy(id);
+      return;
+    }
+    if (!event.target.closest || !event.target.closest("#card-menu")) closeCardMenu();
     if (!document.body.classList.contains("is-card-edit")) return;
     const tagSpot = event.target.closest("[data-tag-spot]");
     if (tagSpot) { openTagPop(tagSpot.getAttribute("data-tag-spot"), tagSpot); event.preventDefault(); return; }
@@ -1745,8 +1865,57 @@
     if (created) openRouteForm(Object.assign({ kind: "route", id: newId, trackId: place.trackId, chapterId: place.chapterId }, created));
   }
 
+  function headerCopy(id) {
+    const place = locate(id);
+    const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
+    if (!item) return;
+    const orderIds = GuideApp.currentIds(place.trackId, place.chapterId);
+    const newId = GuideProgress.createCardId(usedIds());
+    const order = orderIds.slice();
+    const at = order.indexOf(id);
+    order.splice(at < 0 ? order.length : at + 1, 0, newId);
+    const next = GuideProgress.upsertRouteCard(
+      book(), null, newId, GuideProgress.headerCopyFields(item),
+      place.trackId, place.chapterId, order,
+      GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id)
+    );
+    GuideApp.setCardBook(next, "見出しコピー");
+    revealCard(place.trackId, place.chapterId, newId);
+  }
+
+  function openCardMenu(id, x, y) {
+    let menu = document.getElementById("card-menu");
+    if (!menu) {
+      menu = document.createElement("div");
+      menu.id = "card-menu";
+      menu.setAttribute("role", "menu");
+      document.body.appendChild(menu);
+    }
+    menu.innerHTML = `<button type="button" data-menu-copy="${escapeAttr(id)}">コピー</button><button type="button" data-menu-head="${escapeAttr(id)}">見出しコピー</button>`;
+    menu.hidden = false;
+    menu.style.left = Math.max(8, Math.min(x, window.innerWidth - 180)) + "px";
+    menu.style.top = Math.max(8, Math.min(y, window.innerHeight - 100)) + "px";
+  }
+
+  function closeCardMenu() {
+    const menu = document.getElementById("card-menu");
+    if (menu) menu.remove();
+  }
+
   document.addEventListener("dblclick", event => {
     if (!document.body.classList.contains("is-card-edit")) return;
+    const block = event.target.closest && event.target.closest("[data-bpath]");
+    const card = block && block.closest("article.it[data-id]");
+    if (block && card && !event.target.closest(".map-open, .blk-resize, .blk-split")) {
+      event.preventDefault();
+      event.stopPropagation();
+      const id = card.getAttribute("data-id");
+      const place = locate(id);
+      const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
+      if (!item) return;
+      openRouteForm(Object.assign({ kind: "route", id, trackId: place.trackId, chapterId: place.chapterId, focusBlock: block.getAttribute("data-bpath") }, item));
+      return;
+    }
     const button = event.target.closest && event.target.closest(".map-open");
     if (!button) return;
     event.preventDefault();
@@ -1840,7 +2009,12 @@
         const targetIsChild = !!(targetItem && targetItem.parent);
         const movingHasChildren = cardHasChildren(from.trackId, from.chapterId, drag.id);
         if (drag.ids && drag.ids.length > 1) {
-          return { type: "card", id: targetId, after: !edge && indented ? true : ratio >= 0.5, unnest: draggedLeft, element: card };
+          if (!edge && indented) {
+            const anyKids = drag.ids.some(itemId => cardHasChildren(from.trackId, from.chapterId, itemId));
+            if (targetIsChild || anyKids || drag.ids.indexOf(targetId) >= 0) return { type: "blocked", id: targetId, element: card };
+            return { type: "nest", id: targetId, element: card };
+          }
+          return { type: "card", id: targetId, after: ratio >= 0.5, unnest: draggedLeft, element: card };
         }
         if (!edge && indented) {
           if (targetIsChild || movingHasChildren || targetId === drag.id) {
@@ -1923,6 +2097,34 @@
     };
   }
 
+  function nestGroup(ids, targetId) {
+    const placed = GuideProgress.nestMany(ids, chapterItems(ids[0]), targetId);
+    const to = locate(targetId);
+    const from = locate(ids[0]);
+    if (!placed || !to || !from) return;
+    let next = book();
+    const known = GuideApp.baseItems(to.trackId, to.chapterId).map(item => item.id);
+    ids.forEach(id => {
+      const item = routeRecord(from.trackId, from.chapterId, id);
+      if (!item || !placed.parents[id]) return;
+      const base = GuideApp.findBaseRoute(id);
+      next = GuideProgress.upsertRouteCard(
+        next, base && base.item, id, cardFields(item, placed.parents[id]),
+        to.trackId, to.chapterId, placed.order, known
+      );
+    });
+    clearSelect();
+    GuideApp.setCardBook(next, "入れ子");
+    revealCard(to.trackId, to.chapterId, targetId);
+  }
+
+  function chapterItems(id) {
+    const place = locate(id);
+    if (!place) return [];
+    const row = (GuideProgress.mergeTrack(ROUTE, GAME.chapters[place.trackId] || [], book(), place.trackId) || []).find(item => item.chapterId === place.chapterId);
+    return row && row.items || [];
+  }
+
   function nestRoute(id, from, targetId) {
     const to = locate(targetId);
     if (!to || to.kind !== "route" || targetId === id) return;
@@ -1965,7 +2167,7 @@
       ids,
       GuideApp.baseItems(to.trackId, to.chapterId).map(item => item.id)
     );
-    GuideApp.setCardBook(next);
+    GuideApp.setCardBook(next, "入れ子");
     revealCard(to.trackId, to.chapterId, id);
   }
 
@@ -2102,6 +2304,10 @@
     const from = locate(id);
     if (!from) return;
     if (current.ids && current.ids.length > 1 && from.kind === "route") {
+      if (target.type === "nest") {
+        nestGroup(current.ids, target.id);
+        return;
+      }
       commitGroup(current, current.ids);
       return;
     }
