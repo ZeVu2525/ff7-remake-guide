@@ -453,7 +453,7 @@
           ${sourceLine(item.source)}
           ${cardTools(item)}
         </div>
-        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-chevron" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}"><span class="chev" aria-hidden="true">⌄</span></button><div class="kids"${kidsOpen ? "" : " hidden"}>${kids.map(child => routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard)).join("")}</div></div>` : ""}
+        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}"><span>${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）</span><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard)).join("")}</div></div></div>` : ""}
       </div>
     </article>`;
   }
@@ -551,7 +551,7 @@
     const index = {};
     const walk = node => {
       const id = node.getAttribute("data-id");
-      const children = node.querySelectorAll(":scope > .ibody > .kids-wrap > .kids > article.it");
+      const children = node.querySelectorAll(":scope > .ibody > .kids-wrap > .kids-panel > .kids > article.it");
       index[id] = Array.from(children).map(child => child.getAttribute("data-id"));
       children.forEach(walk);
     };
@@ -569,11 +569,15 @@
     const detail = card.querySelector(":scope > .ibody > .ihead .route-item-toggle");
     if (detail) detail.setAttribute("aria-expanded", collapsed ? "false" : "true");
     const kidsClosed = ui.collapsed["kids:" + id] === true;
-    const kids = card.querySelector(":scope > .ibody > .kids-wrap > .kids");
-    if (kids) kids.hidden = kidsClosed;
-    const chevron = card.querySelector(":scope > .ibody > .kids-wrap > .kids-chevron");
-    if (chevron) chevron.setAttribute("aria-expanded", kidsClosed ? "false" : "true");
-    card.querySelectorAll(":scope > .ibody > .kids-wrap > .kids > article.it").forEach(paintFold);
+    setKidsOpen(card, !kidsClosed);
+    card.querySelectorAll(":scope > .ibody > .kids-wrap > .kids-panel > .kids > article.it").forEach(paintFold);
+  }
+
+  function setKidsOpen(card, open) {
+    const disclosure = card.querySelector(":scope > .ibody > .kids-wrap > .kids-disclosure");
+    const panel = card.querySelector(":scope > .ibody > .kids-wrap > .kids-panel");
+    if (disclosure) disclosure.setAttribute("aria-expanded", open ? "true" : "false");
+    if (panel) panel.classList.toggle("is-shut", !open);
   }
 
   function dragHandle(id) {
@@ -1564,10 +1568,8 @@
       const id = kidsToggle.getAttribute("data-toggle-kids");
       const closed = ui.collapsed["kids:" + id] !== true;
       ui.collapsed["kids:" + id] = closed;
-      const wrap = kidsToggle.closest(".kids-wrap");
-      const kids = wrap && wrap.querySelector(":scope > .kids");
-      if (kids) kids.hidden = closed;
-      kidsToggle.setAttribute("aria-expanded", closed ? "false" : "true");
+      const card = kidsToggle.closest("article.it");
+      if (card) setKidsOpen(card, !closed);
       return;
     }
     const questLink = event.target.closest("[data-open-quest]");
