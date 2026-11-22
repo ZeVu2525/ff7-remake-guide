@@ -53,6 +53,7 @@
     "#block-editor{display:grid;gap:8px}",
     ".blk-row{padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2)}",
     ".blk-tools{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
+    ".blk-handle{touch-action:none;cursor:grab}",
     ".blk-tools button,.blk-add button,.rt-bar button{min-height:28px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:inherit;font-size:12px;line-height:1.3;cursor:pointer}",
     ".rt-bar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
     ".rt-bar [data-rt=color]{width:22px;min-height:22px;padding:0}",
@@ -419,6 +420,14 @@
           if (item) readImageFields(tile, item, true);
         });
       }
+      if (block.type === "list") {
+        const heading = node.querySelector("[data-list-heading]");
+        const items = node.querySelector("[data-list-items]");
+        const cols = node.querySelector("[data-list-cols]");
+        if (heading) block.heading = heading.value;
+        if (items) block.items = items.value.split(/\n/);
+        if (cols) block.columns = Number(cols.value) === 1 || Number(cols.value) === 3 ? Number(cols.value) : 2;
+      }
       if (block.type === "columns") {
         const count = node.querySelector(":scope > .blk-tools [data-col-count]");
         const arrow = node.querySelector(":scope > .blk-tools [data-col-arrow]");
@@ -493,16 +502,26 @@
     return `<div class="rt-wrap"><div class="rt-bar"><button type="button" data-rt="bold"><b>B</b></button><button type="button" data-rt="italic"><i>I</i></button><button type="button" data-rt="underline"><u>U</u></button><button type="button" data-rt="strike"><s>S</s></button><button type="button" data-rt="clear">書式を消す</button><select data-rt="size"><option value="">大きさ</option><option value="0.85em">小</option><option value="1em">中</option><option value="1.25em">大</option></select><select data-rt="font"><option value="">字体</option><option value="serif">明朝</option><option value="monospace">等幅</option></select><label>色 <input type="color" data-rt="color" value="#1d4e89"></label>${colors}<label>背景 <input type="color" data-rt="bg" value="#fff3bf"></label></div><div class="rt-edit" contenteditable="true">${GuideProgress.sanitizeRich(html || "")}</div></div>`;
   }
 
+  function listField(block) {
+    const columns = block.columns === 1 || block.columns === 3 ? block.columns : 2;
+    return [
+      '<label>見出し<input data-list-heading value="' + escapeAttr(block.heading || "") + '" placeholder="第一段階で使用するアクション"></label>',
+      '<label>列数<select data-list-cols><option value="1"' + (columns === 1 ? " selected" : "") + '>1列</option><option value="2"' + (columns === 2 ? " selected" : "") + '>2列</option><option value="3"' + (columns === 3 ? " selected" : "") + '>3列</option></select></label>',
+      '<label>項目（1行に1つ）<textarea data-list-items rows="6">' + escapeText((block.items || []).join("\n")) + "</textarea></label>"
+    ].join("");
+  }
+
   function addButtons(path) {
-    const kinds = path ? [["text", "文章"], ["image", "画像"]] : [["text", "文章"], ["image", "画像"], ["callout", "囲み"], ["columns", "2列"], ["tiles", "小画像"]];
+    const kinds = path ? [["text", "文章"], ["image", "画像"], ["list", "リスト"]] : [["text", "文章"], ["image", "画像"], ["list", "リスト"], ["callout", "囲み"], ["columns", "2列"], ["tiles", "小画像"]];
     return kinds.map(item => `<button type="button" data-add-block="${item[0]}" data-add-path="${escapeAttr(path)}">${item[1]}</button>`).join("");
   }
 
   function blockRow(block, path) {
     const top = path.indexOf(".") < 0;
-    const tools = `<div class="blk-tools">${top ? `<button type="button" class="blk-handle" draggable="true" data-drag-block="${escapeAttr(path)}" aria-label="並べ替え">≡</button>` : ""}<button type="button" data-del-block="${escapeAttr(path)}">この部分を消す</button></div>`;
+    const tools = `<div class="blk-tools">${top ? `<button type="button" class="blk-handle" data-drag-block="${escapeAttr(path)}" aria-label="並べ替え">≡</button>` : ""}<button type="button" data-del-block="${escapeAttr(path)}">この部分を消す</button></div>`;
     let body = "";
     if (block.type === "text" || block.type === "callout") body = richBox(block.html);
+    else if (block.type === "list") body = listField(block);
     else if (block.type === "image") body = imageField(block, false);
     else if (block.type === "tiles") {
       body = (block.items || []).map((item, index) => `<div data-tile="${index}">${imageField(item, true)}<button type="button" data-del-tile="${escapeAttr(path)}" data-tile-index="${index}">外す</button></div>`).join("") + `<p class="blk-add"><button type="button" data-add-tile="${escapeAttr(path)}">小画像を足す</button></p>`;
@@ -547,6 +566,7 @@
     if (type === "image") return { type: "image", src: "", caption: "", width: "m", align: "center" };
     if (type === "columns") return { type: "columns", count: 2, arrow: false, columns: [[{ type: "text", html: "" }], [{ type: "text", html: "" }]] };
     if (type === "tiles") return { type: "tiles", items: [{ src: "", label: "" }] };
+    if (type === "list") return { type: "list", heading: "", items: [], columns: 2 };
     return { type: "text", html: "" };
   }
 
@@ -809,29 +829,89 @@
   fields.addEventListener("mousedown", event => {
     if (event.target.closest && event.target.closest(".rt-bar button")) event.preventDefault();
   });
-  fields.addEventListener("dragstart", event => {
-    const handle = event.target.closest && event.target.closest("[data-drag-block]");
-    if (!handle || !event.dataTransfer) return;
-    event.dataTransfer.setData("text/plain", handle.getAttribute("data-drag-block"));
-    event.dataTransfer.effectAllowed = "move";
-  });
-  fields.addEventListener("dragover", event => {
-    if (event.target.closest && event.target.closest("[data-block-path]")) event.preventDefault();
-  });
-  fields.addEventListener("drop", event => {
-    const from = event.dataTransfer && event.dataTransfer.getData("text/plain");
-    const row = event.target.closest && event.target.closest("[data-block-path]");
-    if (!from || !row || from.indexOf(".") >= 0) return;
-    const to = row.getAttribute("data-block-path");
-    if (to.indexOf(".") >= 0) return;
+  fields.addEventListener("paste", event => {
+    const clipboard = event.clipboardData;
+    if (!clipboard) return;
+    const text = clipboard.getData("text/plain");
+    const target = event.target;
+    if (target && target.closest && target.closest(".rt-edit")) {
+      event.preventDefault();
+      const editor = target.closest(".rt-edit");
+      editor.focus();
+      document.execCommand("insertHTML", false, GuideProgress.plainInsertHtml(text));
+      syncBlocks();
+      return;
+    }
+    if (!target || (target.tagName !== "TEXTAREA" && target.tagName !== "INPUT")) return;
+    if (target.type === "file" || target.type === "checkbox" || target.type === "color") return;
     event.preventDefault();
+    const insert = target.tagName === "INPUT" ? String(text || "").replace(/\s*\n\s*/g, " ") : String(text || "");
+    const start = target.selectionStart == null ? target.value.length : target.selectionStart;
+    const end = target.selectionEnd == null ? start : target.selectionEnd;
+    target.setRangeText(insert, start, end, "end");
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  let blockDrag = null;
+
+  function clearBlockMarks() {
+    document.querySelectorAll(".is-block-before,.is-block-after").forEach(node => node.classList.remove("is-block-before", "is-block-after"));
+  }
+
+  function markBlockTarget(clientX, clientY) {
+    clearBlockMarks();
+    if (!blockDrag) return;
+    const hit = document.elementFromPoint(clientX, clientY);
+    const row = hit && hit.closest && hit.closest("#block-editor [data-block-path]");
+    if (!row) return;
+    const path = row.getAttribute("data-block-path");
+    if (!path || path.indexOf(".") >= 0) return;
+    const rect = row.getBoundingClientRect();
+    const before = clientY < rect.top + rect.height / 2;
+    row.classList.add(before ? "is-block-before" : "is-block-after");
+    blockDrag.to = path;
+    blockDrag.before = before;
+  }
+
+  fields.addEventListener("pointerdown", event => {
+    const handle = event.target.closest && event.target.closest("[data-drag-block]");
+    if (!handle || event.button > 0) return;
+    event.preventDefault();
+    try { handle.setPointerCapture(event.pointerId); } catch (error) {}
+    blockDrag = { path: handle.getAttribute("data-drag-block"), id: event.pointerId, x: event.clientX, y: event.clientY, before: false };
+    document.body.classList.add("is-block-dragging");
+    startEdgeScroll(() => blockDrag);
+  });
+  fields.addEventListener("pointermove", event => {
+    if (!blockDrag || event.pointerId !== blockDrag.id) return;
+    blockDrag.x = event.clientX;
+    blockDrag.y = event.clientY;
+    markBlockTarget(event.clientX, event.clientY);
+  });
+  function finishBlockDrag() {
+    const current = blockDrag;
+    blockDrag = null;
+    document.body.classList.remove("is-block-dragging");
+    clearBlockMarks();
+    if (!current || current.to == null || current.to === current.path) return;
     syncBlocks();
-    const a = Number(from);
-    const b = Number(to);
-    if (a === b || !editing.blocks[a]) return;
-    const moved = editing.blocks.splice(a, 1)[0];
-    editing.blocks.splice(b, 0, moved);
+    const from = Number(current.path);
+    let to = Number(current.to);
+    if (!editing.blocks[from]) return;
+    const moved = editing.blocks.splice(from, 1)[0];
+    if (from < to) to -= 1;
+    editing.blocks.splice(current.before ? to : to + 1, 0, moved);
     paintBlocks();
+  }
+  fields.addEventListener("pointerup", event => {
+    if (!blockDrag || event.pointerId !== blockDrag.id) return;
+    finishBlockDrag();
+  });
+  fields.addEventListener("pointercancel", event => {
+    if (!blockDrag || event.pointerId !== blockDrag.id) return;
+    blockDrag = null;
+    document.body.classList.remove("is-block-dragging");
+    clearBlockMarks();
   });
 
   function openRouteForm(seed) {
@@ -855,7 +935,7 @@
       field("見出しの定型文", `<select name="template">${templateOptions}</select>`),
       field("見出し", `<input name="title" value="${escapeAttr(seed.title || "")}" placeholder="定型文を選んだときは空でも保存できます">`),
       '<p id="template-preview"></p>',
-      '<p>本文は、文章・画像・列・囲みを上から順に並べます。文章の中の改行も、カードにそのまま出ます。</p>',
+      '<p>本文は、文章・画像・リスト・列・囲みを上から順に並べます。文章の中の改行も、カードにそのまま出ます。貼り付けは文字と改行だけが入ります。</p>',
       '<div id="block-editor"></div>',
       `<textarea name="detail" hidden>${escapeText(seed.detail || "")}</textarea>`,
       '<input type="hidden" id="block-json" name="blocks" value="">',
@@ -1172,6 +1252,21 @@
     if (!pop || event.target.closest("#tag-pop, [data-tag-spot]")) return;
     pop.remove();
   });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    if (blockDrag) {
+      blockDrag = null;
+      document.body.classList.remove("is-block-dragging");
+      clearBlockMarks();
+      event.preventDefault();
+      return;
+    }
+    if (layoutDrag) {
+      endLayoutDrag(false);
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape") return;
     const pop = document.getElementById("tag-pop");
@@ -2360,6 +2455,83 @@
   function closeOnly() { dialog.hidden = true; }
 
   let layoutDrag = null;
+  let edgeScrollOn = false;
+
+  function edgeDelta(clientY, top, bottom) {
+    const margin = 72;
+    const maxSpeed = 26;
+    if (clientY < top + margin) return -Math.max(1, Math.ceil((1 - Math.max(0, clientY - top) / margin) * maxSpeed));
+    if (clientY > bottom - margin) return Math.max(1, Math.ceil((1 - Math.max(0, bottom - clientY) / margin) * maxSpeed));
+    return 0;
+  }
+
+  function scrollNearPointer(clientY) {
+    const windowDelta = edgeDelta(clientY, 0, window.innerHeight);
+    if (windowDelta) window.scrollBy(0, windowDelta);
+    const scroller = document.getElementById("card-edit-fields");
+    if (!scroller) return;
+    const rect = scroller.getBoundingClientRect();
+    const inner = edgeDelta(clientY, rect.top, rect.bottom);
+    if (inner) scroller.scrollTop += inner;
+  }
+
+  function startEdgeScroll(active) {
+    if (edgeScrollOn) return;
+    edgeScrollOn = true;
+    const step = () => {
+      const state = active();
+      if (!state) {
+        edgeScrollOn = false;
+        return;
+      }
+      if (state.moved !== false && typeof state.y === "number") scrollNearPointer(state.y);
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  function clearLayoutMarks() {
+    document.querySelectorAll(".is-drop-before,.is-drop-after,.is-drop-left,.is-drop-right").forEach(node => {
+      node.classList.remove("is-drop-before", "is-drop-after", "is-drop-left", "is-drop-right");
+    });
+  }
+
+  function removeLayoutGhost() {
+    const ghost = document.getElementById("layout-ghost");
+    if (ghost) ghost.remove();
+  }
+
+  function placeLayoutGhost(node, x, y) {
+    let ghost = document.getElementById("layout-ghost");
+    if (!ghost) {
+      ghost = node.cloneNode(true);
+      ghost.id = "layout-ghost";
+      ghost.querySelectorAll("[id]").forEach(item => item.removeAttribute("id"));
+      document.body.appendChild(ghost);
+    }
+    const width = Math.min(Math.max(node.getBoundingClientRect().width, 120), 360);
+    ghost.style.width = width + "px";
+    ghost.style.left = Math.round(x + 14) + "px";
+    ghost.style.top = Math.round(y + 14) + "px";
+  }
+
+  function markLayoutDrop(card, clientX, clientY) {
+    clearLayoutMarks();
+    const hit = document.elementFromPoint(clientX, clientY);
+    const targetNode = hit && hit.closest && hit.closest("[data-bpath]");
+    if (!targetNode || !card.contains(targetNode)) return;
+    const path = targetNode.getAttribute("data-bpath");
+    if (!path || path === layoutDrag.path) return;
+    const rect = targetNode.getBoundingClientRect();
+    const rx = rect.width ? (clientX - rect.left) / rect.width : 0.5;
+    const ry = rect.height ? (clientY - rect.top) / rect.height : 0.5;
+    let side = "after";
+    if (rx < 0.28) side = "left";
+    else if (rx > 0.72) side = "right";
+    else side = ry < 0.5 ? "before" : "after";
+    targetNode.classList.add("is-drop-" + side);
+    layoutDrag.drop = { path, side };
+  }
 
   function blocksOf(item) {
     const stored = item && item.blocks && item.blocks.length ? item.blocks : GuideProgress.blocksFromDetail(item && item.detail);
@@ -2474,16 +2646,21 @@
     if (!handle) return;
     const card = handle.closest("article.it[data-id]");
     if (!card) return;
+    try { handle.setPointerCapture(event.pointerId); } catch (error) {}
     layoutDrag = {
       id: card.getAttribute("data-id"),
       path: handle.getAttribute("data-bpath"),
       selected: handle.getAttribute("data-bpath"),
       mode: resize ? "resize" : split ? "split" : "move",
       splitIndex: split ? Number(split.getAttribute("data-split")) : 0,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
       x: event.clientX,
       y: event.clientY,
       moved: false
     };
+    if (layoutDrag.mode === "move") startEdgeScroll(() => layoutDrag);
     document.querySelectorAll(".is-layout-selected").forEach(node => node.classList.remove("is-layout-selected"));
     const selected = card.querySelector('[data-bpath="' + (window.CSS && CSS.escape ? CSS.escape(layoutDrag.path) : layoutDrag.path) + '"]');
     if (selected) selected.classList.add("is-layout-selected");
@@ -2492,10 +2669,21 @@
 
   document.addEventListener("pointermove", event => {
     if (!layoutDrag) return;
-    if (Math.hypot(event.clientX - layoutDrag.x, event.clientY - layoutDrag.y) > 6) layoutDrag.moved = true;
+    layoutDrag.x = event.clientX;
+    layoutDrag.y = event.clientY;
+    if (Math.hypot(event.clientX - layoutDrag.startX, event.clientY - layoutDrag.startY) > 6) layoutDrag.moved = true;
     if (!layoutDrag.moved) return;
     const card = document.querySelector('article.it[data-id="' + (window.CSS && CSS.escape ? CSS.escape(layoutDrag.id) : layoutDrag.id) + '"]');
     if (!card) return;
+    if (layoutDrag.mode === "move") {
+      document.body.classList.add("is-layout-dragging");
+      const source = card.querySelector('[data-bpath="' + (window.CSS && CSS.escape ? CSS.escape(layoutDrag.path) : layoutDrag.path) + '"]');
+      if (source) {
+        placeLayoutGhost(source, event.clientX, event.clientY);
+        source.style.opacity = "0.35";
+      }
+      markLayoutDrop(card, event.clientX, event.clientY);
+    }
     if (layoutDrag.mode === "resize") {
       const figure = card.querySelector('[data-bpath="' + layoutDrag.path + '"]');
       const host = card.querySelector(".blocks");
@@ -2514,9 +2702,19 @@
     }
   });
 
-  document.addEventListener("pointerup", event => {
+  function endLayoutDrag(commit) {
     const current = layoutDrag;
     layoutDrag = null;
+    document.body.classList.remove("is-layout-dragging");
+    clearLayoutMarks();
+    removeLayoutGhost();
+    document.querySelectorAll("[data-bpath]").forEach(node => { node.style.opacity = ""; });
+    if (!current || !commit) return null;
+    return current;
+  }
+
+  document.addEventListener("pointerup", event => {
+    const current = endLayoutDrag(true);
     if (!current) return;
     const place = locate(current.id);
     const item = place && routeRecord(place.trackId, place.chapterId, current.id);
@@ -2534,22 +2732,11 @@
       saveLayout(current.id, blocks);
       return;
     }
-    if (!current.moved) return;
+    if (!current.moved || current.mode !== "move") return;
     const moving = detachBlock(blocks, current.path);
-    const hit = document.elementFromPoint(event.clientX, event.clientY);
-    const targetNode = hit && hit.closest && hit.closest("article.it[data-id='" + current.id + "'] [data-bpath]");
-    const targetPath = targetNode && targetNode.getAttribute("data-bpath");
-    const target = targetPath && targetPath !== current.path ? takeBlock(blocks, targetPath) : null;
-    let side = "after";
-    if (targetNode) {
-      const rect = targetNode.getBoundingClientRect();
-      const rx = rect.width ? (event.clientX - rect.left) / rect.width : 0.5;
-      const ry = rect.height ? (event.clientY - rect.top) / rect.height : 0.5;
-      if (rx < 0.28) side = "left";
-      else if (rx > 0.72) side = "right";
-      else side = ry < 0.5 ? "before" : "after";
-    }
-    placeBlock(blocks, moving, target && target.block, side);
+    const drop = current.drop;
+    const target = drop && drop.path !== current.path ? takeBlock(blocks, drop.path) : null;
+    placeBlock(blocks, moving, target && target.block, drop ? drop.side : "after");
     tidyColumns(blocks);
     saveLayout(current.id, blocks);
   });

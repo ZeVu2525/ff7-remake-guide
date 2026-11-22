@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v26");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v27");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -528,6 +528,30 @@ assert.strictEqual(multiFlags.error, undefined);
 assert.deepStrictEqual(multiFlags.value.flags, ["story", "battle"]);
 assert.deepStrictEqual(multiFlags.value.enemies, ["e001"]);
 assert.strictEqual(multiFlags.value.trophy, "trophy-ch01");
+const listed = progress.normalizeBlocks([{
+  type: "list",
+  heading: " 第一段階で使用するアクション ",
+  columns: 2,
+  items: ["98式機関砲", "電磁フィールド", "ジャンプ", "電磁ブレス", "スコーピオンテイル", "クローアーム", "ターゲットサーチ", "なぎはらい", "99式小型ミサイル", ""]
+}]);
+assert.strictEqual(listed[0].heading, "第一段階で使用するアクション");
+assert.strictEqual(listed[0].columns, 2);
+assert.strictEqual(listed[0].items.length, 9);
+assert.deepStrictEqual(progress.listColumns(listed[0].items, 2).map(col => col.length), [5, 4]);
+assert.deepStrictEqual(progress.listColumns(listed[0].items, 3).map(col => col.length), [3, 3, 3]);
+assert.deepStrictEqual(progress.listColumns(listed[0].items, 1).map(col => col.length), [9]);
+const nestedList = progress.normalizeBlocks([{
+  type: "columns",
+  count: 2,
+  columns: [[{ type: "text", html: "左" }, { type: "list", heading: "手順", items: ["A", "B"] }], [{ type: "image", src: "https://example.com/a.png" }]]
+}]);
+assert.strictEqual(nestedList[0].columns[0][1].type, "list");
+const listHtml = progress.blockHtml(listed);
+assert.ok(listHtml.includes("blk-list-head"));
+assert.ok(listHtml.includes("98式機関砲"));
+assert.ok(listHtml.includes("99式小型ミサイル"));
+assert.strictEqual(progress.plainInsertHtml("太字\n<b>次</b>"), "太字<br>&lt;b&gt;次&lt;/b&gt;");
+assert.ok(progress.plainFromBlocks(listed).includes("第一段階で使用するアクション"));
 const sized = progress.normalizeBlocks([{ type: "image", src: "https://example.com/a.png", pct: 33, width: "m", align: "left" }]);
 assert.strictEqual(sized[0].pct, 35);
 

@@ -1271,7 +1271,7 @@
         const children = Array.isArray(source[i]) ? source[i] : [];
         columns.push(children.map(child => {
           const next = normalizeBlock(child);
-          return next && (next.type === "text" || next.type === "image") ? next : null;
+          return next && (next.type === "text" || next.type === "image" || next.type === "list") ? next : null;
         }).filter(Boolean).slice(0, 6));
       }
       if (!columns.some(col => col.length)) return null;
@@ -1282,6 +1282,14 @@
       const head = widths.slice(0, -1).reduce((total, n) => total + n, 0);
       widths[widths.length - 1] = Math.max(15, 100 - head);
       return { type: "columns", count, arrow: block.arrow === true && count === 2, widths, columns };
+    }
+    if (type === "list") {
+      const heading = String(block.heading || "").replace(/\s+/g, " ").trim().slice(0, 80);
+      const source = Array.isArray(block.items) ? block.items : String(block.items || "").split("\n");
+      const items = source.map(item => String(item || "").replace(/\s+/g, " ").trim().slice(0, 80)).filter(Boolean).slice(0, 24);
+      const columns = block.columns === 1 || block.columns === 3 ? block.columns : 2;
+      if (!heading && !items.length) return null;
+      return { type: "list", heading, items, columns };
     }
     if (type === "tiles") {
       const items = (Array.isArray(block.items) ? block.items : []).map(item => {
@@ -1317,6 +1325,10 @@
       if (block.type === "text" || block.type === "callout") parts.push(plainFromHtml(block.html));
       if (block.type === "image" && block.caption) parts.push(block.caption);
       if (block.type === "columns") block.columns.forEach(col => parts.push(plainFromBlocks(col)));
+      if (block.type === "list") {
+        if (block.heading) parts.push(block.heading);
+        if (block.items.length) parts.push(block.items.join("\n"));
+      }
       if (block.type === "tiles") block.items.forEach(item => { if (item.label) parts.push(item.label); });
     });
     return parts.filter(part => part && part.trim()).join("\n");
@@ -1335,11 +1347,36 @@
     return normalizeBlocks(blocks).map((block, index) => renderBlock(block, String(index))).join("");
   }
 
+  function listColumns(items, count) {
+    const list = (items || []).map(item => String(item || "").trim()).filter(Boolean);
+    const columns = count === 1 || count === 3 ? count : 2;
+    if (!list.length) return [];
+    const size = Math.ceil(list.length / columns);
+    const out = [];
+    for (let index = 0; index < columns; index += 1) {
+      const slice = list.slice(index * size, (index + 1) * size);
+      if (slice.length) out.push(slice);
+    }
+    return out;
+  }
+
+  function plainInsertHtml(text) {
+    return escapeRichText(String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n")).replace(/\n/g, "<br>");
+  }
+
+  function renderList(block, path) {
+    const cols = listColumns(block.items, block.columns);
+    const heading = block.heading ? '<h4 class="blk-list-head"><i aria-hidden="true"></i>' + escapeRichText(block.heading) + "</h4>" : "";
+    const body = cols.map(col => '<div class="blk-list-col">' + col.map(item => "<p>" + escapeRichText(item) + "</p>").join("") + "</div>").join("");
+    return '<section class="blk-list c' + (block.columns || cols.length || 1) + '" data-bpath="' + path + '">' + heading + '<div class="blk-list-grid">' + body + "</div></section>";
+  }
+
   function renderBlock(block, path) {
     const attr = ' data-bpath="' + path + '"';
     if (block.type === "text") return '<div class="blk-text"' + attr + ">" + block.html + "</div>";
     if (block.type === "callout") return '<div class="blk-callout"' + attr + ">" + block.html + "</div>";
     if (block.type === "image") return renderImage(block, false, path);
+    if (block.type === "list") return renderList(block, path);
     if (block.type === "tiles") {
       return '<div class="blk-tiles"' + attr + ">" + block.items.map((item, index) => '<figure class="blk-tile" data-bpath="' + path + ".tile." + index + '">' + renderImage(item, true, path + ".tile." + index) + (item.label ? "<figcaption>" + escapeRichText(item.label) + "</figcaption>" : "") + "</figure>").join("") + "</div>";
     }
@@ -1725,6 +1762,8 @@
     blocksFromDetail,
     plainFromBlocks,
     blockHtml,
+    listColumns,
+    plainInsertHtml,
     validImageValue,
     replaceMapValues,
     saveOrder,
