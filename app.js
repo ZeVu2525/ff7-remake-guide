@@ -39,6 +39,12 @@
   } catch (error) {
     cardBook = GuideProgress.emptyCardBook();
   }
+  if (!localStorage.getItem(storage.cardEdits) && globalThis.UI_SETTINGS) {
+    cardBook = GuideProgress.normalizeCardBook(Object.assign({}, cardBook, {
+      labels: UI_SETTINGS.labels || {},
+      difficulty: UI_SETTINGS.difficulty || "normal"
+    }));
+  }
   for (const id of Object.keys(state.checks)) {
     if (cardBook.deleted[id]) delete state.checks[id];
   }
@@ -1206,8 +1212,68 @@
       <p class="lead">1行が1つの定型文です。カードの見出しで選ぶと、章の中で 宝箱① のように番号が付きます。</p>
       <textarea id="settings-templates" rows="6">${esc(templates.map(item => item.label).join("\n"))}</textarea>
       <p><button type="button" id="settings-templates-save">定型文を保存</button></p>
+      <h3>GitHub連携（管理者）</h3>
+      <p class="lead">Fine-grained の Personal Access Token を、このリポジトリだけに、Contents は Read and write だけにして作ってください。トークンはこのブラウザの中だけに残り、書き出すファイルには入りません。</p>
+      <label class="setting-row"><span>トークン</span><input id="github-token" type="password" autocomplete="off" placeholder="github_pat_..."></label>
+      <label class="setting-row"><span>所有者</span><input id="github-owner" value="ZeVu2525" autocomplete="off"></label>
+      <label class="setting-row"><span>リポジトリ</span><input id="github-repo" value="ff7-remake-guide" autocomplete="off"></label>
+      <label class="setting-row"><span>ブランチ</span><input id="github-branch" value="main" autocomplete="off"></label>
+      <p><button type="button" id="github-save">保存</button> <button type="button" id="github-forget">削除</button> <button type="button" id="github-test">接続テスト</button></p>
+      <p id="github-status" class="lead"></p>
       <h3>今後の設定</h3>
       <p class="lead">表示や操作で、あとから設定が必要になったものはこの画面に足します。</p>`;
+    const githubStatus = document.getElementById("github-status");
+    const savedGithub = (() => {
+      try { return JSON.parse(localStorage.getItem(GuideProgress.GITHUB_STORE) || "null"); } catch (error) { return null; }
+    })();
+    if (githubStatus && savedGithub && savedGithub.push) githubStatus.textContent = "管理者として接続済みです。編集バーに書き出しと読み込みが出ます。";
+    const saveGithub = document.getElementById("github-save");
+    if (saveGithub) saveGithub.addEventListener("click", () => {
+      const token = document.getElementById("github-token").value.trim();
+      const storedNow = (() => { try { return JSON.parse(localStorage.getItem(GuideProgress.GITHUB_STORE) || "null"); } catch (error) { return null; } })();
+      const nextToken = token || (storedNow && storedNow.token);
+      if (!nextToken) { githubStatus.textContent = "トークンを入れてください。"; return; }
+      localStorage.setItem(GuideProgress.GITHUB_STORE, JSON.stringify({
+        token: nextToken,
+        owner: document.getElementById("github-owner").value.trim() || "ZeVu2525",
+        repo: document.getElementById("github-repo").value.trim() || "ff7-remake-guide",
+        branch: document.getElementById("github-branch").value.trim() || "main",
+        push: false
+      }));
+      document.getElementById("github-token").value = "";
+      if (globalThis.GuideCardEdit && GuideCardEdit.paintGithub) GuideCardEdit.paintGithub();
+      renderSettings();
+      const status = document.getElementById("github-status");
+      if (status) status.textContent = "保存しました。接続テストで、書き込み権限を確認してください。";
+    });
+    const forgetGithub = document.getElementById("github-forget");
+    if (forgetGithub) forgetGithub.addEventListener("click", () => {
+      localStorage.removeItem(GuideProgress.GITHUB_STORE);
+      if (globalThis.GuideCardEdit && GuideCardEdit.paintGithub) GuideCardEdit.paintGithub();
+      renderSettings();
+      const status = document.getElementById("github-status");
+      if (status) status.textContent = "トークンを削除しました。";
+    });
+    const testGithub = document.getElementById("github-test");
+    if (testGithub) testGithub.addEventListener("click", async () => {
+      const typed = document.getElementById("github-token").value.trim();
+      const stored = (() => { try { return JSON.parse(localStorage.getItem(GuideProgress.GITHUB_STORE) || "null"); } catch (error) { return null; } })();
+      const token = typed || (stored && stored.token);
+      const owner = document.getElementById("github-owner").value.trim() || "ZeVu2525";
+      const repo = document.getElementById("github-repo").value.trim() || "ff7-remake-guide";
+      const branch = document.getElementById("github-branch").value.trim() || "main";
+      if (!token) { githubStatus.textContent = "トークンを入れてください。"; return; }
+      githubStatus.textContent = "接続を確認しています。";
+      try {
+        const result = await GuideProgress.githubTest(fetch, token, owner, repo);
+        localStorage.setItem(GuideProgress.GITHUB_STORE, JSON.stringify({ token, owner, repo, branch, push: result.push === true }));
+        document.getElementById("github-token").value = "";
+        githubStatus.textContent = result.push ? "書き込みできます。編集バーにボタンが出ます。" : "接続できましたが、書き込み権限がありません。";
+      } catch (error) {
+        githubStatus.textContent = "接続できませんでした。";
+      }
+      if (globalThis.GuideCardEdit && GuideCardEdit.paintGithub) GuideCardEdit.paintGithub();
+    });
     const difficultySelect = document.getElementById("settings-difficulty");
     if (difficultySelect) difficultySelect.addEventListener("change", () => {
       const next = JSON.parse(JSON.stringify(cardBook));

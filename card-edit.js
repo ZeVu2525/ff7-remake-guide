@@ -149,6 +149,33 @@
       const node = document.getElementById(id);
       if (node) node.textContent = GuideProgress.labelText(current, named[id]);
     });
+    paintGithub();
+  }
+
+  function githubAccount() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(GuideProgress.GITHUB_STORE) || "null");
+      if (!parsed || typeof parsed.token !== "string" || !parsed.token || parsed.push !== true) return null;
+      return parsed;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function paintGithub() {
+    const exportButton = document.getElementById("card-edit-export");
+    let box = document.getElementById("github-admin-actions");
+    if (!githubAccount() || !exportButton) {
+      if (box) box.remove();
+      return;
+    }
+    if (box) return;
+    box = document.createElement("span");
+    box.id = "github-admin-actions";
+    box.innerHTML = '<button type="button" id="github-push">GitHubに書き出す</button><button type="button" id="github-pull">GitHubから読み込む</button>';
+    exportButton.insertAdjacentElement("afterend", box);
+    document.getElementById("github-push").addEventListener("click", () => { githubPush().catch(error => window.alert(error.message || "書き出せませんでした。")); });
+    document.getElementById("github-pull").addEventListener("click", () => { githubPull().catch(error => window.alert(error.message || "読み込めませんでした。")); });
   }
 
   function setOn(on) {
@@ -351,7 +378,10 @@
   function freshBlocks(seed) {
     const stored = GuideProgress.normalizeBlocks(seed && seed.blocks);
     if (stored.length) return stored;
-    return GuideProgress.blocksFromDetail(seed && seed.detail);
+    const fromDetail = GuideProgress.blocksFromDetail(seed && seed.detail);
+    if (fromDetail.length) return fromDetail;
+    if (!seed || !seed.id) return [{ type: "text", html: "" }];
+    return [];
   }
 
   function blockAt(path) {
@@ -2509,10 +2539,86 @@
       "<li>カードの画像は images/ と data/images.js です。掲載元の画像は入れません。</li>",
       "<li>定型文は data/templates.js です。宝箱① のような見出しの元です。設定タブでも直せます。</li>",
       "<li>設定はボタン名などのJSONです。「読み込む」でこのブラウザに戻せます。</li>",
-      "<li>表示文の修正は、画面の文章を直接直した分です。</li></ul>",
-      "<p>「読み込む」は、編集データの控えJSONをこのブラウザに反映します。原稿ファイルそのものは置き換わりません。</p>"
+      "<li>表示文の修正は、画面の文章を直接直した分です。</li>",
+      "<li>管理者は、設定タブのトークンで、同じ原稿を main に1回で書き出せます。トークンはファイルに入りません。</li></ul>",
+      "<p>「読み込む」は、編集データの控えJSONをこのブラウザに反映します。原稿ファイルそのものは置き換わりません。GitHubから読み込む場合は、リポジトリの原稿でこのブラウザのカード編集を置き換えます。</p>"
     ].join(""), () => { dialog.hidden = true; }, "閉じる");
   });
+  function bytesToBase64(bytes) {
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+
+  async function repoFiles() {
+    const prepared = await prepareMaps(GuideProgress.mergedRoute(ROUTE, GAME.chapters, book()), mergedCatalogs());
+    const images = await prepareImages(prepared.route);
+    prepared.route = images.route;
+    const templates = GuideProgress.activeTemplates(book(), globalThis.TEMPLATES);
+    const files = [
+      { path: "data/route.js", text: GuideProgress.routeModuleSource(prepared.route) },
+      { path: "data/catalogs.js", text: GuideProgress.catalogsModuleSource(prepared.catalogs) },
+      { path: "data/maps.js", text: "const MAP_FILES = " + JSON.stringify(prepared.manifest, null, 2) + ";\n\nglobalThis.MAP_FILES = MAP_FILES;\n" },
+      { path: "data/images.js", text: "const IMAGE_FILES = " + JSON.stringify(images.manifest, null, 2) + ";\n\nglobalThis.IMAGE_FILES = IMAGE_FILES;\n" },
+      { path: "data/templates.js", text: "const TEMPLATES = " + JSON.stringify(templates, null, 2) + ";\n\nglobalThis.TEMPLATES = TEMPLATES;\n" },
+      { path: "data/settings.js", text: "const UI_SETTINGS = " + JSON.stringify({ difficulty: book().difficulty || "normal", labels: book().labels || {} }, null, 2) + ";\n\nglobalThis.UI_SETTINGS = UI_SETTINGS;\n" }
+    ];
+    for (const item of prepared.fresh.concat(images.fresh)) {
+      if (!item.blob) continue;
+      files.push({ path: item.file, base64: bytesToBase64(new Uint8Array(await item.blob.arrayBuffer())) });
+    }
+    return files.map(file => ({ path: file.path, base64: file.base64 || GuideProgress.utf8ToBase64(file.text) }));
+  }
+
+  function stamp() {
+    const now = new Date();
+    const pad = value => String(value).padStart(2, "0");
+    return now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate()) + " " + pad(now.getHours()) + ":" + pad(now.getMinutes());
+  }
+
+  async function githubPush() {
+    const account = githubAccount();
+    if (!account) return;
+    if (!window.confirm("今の編集を main に、1件のコミットとして書き出します。")) return;
+    const status = document.getElementById("github-status");
+    if (status) status.textContent = "ファイルをまとめています。";
+    const files = await repoFiles();
+    if (status) status.textContent = "GitHubへ送っています。";
+    const result = await GuideProgress.githubCommit(fetch, account.token, {
+      owner: account.owner || "ZeVu2525",
+      repo: account.repo || "ff7-remake-guide",
+      branch: account.branch || "main",
+      message: "編集内容を書き出し (" + stamp() + ")",
+      files: files
+    });
+    if (status) status.innerHTML = "書き出しました。<a href=\"" + result.url + "\" target=\"_blank\" rel=\"noopener noreferrer\">コミットを開く</a>。GitHub Pages の反映には1〜2分かかります。";
+    else window.alert("書き出しました。 " + result.url);
+    if (window.confirm("リポジトリに入ったので、このブラウザのカード編集を消しますか。消したあとは、Pages の反映後に再読み込みしてください。")) {
+      GuideApp.setCardBook(GuideProgress.emptyCardBook());
+    }
+  }
+
+  async function githubPull() {
+    const account = githubAccount();
+    if (!account) return;
+    if (!window.confirm("GitHubの原稿で、このブラウザのカード編集を置き換えます。")) return;
+    const status = document.getElementById("github-status");
+    if (status) status.textContent = "原稿を受け取っています。";
+    const files = await GuideProgress.githubReadFiles(fetch, account.token, account.owner || "ZeVu2525", account.repo || "ff7-remake-guide", account.branch || "main", [
+      "data/route.js", "data/catalogs.js", "data/maps.js", "data/images.js", "data/templates.js", "data/enemies.js", "data/settings.js"
+    ]);
+    Object.keys(files).forEach(path => { (0, eval)(files[path]); });
+    const next = GuideProgress.emptyCardBook();
+    if (globalThis.UI_SETTINGS) {
+      next.labels = UI_SETTINGS.labels || {};
+      next.difficulty = UI_SETTINGS.difficulty || "normal";
+    }
+    GuideApp.setCardBook(next);
+    if (status) status.textContent = "GitHubの原稿を読み込みました。";
+  }
+
+  globalThis.GuideCardEdit = { paintGithub: paintGithub };
+
   document.getElementById("card-edit-templates").addEventListener("click", () => {
     if (globalThis.GuideApp && GuideApp.showHub) GuideApp.showHub("settings");
   });
