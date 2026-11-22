@@ -21,7 +21,7 @@ const GAME = {
     theme: "ff7r-guide-theme",
     backup: "ff7r-guide-state-v1-last-backup"
   },
-  cache: "ff7r-guide-v12",
+  cache: "ff7r-guide-v13",
   cacheFiles: [
     "./",
     "./index.html",
@@ -36,7 +36,8 @@ const GAME = {
     "./data/catalogs.js",
     "./data/maps.js",
     "./data/templates.js",
-    "./data/images.js"
+    "./data/images.js",
+    "./data/enemies.js"
   ],
   themes: [
     { id: "light", label: "読みやすいライト" },
@@ -64,7 +65,8 @@ const GAME = {
     { id: "optional", label: "任意", chip: true, tone: "optional" },
     { id: "trophy", label: "トロフィー", chip: true, tone: "trophy" },
     { id: "item", label: "アイテム入手", chip: true, tone: "item" },
-    { id: "tips", label: "Tips", chip: true, tone: "tips" }
+    { id: "tips", label: "Tips", chip: true, tone: "tips" },
+    { id: "battle", label: "戦闘", chip: true, tone: "battle" }
   ],
   hubs: [
     { id: "route", label: "ルート", kind: "route" },
@@ -80,6 +82,7 @@ const GAME = {
     ] },
     { id: "summons", label: "召喚獣", kind: "catalog", catalog: "summons" },
     { id: "skills", label: "敵の技", kind: "catalog", catalog: "skills" },
+    { id: "enemies", label: "エネミー", kind: "enemies" },
     { id: "settings", label: "設定", kind: "settings" }
   ],
   maps: [

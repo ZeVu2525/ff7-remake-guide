@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v12");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v13");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -401,5 +401,17 @@ const imageFile = progress.assignImageFile("abc123abc123", "png", []);
 assert.strictEqual(imageFile.file, "images/user-abc123abc123.png");
 const again = progress.assignImageFile("abc123abc123", "png", imageFile.manifest);
 assert.strictEqual(again.added, null);
+
+assert.deepStrictEqual(progress.cardFlags({ flag: "story" }), ["story"]);
+assert.deepStrictEqual(progress.cardFlags({ flag: "story", flags: ["tips", "battle"] }), ["tips", "battle"]);
+const multiFlags = progress.validateRouteFields({
+  title: "t", detail: "d", flags: ["story", "battle"], enemies: ["e001"], trophy: "trophy-ch01"
+}, ["story", "battle", "trophy", "item"], ["trophy-ch01"]);
+assert.strictEqual(multiFlags.error, undefined);
+assert.deepStrictEqual(multiFlags.value.flags, ["story", "battle"]);
+assert.deepStrictEqual(multiFlags.value.enemies, ["e001"]);
+assert.strictEqual(multiFlags.value.trophy, "trophy-ch01");
+const sized = progress.normalizeBlocks([{ type: "image", src: "https://example.com/a.png", pct: 33, width: "m", align: "left" }]);
+assert.strictEqual(sized[0].pct, 35);
 
 console.log("test-guide: ok");

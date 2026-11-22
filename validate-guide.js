@@ -11,16 +11,16 @@ function loadGuide() {
   const sandbox = { console };
   sandbox.globalThis = sandbox;
   const context = vm.createContext(sandbox);
-  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "data/templates.js"]) {
+  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "data/templates.js", "data/enemies.js"]) {
     vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context, { filename: file });
   }
-  return { GAME: sandbox.GAME, ROUTE: sandbox.ROUTE, CATALOGS: sandbox.CATALOGS, MAP_FILES: sandbox.MAP_FILES };
+  return { GAME: sandbox.GAME, ROUTE: sandbox.ROUTE, CATALOGS: sandbox.CATALOGS, MAP_FILES: sandbox.MAP_FILES, ENEMIES: sandbox.ENEMIES };
 }
 
 function validateGuide(guide) {
   const errors = [];
   const fail = message => errors.push(message);
-  const { GAME, ROUTE, CATALOGS } = guide;
+  const { GAME, ROUTE, CATALOGS, ENEMIES } = guide;
   if (!GAME || !ROUTE || !CATALOGS) {
     fail("data/game.js、data/route.js、data/catalogs.js を読めなかった");
     return errors;
@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v12") fail("キャッシュ名が ff7r-guide-v12 ではない");
+  if (GAME.cache !== "ff7r-guide-v13") fail("キャッシュ名が ff7r-guide-v13 ではない");
   const mapFiles = guide.MAP_FILES;
   if (!Array.isArray(mapFiles)) fail("data/maps.js の MAP_FILES が配列ではない");
   else mapFiles.forEach(entry => {
@@ -51,7 +51,7 @@ function validateGuide(guide) {
   for (const file of GAME.cacheFiles) {
     if (!sw.includes(file)) fail("sw.js の対象に " + file + " がない");
   }
-  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "data/templates.js", "data/images.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
+  for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "data/templates.js", "data/images.js", "data/enemies.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
     if (!html.includes(file + "?v=" + GAME.cache)) fail("index.html の " + file + " に版のクエリがない");
   }
   if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw") || !app.includes("すべて表示") || !app.includes("data-map") || !app.includes("data-open-item") || !app.includes("data-item-section") || !app.includes("map-zoom") || !progress.includes('"kids": "中のカード"') || !app.includes("data-open-weapon")) {
@@ -84,7 +84,7 @@ function validateGuide(guide) {
   const flagIds = new Set((GAME.flags || []).map(flag => flag.id));
   const band = new Set((GAME.flags || []).filter(flag => flag.band).map(flag => flag.id));
   if (!band.has("deadline") || !band.has("missable")) fail("期限と取り逃しが帯の対象になっていない");
-  for (const id of ["trophy", "item", "tips"]) {
+  for (const id of ["trophy", "item", "tips", "battle"]) {
     if (!flagIds.has(id)) fail("フラグがない: " + id);
   }
 
@@ -220,6 +220,18 @@ function validateGuide(guide) {
   if (!CATALOGS.quests.items.some(item => item && item.id === "quest-chadley" && item.reports && item.reports.length >= 4)) {
     fail("チャドリーレポートの表がない");
   }
+  const enemies = Array.isArray(ENEMIES) ? ENEMIES : [];
+  const normals = enemies.filter(enemy => enemy && enemy.kind === "normal");
+  const bosses = enemies.filter(enemy => enemy && enemy.kind === "boss");
+  if (normals.length < 90) fail("通常エネミーが足りない");
+  if (bosses.length !== 24) fail("ボスが24体ではない");
+  const numbers = new Set(enemies.map(enemy => Number(enemy.no)).filter(n => n >= 1 && n <= 114));
+  if (numbers.size !== 114) fail("エネミー番号 001-114 が揃っていない");
+  enemies.forEach(enemy => {
+    if (!enemy.name || !/^https:\/\//.test(enemy.source || "")) fail("エネミーの名前か出典がない: " + (enemy && enemy.id));
+    if (enemy.image && !/^https:\/\//.test(enemy.image)) fail("エネミー画像は掲載元へのリンクだけにする: " + enemy.id);
+    if (/インターミッション/.test(enemy.name || "")) fail("INTERmission の敵が混ざっている: " + enemy.name);
+  });
   const chapter18 = (ROUTE.main || []).find(row => row.chapterId === "ch18");
   if (chapter18 && (chapter18.items || []).some(item => item && item.map)) fail("Chapter 18 に地図を出している");
 

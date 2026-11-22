@@ -107,6 +107,7 @@ html[data-theme="dark"] .chip.on.tone-trophy,
 html[data-theme="accent"] .chip.on.tone-trophy{color:#1a1404}
 .chip.on.tone-item{background:var(--green);border-color:var(--green)}
 .chip.on.tone-tips{background:var(--pink);border-color:var(--pink)}
+.chip.on.tone-battle{background:#1677a8;border-color:#1677a8;color:#fff}
 .toolbar input[type=search],.chapter-jump select{min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--fg);font-size:16px}
 #q,.catalog-tools input[type=search]{flex:1 1 180px;min-width:0;width:100%;padding:8px 12px}
 .chapter-jump{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;color:var(--fg2);font-size:14px;font-weight:700}
@@ -212,6 +213,7 @@ tr.is-target td{background:rgba(57,201,255,.18)}
 .tone-trophy{color:var(--amber);background:var(--amberbg);border:1px solid var(--amber)}
 .tone-item{color:var(--green);background:var(--greenbg);border:1px solid var(--green)}
 .tone-tips{color:var(--pink);background:var(--pinkbg);border:1px solid var(--pink)}
+.tone-battle{color:#1677a8;background:#e5f4ff;border:1px solid #1677a8}
 .it.flag-deadline,.it.flag-missable{box-shadow:inset 4px 0 0 var(--red)}
 .it.flag-trophy{box-shadow:inset 4px 0 0 var(--amber)}
 .it.flag-item{box-shadow:inset 4px 0 0 var(--green)}
@@ -243,7 +245,20 @@ html[data-theme="dark"] .blk-callout,html[data-theme="accent"] .blk-callout{back
 .blk-tile{width:108px;margin:0;text-align:center}
 .blk-tile img{width:100%;height:72px;object-fit:contain;border:1px solid var(--line)}
 .blk-tile figcaption,.blk-img figcaption{margin-top:4px;font-size:13px}
-@media(max-width:700px){.blk-cols.c2,.blk-cols.c3,.blk-cols.has-arrow{grid-template-columns:1fr}}
+.blk-col{position:relative;min-width:0}
+.blk-split{display:none}
+.is-card-edit .blk-split{display:block;position:absolute;top:0;right:-7px;bottom:0;width:14px;cursor:col-resize;z-index:2}
+.blk-img{position:relative}
+.blk-resize{display:none}
+.is-card-edit .blk-resize{display:block;position:absolute;right:0;bottom:0;width:14px;height:14px;background:#39c9ff;cursor:nwse-resize}
+.is-card-edit .is-layout-selected{outline:2px solid #39c9ff;outline-offset:2px}
+.enemy-row,.enemy-mini{display:flex;gap:8px;align-items:center;width:100%;min-height:44px;margin:0 0 6px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:inherit;text-align:left;cursor:pointer}
+.enemy-card{display:grid;gap:6px;margin-top:8px}
+.enemy-own,.enemy-hero{max-width:min(100%,420px);background:#fff}
+.enemy-table{width:100%;border-collapse:collapse;margin:0 0 12px}
+.enemy-table th,.enemy-table td{padding:6px 8px;border:1px solid var(--line);text-align:left;vertical-align:top}
+.enemy-phase{margin:0 0 8px;padding:8px 10px;background:var(--bg3);border-left:4px solid #1677a8}
+@media(max-width:700px){.blk-cols,.blk-cols.c2,.blk-cols.c3,.blk-cols.has-arrow{grid-template-columns:1fr !important}}
 button.linkish{display:inline;padding:0;border:0;background:transparent;color:var(--accent);font:inherit;font-weight:700;cursor:pointer;overflow-wrap:anywhere}
 .route-item-toggle{background:var(--bg3);color:var(--fg2)}
 .empty-chapter{margin:0;padding:14px;color:var(--fg3)}
@@ -336,15 +351,16 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
   <button type="button" id="edit-toggle" aria-pressed="false">編集：オフ</button>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v12"></script>
-<script src="data/route.js?v=ff7r-guide-v12"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v12"></script>
-<script src="data/maps.js?v=ff7r-guide-v12"></script>
-<script src="data/templates.js?v=ff7r-guide-v12"></script>
-<script src="data/images.js?v=ff7r-guide-v12"></script>
-<script src="progress.js?v=ff7r-guide-v12"></script>
-<script src="app.js?v=ff7r-guide-v12"></script>
-<script src="edit-mode.js?v=ff7r-guide-v12"></script>
-<script src="card-edit.js?v=ff7r-guide-v12"></script>
+<script src="data/game.js?v=ff7r-guide-v13"></script>
+<script src="data/route.js?v=ff7r-guide-v13"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v13"></script>
+<script src="data/maps.js?v=ff7r-guide-v13"></script>
+<script src="data/templates.js?v=ff7r-guide-v13"></script>
+<script src="data/images.js?v=ff7r-guide-v13"></script>
+<script src="data/enemies.js?v=ff7r-guide-v13"></script>
+<script src="progress.js?v=ff7r-guide-v13"></script>
+<script src="app.js?v=ff7r-guide-v13"></script>
+<script src="edit-mode.js?v=ff7r-guide-v13"></script>
+<script src="card-edit.js?v=ff7r-guide-v13"></script>
 </body>
 </html>
