@@ -206,10 +206,16 @@ tr.is-target td{background:rgba(57,201,255,.18)}
 .equip-section{margin:0 0 18px}
 .equip-initial{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .equip-grid td,.equip-grid th{text-align:center}
-#map-pop{position:fixed;z-index:320;max-height:min(70vh,560px);overflow:auto;padding:8px;border:1px solid #bfd0da;border-radius:12px;background:#fff;color:#142635;box-shadow:0 12px 32px rgba(0,0,0,.28)}
+#map-pop{position:fixed;z-index:320;display:flex;flex-direction:column;overflow:hidden;padding:0;border:1px solid #bfd0da;border-radius:12px;background:#fff;color:#142635;box-shadow:0 12px 32px rgba(0,0,0,.28)}
 #map-pop[hidden]{display:none}
-#map-pop img{display:block;width:100%;height:auto;background:#111;border-radius:8px}
+.map-pop-bar{display:flex;align-items:center;gap:8px;min-height:40px;padding:4px 6px 4px 10px;background:#e7eef3;color:#142635;cursor:grab;touch-action:none;user-select:none}
+.map-pop-bar:active{cursor:grabbing}
+#map-pop-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+#map-pop-close{min-width:36px;min-height:36px;border:0;border-radius:8px;background:transparent;color:#142635;font-size:20px;line-height:1;cursor:pointer}
+.map-pop-body{flex:1;min-height:0;overflow:auto;padding:8px;touch-action:auto}
+#map-pop img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;background:#111;border-radius:8px}
 #map-pop a{color:var(--accent)}
+.map-pop-resize{position:absolute;right:0;bottom:0;width:22px;height:22px;border:0;background:linear-gradient(135deg,transparent 50%,#8aa4b4 50%);cursor:nwse-resize;touch-action:none}
 .item-links{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .facet-switch{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
 .is-target{outline:2px solid var(--accent)}
@@ -382,17 +388,17 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
   <button type="button" id="edit-toggle" aria-pressed="false">編集：オフ</button>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v19"></script>
-<script src="data/route.js?v=ff7r-guide-v19"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v19"></script>
-<script src="data/maps.js?v=ff7r-guide-v19"></script>
-<script src="data/templates.js?v=ff7r-guide-v19"></script>
-<script src="data/settings.js?v=ff7r-guide-v19"></script>
-<script src="data/images.js?v=ff7r-guide-v19"></script>
-<script src="data/enemies.js?v=ff7r-guide-v19"></script>
-<script src="progress.js?v=ff7r-guide-v19"></script>
-<script src="app.js?v=ff7r-guide-v19"></script>
-<script src="edit-mode.js?v=ff7r-guide-v19"></script>
-<script src="card-edit.js?v=ff7r-guide-v19"></script>
+<script src="data/game.js?v=ff7r-guide-v20"></script>
+<script src="data/route.js?v=ff7r-guide-v20"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v20"></script>
+<script src="data/maps.js?v=ff7r-guide-v20"></script>
+<script src="data/templates.js?v=ff7r-guide-v20"></script>
+<script src="data/settings.js?v=ff7r-guide-v20"></script>
+<script src="data/images.js?v=ff7r-guide-v20"></script>
+<script src="data/enemies.js?v=ff7r-guide-v20"></script>
+<script src="progress.js?v=ff7r-guide-v20"></script>
+<script src="app.js?v=ff7r-guide-v20"></script>
+<script src="edit-mode.js?v=ff7r-guide-v20"></script>
+<script src="card-edit.js?v=ff7r-guide-v20"></script>
 </body>
 </html>

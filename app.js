@@ -1679,7 +1679,7 @@
       toggleMap(map);
       return;
     }
-    if (!event.target.closest("#map-pop") && !event.target.closest("#map-zoom")) hideMap(true);
+    if (mapPop.dataset.pin !== "1" && !event.target.closest("#map-pop") && !event.target.closest("#map-zoom")) hideMap(true);
   });
 
   document.addEventListener("change", event => {
@@ -1892,11 +1892,33 @@
     }
   };
 
+  const MAP_PANEL_KEY = "ff7r-map-panel-v1";
   const mapPop = document.createElement("div");
   mapPop.id = "map-pop";
   mapPop.hidden = true;
-  mapPop.innerHTML = '<img alt=""><p class="map-fallback" hidden>画像を表示できないので、下のリンクから開いてください。</p><p class="map-actions"><button type="button" id="map-enlarge">拡大</button> <a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p>';
+  mapPop.innerHTML = '<div class="map-pop-bar" id="map-pop-handle"><span id="map-pop-title">地図</span><button type="button" id="map-pop-close" aria-label="閉じる">×</button></div><div class="map-pop-body"><img alt=""><p class="map-fallback" hidden>画像を表示できないので、下のリンクから開いてください。</p><p class="map-actions"><button type="button" id="map-enlarge">拡大</button> <a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p></div><button type="button" class="map-pop-resize" aria-label="大きさを変える"></button>';
   document.body.appendChild(mapPop);
+  function mapViewport() {
+    return { width: window.innerWidth, height: window.innerHeight };
+  }
+  function readMapFrame(anchor) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(MAP_PANEL_KEY) || "null");
+      if (parsed && typeof parsed.left === "number") return GuideProgress.clampMapFrame(parsed, mapViewport());
+    } catch (error) {}
+    return GuideProgress.defaultMapFrame(mapViewport(), anchor);
+  }
+  function writeMapFrame(frame) {
+    try { localStorage.setItem(MAP_PANEL_KEY, JSON.stringify(frame)); } catch (error) {}
+  }
+  function placeMapFrame(frame) {
+    const next = GuideProgress.clampMapFrame(frame, mapViewport());
+    mapPop.style.left = next.left + "px";
+    mapPop.style.top = next.top + "px";
+    mapPop.style.width = next.width + "px";
+    mapPop.style.height = next.height + "px";
+    return next;
+  }
   mapPop.querySelector("img").addEventListener("error", () => {
     mapPop.querySelector("img").hidden = true;
     mapPop.querySelector(".map-fallback").hidden = false;
@@ -1935,19 +1957,14 @@
       link.hidden = true;
       link.removeAttribute("href");
     }
+    const title = mapPop.querySelector("#map-pop-title");
+    if (title) title.textContent = label;
+    const wasHidden = mapPop.hidden;
     mapPop.hidden = false;
-    const rect = button.getBoundingClientRect();
-    const width = Math.min(480, window.innerWidth - 16);
-    mapPop.style.width = width + "px";
-    mapPop.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) + "px";
-    const below = rect.bottom + 8;
-    const spaceBelow = window.innerHeight - below;
-    if (spaceBelow > 200) {
-      mapPop.style.top = below + "px";
-      mapPop.style.maxHeight = Math.max(160, spaceBelow - 8) + "px";
-    } else {
-      mapPop.style.top = "8px";
-      mapPop.style.maxHeight = Math.max(160, rect.top - 16) + "px";
+    if (wasHidden) {
+      const card = button.closest("article.it");
+      const anchor = (card || button).getBoundingClientRect();
+      placeMapFrame(readMapFrame({ left: anchor.left, top: anchor.top, right: anchor.right, bottom: anchor.bottom }));
     }
   }
 
@@ -1991,6 +2008,60 @@
   });
   mapPop.querySelector("img").addEventListener("click", () => {
     openZoom(mapPop.dataset.src, mapPop.dataset.href, mapPop.querySelector("img").alt.replace(/の地図$/, ""));
+  });
+  mapPop.querySelector("#map-pop-close").addEventListener("click", event => {
+    event.stopPropagation();
+    hideMap(true);
+  });
+  const mapHandle = mapPop.querySelector("#map-pop-handle");
+  const mapResize = mapPop.querySelector(".map-pop-resize");
+  let mapDrag = null;
+  mapHandle.addEventListener("pointerdown", event => {
+    if (event.target.closest("button, a")) return;
+    try { mapHandle.setPointerCapture(event.pointerId); } catch (error) {}
+    const rect = mapPop.getBoundingClientRect();
+    mapDrag = { id: event.pointerId, kind: "move", dx: event.clientX - rect.left, dy: event.clientY - rect.top };
+  });
+  mapResize.addEventListener("pointerdown", event => {
+    event.stopPropagation();
+    try { mapResize.setPointerCapture(event.pointerId); } catch (error) {}
+    const rect = mapPop.getBoundingClientRect();
+    mapDrag = { id: event.pointerId, kind: "resize", left: rect.left, top: rect.top, x: event.clientX, y: event.clientY, width: rect.width, height: rect.height };
+  });
+  function moveMapPanel(event) {
+    if (!mapDrag || mapDrag.id !== event.pointerId) return;
+    if (mapDrag.kind === "resize") {
+      placeMapFrame({
+        left: mapDrag.left,
+        top: mapDrag.top,
+        width: mapDrag.width + (event.clientX - mapDrag.x),
+        height: mapDrag.height + (event.clientY - mapDrag.y)
+      });
+      return;
+    }
+    placeMapFrame({
+      left: event.clientX - mapDrag.dx,
+      top: event.clientY - mapDrag.dy,
+      width: mapPop.offsetWidth,
+      height: mapPop.offsetHeight
+    });
+  }
+  function endMapPanel(event) {
+    if (!mapDrag || mapDrag.id !== event.pointerId) return;
+    mapDrag = null;
+    const rect = mapPop.getBoundingClientRect();
+    writeMapFrame(placeMapFrame({ left: rect.left, top: rect.top, width: rect.width, height: rect.height }));
+  }
+  mapHandle.addEventListener("pointermove", moveMapPanel);
+  mapHandle.addEventListener("pointerup", endMapPanel);
+  mapHandle.addEventListener("pointercancel", endMapPanel);
+  mapResize.addEventListener("pointermove", moveMapPanel);
+  mapResize.addEventListener("pointerup", endMapPanel);
+  mapResize.addEventListener("pointercancel", endMapPanel);
+  window.addEventListener("resize", () => {
+    if (mapPop.hidden) return;
+    const rect = mapPop.getBoundingClientRect();
+    writeMapFrame(placeMapFrame({ left: rect.left, top: rect.top, width: rect.width, height: rect.height }));
   });
   const stage = mapZoom.querySelector("#map-zoom-stage");
   stage.addEventListener("wheel", event => {

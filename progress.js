@@ -671,6 +671,37 @@
     return next;
   }
 
+  function clampMapFrame(frame, viewport) {
+    const box = viewport || { width: 0, height: 0 };
+    const viewWidth = Math.max(0, Number(box.width) || 0);
+    const viewHeight = Math.max(0, Number(box.height) || 0);
+    const maxWidth = Math.max(96, viewWidth - 16);
+    const maxHeight = Math.max(96, viewHeight - 16);
+    const width = Math.min(maxWidth, Math.max(Math.min(160, maxWidth), Number(frame && frame.width) || maxWidth));
+    const height = Math.min(maxHeight, Math.max(Math.min(120, maxHeight), Number(frame && frame.height) || maxHeight));
+    const left = Math.min(Math.max(8, Number(frame && frame.left) || 8), Math.max(8, viewWidth - width - 8));
+    const top = Math.min(Math.max(8, Number(frame && frame.top) || 8), Math.max(8, viewHeight - height - 8));
+    return { left: left, top: top, width: width, height: height };
+  }
+
+  function defaultMapFrame(viewport, anchor) {
+    const box = viewport || { width: 0, height: 0 };
+    const mobile = (Number(box.width) || 0) < 720;
+    const width = mobile ? Math.min(260, Math.max(96, (Number(box.width) || 0) - 24)) : 320;
+    const height = mobile ? 200 : 280;
+    const placed = clampMapFrame({
+      left: (Number(box.width) || 0) - width - 12,
+      top: (Number(box.height) || 0) - height - 12,
+      width: width,
+      height: height
+    }, box);
+    const hits = frame => anchor && frame.left < anchor.right && frame.left + frame.width > anchor.left && frame.top < anchor.bottom && frame.top + frame.height > anchor.top;
+    if (!hits(placed)) return placed;
+    const above = clampMapFrame({ left: placed.left, top: 12, width: placed.width, height: placed.height }, box);
+    if (!hits(above)) return above;
+    return clampMapFrame({ left: 12, top: placed.top, width: placed.width, height: placed.height }, box);
+  }
+
   function numberChapter(items, sections) {
     return numberCards(displayItems(items, sections));
   }
@@ -1374,6 +1405,8 @@
     enemyLinks,
     numberCards,
     foldCards,
+    clampMapFrame,
+    defaultMapFrame,
     numberChapter,
     circledNumber,
     templateHeadings,
