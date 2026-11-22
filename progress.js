@@ -813,6 +813,16 @@
     return next;
   }
 
+  function foldAll(flags, ids, closed) {
+    const next = Object.assign(Object.create(null), flags || {});
+    (ids || []).forEach(id => {
+      if (!id) return;
+      next[id] = closed === true;
+      next["kids:" + id] = closed === true;
+    });
+    return next;
+  }
+
   function clampMapFrame(frame, viewport) {
     const box = viewport || { width: 0, height: 0 };
     const viewWidth = Math.max(0, Number(box.width) || 0);
@@ -1233,7 +1243,7 @@
     const width = block.width || "m";
     const align = block.align || "center";
     const pct = block.pct ? ' style="width:' + block.pct + '%"' : "";
-    const image = '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img src="' + src + '" alt="' + (caption || escapeRichText(block.label || "")) + '" loading="lazy"></button>';
+    const image = '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img src="' + src + '" alt="' + (caption || escapeRichText(block.label || "")) + '" loading="lazy" decoding="async"></button>';
     if (bare) return image;
     return '<figure class="blk-img w-' + width + " align-" + align + '" data-bpath="' + path + '"' + pct + ">" + image + '<i class="blk-resize" data-bpath="' + path + '"></i>' + (caption ? "<figcaption>" + caption + "</figcaption>" : "") + "</figure>";
   }
@@ -1555,6 +1565,7 @@
     enemyLinks,
     numberCards,
     foldCards,
+    foldAll,
     clampMapFrame,
     defaultMapFrame,
     numberChapter,
