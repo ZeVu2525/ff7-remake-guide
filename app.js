@@ -453,7 +453,7 @@
           ${sourceLine(item.source)}
           ${cardTools(item)}
         </div>
-        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）"><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard)).join("")}</div></div></div>` : ""}
+        ${kids.length ? `<div class="kids-wrap"><div class="kids-bar"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）"><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><button type="button" class="kids-fold" data-fold-kids="${esc(item.id)}" title="子カードの詳細をすべて閉じる" aria-label="子カードの詳細をすべて閉じる">⊟</button></div><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard)).join("")}</div></div></div>` : ""}
       </div>
     </article>`;
   }
@@ -574,7 +574,7 @@
   }
 
   function setKidsOpen(card, open) {
-    const disclosure = card.querySelector(":scope > .ibody > .kids-wrap > .kids-disclosure");
+    const disclosure = card.querySelector(":scope > .ibody > .kids-wrap .kids-disclosure");
     const panel = card.querySelector(":scope > .ibody > .kids-wrap > .kids-panel");
     if (disclosure) disclosure.setAttribute("aria-expanded", open ? "true" : "false");
     if (panel) panel.classList.toggle("is-shut", !open);
@@ -592,14 +592,12 @@
   function cardTools(item) {
     if (!cardEditing()) return "";
     return `<div class="card-edit-tools">
-      <button type="button" data-card-up="${esc(item.id)}">${esc(L("up"))}</button>
-      <button type="button" data-card-down="${esc(item.id)}">${esc(L("down"))}</button>
-      <button type="button" data-card-edit="${esc(item.id)}">${esc(L("edit"))}</button>
-      <button type="button" data-card-move="${esc(item.id)}">${esc(L("move"))}</button>
-      <button type="button" data-card-add-after="${esc(item.id)}">${esc(L("add"))}</button>
-      <button type="button" data-card-copy="${esc(item.id)}">${esc(L("copy"))}</button>
-      <label class="pick-label"><input type="checkbox" data-card-pick="${esc(item.id)}"${globalThis.GuideSelect && GuideSelect.has(item.id) ? " checked" : ""}>${esc(L("pick"))}</label>
-      <button type="button" data-card-delete="${esc(item.id)}">${esc(L("delete"))}</button>
+      <button type="button" data-card-up="${esc(item.id)}" title="${esc(L("up"))}" aria-label="${esc(L("up"))}">△</button>
+      <button type="button" data-card-down="${esc(item.id)}" title="${esc(L("down"))}" aria-label="${esc(L("down"))}">▽</button>
+      <button type="button" data-card-edit="${esc(item.id)}" title="${esc(L("edit"))}" aria-label="${esc(L("edit"))}">✎</button>
+      <button type="button" data-card-add-after="${esc(item.id)}" title="${esc(L("add"))}" aria-label="${esc(L("add"))}">＋</button>
+      <label class="pick-label" title="${esc(L("pick"))}"><input type="checkbox" data-card-pick="${esc(item.id)}" aria-label="${esc(L("pick"))}"${globalThis.GuideSelect && GuideSelect.has(item.id) ? " checked" : ""}></label>
+      <button type="button" data-card-delete="${esc(item.id)}" title="${esc(L("delete"))}" aria-label="${esc(L("delete"))}">✕</button>
     </div>`;
   }
 
@@ -2038,6 +2036,25 @@
       const id = questToggle.getAttribute("data-toggle-quest");
       ui.openQuest = ui.openQuest === id ? "" : id;
       renderCatalog(GAME.hubs.find(hub => hub.id === "quests"));
+      return;
+    }
+    const foldKids = event.target.closest("[data-fold-kids]");
+    if (foldKids) {
+      const id = foldKids.getAttribute("data-fold-kids");
+      const items = chaptersFor(ui.trackId).flatMap(chapter => chapter.items || []);
+      const kids = {};
+      items.forEach(item => {
+        if (!item || !item.parent) return;
+        kids[item.parent] = kids[item.parent] || [];
+        kids[item.parent].push(item.id);
+      });
+      ui.collapsed = GuideProgress.foldChildDetails(ui.collapsed, id, kids);
+      const card = foldKids.closest("article.it");
+      if (card) {
+        paintFold(card);
+        card.querySelectorAll("article.it").forEach(paintFold);
+      }
+      paintExpandLabel();
       return;
     }
     const kidsToggle = event.target.closest("[data-toggle-kids]");

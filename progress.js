@@ -813,6 +813,21 @@
     return next;
   }
 
+  function foldChildDetails(flags, id, childrenOf) {
+    const next = Object.assign(Object.create(null), flags || {});
+    const seen = new Set();
+    const visit = current => {
+      if (!current || seen.has(current)) return;
+      seen.add(current);
+      next[current] = true;
+      const children = childrenOf && childrenOf[current];
+      if (children) children.forEach(visit);
+    };
+    const children = childrenOf && childrenOf[id];
+    if (children) children.forEach(visit);
+    return next;
+  }
+
   function foldAll(flags, ids, closed) {
     const next = Object.assign(Object.create(null), flags || {});
     (ids || []).forEach(id => {
@@ -1367,7 +1382,7 @@
         const children = Array.isArray(source[i]) ? source[i] : [];
         columns.push(children.map(child => {
           const next = normalizeBlock(child);
-          return next && (next.type === "text" || next.type === "image" || next.type === "list") ? next : null;
+          return next && (next.type === "text" || next.type === "callout" || next.type === "image" || next.type === "list" || next.type === "tiles") ? next : null;
         }).filter(Boolean).slice(0, 6));
       }
       if (!columns.some(col => col.length)) return null;
@@ -1396,6 +1411,77 @@
       return items.length ? { type: "tiles", items } : null;
     }
     return null;
+  }
+
+  function blockPlain(block) {
+    if (!block) return "";
+    if (block.type === "text" || block.type === "callout") return plainFromHtml(block.html);
+    if (block.type === "list") return [block.heading].concat(block.items || []).filter(Boolean).join("\n");
+    if (block.type === "image") return block.caption || "";
+    if (block.type === "tiles") return (block.items || []).map(item => item && item.label).filter(Boolean).join("\n");
+    if (block.type === "columns") return (block.columns || []).map(col => (col || []).map(blockPlain).filter(Boolean).join("\n")).filter(Boolean).join("\n");
+    return "";
+  }
+
+  function convertBlock(block, type) {
+    const allowed = ["text", "callout", "image", "list", "columns", "tiles"];
+    const nextType = allowed.indexOf(type) >= 0 ? type : "text";
+    if (!block || block.type === nextType) return { block: block, loss: false };
+    const lines = blockPlain(block).split("\n").map(line => line.trim()).filter(Boolean);
+    const family = kind => kind === "text" || kind === "callout" || kind === "list";
+    const keepHtml = (block.type === "text" || block.type === "callout") && (nextType === "text" || nextType === "callout");
+    const html = keepHtml ? (block.html || "") : lines.join("<br>");
+    let next;
+    if (nextType === "text" || nextType === "callout") next = { type: nextType, html: html };
+    else if (nextType === "list") next = { type: "list", heading: "", items: lines, columns: 2 };
+    else if (nextType === "image") next = { type: "image", src: block.type === "image" ? block.src : "", caption: lines[0] || "", width: block.width || "m", align: block.align || "center" };
+    else if (nextType === "tiles") next = { type: "tiles", items: block.type === "tiles" && block.items ? block.items : [{ src: "", label: lines[0] || "" }] };
+    else next = { type: "columns", count: 2, arrow: false, widths: [50, 50], columns: [[{ type: "text", html: html }], [{ type: "text", html: "" }]] };
+    return { block: next, loss: !(family(block.type) && family(nextType)) };
+  }
+
+  function headerCopyFields(item) {
+    const flags = cardFlags(item);
+    return {
+      title: item && item.title || "",
+      detail: "",
+      flag: flags[0] || "story",
+      flags: flags.length ? flags : ["story"],
+      deadline: "",
+      source: item && item.source || "",
+      trophy: "",
+      map: "",
+      parent: "",
+      quest: "",
+      section: item && item.section || "",
+      template: item && item.template || "",
+      items: [],
+      blocks: [{ type: "text", html: "" }],
+      enemies: [],
+      enemyNote: "",
+      enemyImage: ""
+    };
+  }
+
+  function nestMany(ids, items, targetId) {
+    const list = (items || []).filter(item => item && item.id);
+    const target = list.find(item => item.id === targetId);
+    const moving = (ids || []).filter(id => id && id !== targetId);
+    if (!target || target.parent || !moving.length) return null;
+    if (moving.some(id => list.some(item => item.parent === id))) return null;
+    const order = list.map(item => item.id).filter(id => moving.indexOf(id) < 0);
+    let insertAt = order.indexOf(targetId);
+    insertAt = insertAt < 0 ? order.length : insertAt + 1;
+    list.forEach(item => {
+      if (item.parent !== targetId || moving.indexOf(item.id) >= 0) return;
+      const pos = order.indexOf(item.id);
+      if (pos >= insertAt) insertAt = pos + 1;
+    });
+    const placed = order.slice();
+    placed.splice(insertAt, 0, ...moving);
+    const parents = {};
+    moving.forEach(id => { parents[id] = targetId; });
+    return { order: placed, parents: parents };
   }
 
   function blocksFromDetail(detail) {
@@ -1819,7 +1905,11 @@
     enemyLinks,
     numberCards,
     foldCards,
+    foldChildDetails,
     foldAll,
+    convertBlock,
+    headerCopyFields,
+    nestMany,
     LIBRARY_FOLDERS,
     libraryFolderId,
     libraryFileName,
