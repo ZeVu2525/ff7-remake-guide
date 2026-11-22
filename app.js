@@ -15,6 +15,7 @@
     collapsed: Object.create(null),
     hub: "route"
   };
+  globalThis.GuideSelect = globalThis.GuideSelect || new Set();
   let chapterFilter = {};
   try {
     const saved = JSON.parse(localStorage.getItem(storage.chapterFilter) || "{}");
@@ -351,7 +352,7 @@
     return `<button type="button" class="map-open" data-map-owner="${esc(owner || "card")}" data-owner-id="${esc(item.id)}" data-map="${esc(parts.key)}" data-map-src="${esc(parts.src)}"${href} data-map-label="${esc(parts.label)}">MAP</button>`;
   }
 
-  function routeCard(item, ord, children, numbers, headings) {
+  function routeCard(item, ord, children, numbers, headings, section) {
     const on = checked(item.id);
     const collapsed = ui.collapsed[item.id] === true;
     const kids = children || [];
@@ -369,7 +370,7 @@
             ${item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
             ${questLink}
             <button type="button" class="route-item-toggle" data-toggle-item="${esc(item.id)}" aria-expanded="${collapsed ? "false" : "true"}">詳細</button>
-            ${mapButton(item)}
+            ${mapButton(shownMap(item, section) ? { id: item.id, map: shownMap(item, section) } : null)}
           </div>
         </div>
         <div class="route-item-content"${collapsed ? " hidden" : ""}>
@@ -378,7 +379,7 @@
           ${sourceLine(item.source)}
           ${cardTools(item)}
         </div>
-        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-toggle" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}">中のカード ${kids.length}</button><div class="kids"${kidsOpen ? "" : " hidden"}>${kids.map(child => routeCard(child, numbers[child.id], [], numbers, headings)).join("")}</div></div>` : ""}
+        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-toggle" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}">中のカード ${kids.length}</button><div class="kids"${kidsOpen ? "" : " hidden"}>${kids.map(child => routeCard(child, numbers[child.id], [], numbers, headings, section)).join("")}</div></div>` : ""}
       </div>
     </article>`;
   }
@@ -387,11 +388,11 @@
     const groups = sections && sections.length ? sections : [{ id: "", title: "(1) 本章", map: "", note: "" }];
     const known = new Set(groups.map(section => section.id));
     const sectionOf = item => item.section && known.has(item.section) ? item.section : groups[0].id;
-    const headings = GuideProgress.templateHeadings(items, GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES));
+    const headings = GuideProgress.templateHeadings(GuideProgress.displayItems(items, groups), GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES));
     let visible = 0;
     const html = groups.map(section => {
       const mine = items.filter(item => sectionOf(item) === section.id);
-      const built = blockCards(mine, headings);
+      const built = blockCards(mine, headings, section);
       visible += built.visible;
       const closed = ui.collapsed["section:" + ui.trackId + ":" + section.id] === true;
       const tools = cardEditing() ? `<span class="subch-tools">
@@ -413,7 +414,11 @@
     return { html, visible, numbers: {} };
   }
 
-  function blockCards(items, headings) {
+  function shownMap(item, section) {
+    return GuideProgress.visibleMap(item, section);
+  }
+
+  function blockCards(items, headings, section) {
     const numbers = GuideProgress.numberCards(items);
     const ids = new Set(items.map(item => item.id));
     const childOf = {};
@@ -441,7 +446,7 @@
       if (!self && !shownKids.length) return "";
       if (self) visible += 1;
       visible += shownKids.length;
-      return routeCard(item, numbers[item.id], shownKids, numbers, headings);
+      return routeCard(item, numbers[item.id], shownKids, numbers, headings, section);
     }).join("");
     return { html, visible, numbers };
   }
@@ -460,6 +465,7 @@
       <button type="button" data-card-move="${esc(item.id)}">移動</button>
       <button type="button" data-card-add-after="${esc(item.id)}">＋追加</button>
       <button type="button" data-card-copy="${esc(item.id)}">コピー</button>
+      <label class="pick-label"><input type="checkbox" data-card-pick="${esc(item.id)}"${globalThis.GuideSelect && GuideSelect.has(item.id) ? " checked" : ""}>選択</label>
       <button type="button" data-card-delete="${esc(item.id)}">削除</button>
     </div>`;
   }
@@ -485,7 +491,7 @@
           <span class="cht">${esc(chapter.title)}</span>
           <span class="chl"><span class="cnt${chapter.items.length && done === chapter.items.length ? " done" : ""}">${done}/${chapter.items.length}</span></span>
         </button></h2>
-        <div class="chb" data-card-track="${esc(ui.trackId)}">${cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">カードを追加</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">子チャプターを追加</button></p>` : ""}${built.html || '<p class="empty-chapter">項目はまだありません。</p>'}</div>
+        <div class="chb" data-card-track="${esc(ui.trackId)}">${cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">カードを追加</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">子チャプターを追加</button><button type="button" data-move-selected="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">選択を移動</button></p>` : ""}${built.html || '<p class="empty-chapter">項目はまだありません。</p>'}</div>
       </section>`;
     }).join("");
     document.getElementById("route-count").textContent = visible + " / " + total + " 件を表示";

@@ -578,17 +578,111 @@
     return "(" + number + ")";
   }
 
+  function tokenNumber(token) {
+    const circled = CIRCLED.indexOf(token);
+    if (circled >= 0) return circled + 1;
+    const match = /^\((\d+)\)$/.exec(token || "");
+    return match ? Number(match[1]) : 0;
+  }
+
+  function numbersFromTitle(title, label) {
+    if (!title || !label || title.indexOf(label) !== 0) return [];
+    let rest = title.slice(label.length).replace(/\s+/g, "");
+    if (!rest) return [];
+    const piece = "(?:[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]|\\(\\d+\\))";
+    const pattern = new RegExp("^(" + piece + ")(?:[〜~\\-－](" + piece + "))?");
+    const nums = [];
+    while (rest) {
+      const match = rest.match(pattern);
+      if (!match) break;
+      const start = tokenNumber(match[1]);
+      const end = match[2] ? tokenNumber(match[2]) : start;
+      if (!start || !end) break;
+      const low = Math.min(start, end);
+      const high = Math.max(start, end);
+      for (let n = low; n <= high; n += 1) nums.push(n);
+      rest = rest.slice(match[0].length);
+    }
+    return nums;
+  }
+
   function templateHeadings(items, templates) {
-    const labels = {};
-    (templates || []).forEach(item => { if (item && item.id) labels[item.id] = item.label; });
-    const counts = {};
+    const list = (templates || []).filter(item => item && item.id && item.label).slice().sort((a, b) => b.label.length - a.label.length);
+    const byId = {};
+    list.forEach(item => { byId[item.id] = item.label; });
+    const used = {};
     const headings = {};
     for (const item of items || []) {
-      if (!item || !item.template || !labels[item.template]) continue;
-      counts[item.template] = (counts[item.template] || 0) + 1;
-      headings[item.id] = labels[item.template] + circledNumber(counts[item.template]);
+      if (!item) continue;
+      if (item.template && byId[item.template]) {
+        const label = byId[item.template];
+        const next = (used[label] || 0) + 1;
+        used[label] = next;
+        headings[item.id] = label + circledNumber(next);
+        continue;
+      }
+      const title = item.title || "";
+      for (const template of list) {
+        const nums = numbersFromTitle(title, template.label);
+        if (!nums.length) continue;
+        used[template.label] = Math.max(used[template.label] || 0, Math.max.apply(null, nums));
+        break;
+      }
     }
     return headings;
+  }
+
+  function visibleMap(item, section) {
+    const shared = section && section.map ? section.map : "";
+    const own = item && item.map ? item.map : "";
+    if (own && own !== shared) return own;
+    return shared;
+  }
+
+  function displayItems(items, sections) {
+    const groups = sections && sections.length ? sections : [{ id: "" }];
+    const known = new Set(groups.map(section => section.id));
+    const sectionOf = item => item && item.section && known.has(item.section) ? item.section : groups[0].id;
+    const out = [];
+    groups.forEach(section => {
+      const mine = (items || []).filter(item => sectionOf(item) === section.id);
+      const ids = new Set(mine.map(item => item.id));
+      const kids = {};
+      const tops = [];
+      mine.forEach(item => {
+        if (item.parent && ids.has(item.parent) && item.parent !== item.id) {
+          if (!kids[item.parent]) kids[item.parent] = [];
+          kids[item.parent].push(item);
+        } else tops.push(item);
+      });
+      tops.forEach(item => {
+        out.push(item);
+        (kids[item.id] || []).forEach(child => out.push(child));
+      });
+    });
+    return out;
+  }
+
+  function withChildIds(ids, items) {
+    const wanted = new Set(ids || []);
+    (items || []).forEach(item => {
+      if (item && item.parent && wanted.has(item.parent)) wanted.add(item.id);
+    });
+    return (items || []).filter(item => item && wanted.has(item.id)).map(item => item.id);
+  }
+
+  function orderAfterSectionMove(order, movingIds, sectionOf, targetSection) {
+    const moving = new Set(movingIds || []);
+    const kept = (order || []).filter(id => !moving.has(id));
+    const moved = (order || []).filter(id => moving.has(id));
+    let at = kept.length;
+    for (let i = kept.length - 1; i >= 0; i -= 1) {
+      if (sectionOf(kept[i]) === targetSection) {
+        at = i + 1;
+        break;
+      }
+    }
+    return kept.slice(0, at).concat(moved, kept.slice(at));
   }
 
   function activeTemplates(book, defaults) {
@@ -603,7 +697,8 @@
     const source = String(fields && fields.source || "").trim();
     const deadline = String(fields && fields.deadline || "").trim();
     const trophy = String(fields && fields.trophy || "").trim();
-    if (!title) return { error: "見出しが空です。" };
+    const template = String(fields && fields.template || "").trim();
+    if (!title && !template) return { error: "見出しが空です。" };
     if (!flagIds || flagIds.indexOf(flag) < 0) return { error: "タグが未定義です。" };
     if (source && !/^https:\/\//i.test(source)) return { error: "出典は https:// から始めるか、空にします。" };
     if (flag === "trophy" && !trophy) return { error: "トロフィーを選んでください。" };
@@ -614,7 +709,6 @@
     const parent = String(fields && fields.parent || "").trim();
     const quest = String(fields && fields.quest || "").trim();
     const section = String(fields && fields.section || "").trim();
-    const template = String(fields && fields.template || "").trim();
     const items = flag === "item" ? itemLinks(fields && fields.items) : [];
     return { value: { title, detail, flag, source, deadline, trophy: flag === "trophy" ? trophy : "", map, parent, quest, section, template, items } };
   }
@@ -770,6 +864,11 @@
     numberCards,
     circledNumber,
     templateHeadings,
+    numbersFromTitle,
+    visibleMap,
+    displayItems,
+    withChildIds,
+    orderAfterSectionMove,
     activeTemplates,
     DEFAULT_TEMPLATES,
     orderWithMove,
