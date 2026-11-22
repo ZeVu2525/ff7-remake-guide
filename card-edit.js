@@ -337,7 +337,7 @@
     const sectionOptions = sectionList.map(item => `<option value="${escapeAttr(item.id)}"${item.id === sectionId ? " selected" : ""}>${escapeText(item.title)}</option>`).join("");
     fields.innerHTML = [
       field("見出しの定型文", `<select name="template">${templateOptions}</select>`),
-      field("見出し", `<input name="title" required value="${escapeAttr(seed.title || "")}">`),
+      field("見出し", `<input name="title" value="${escapeAttr(seed.title || "")}" placeholder="定型文を選んだときは空でも保存できます">`),
       '<p id="template-preview"></p>',
       field("本文", `<textarea name="detail">${escapeText(seed.detail || "")}</textarea>`),
       field("タグ", `<select name="flag">${flags}</select>`),
@@ -438,6 +438,9 @@
   function saveRoute(event) {
     const data = new FormData(form);
     const flagIds = GAME.flags.map(flag => flag.id);
+    const sectionId = String(data.get("section") || editing.section || "");
+    const section = chapterSections(editing.trackId, editing.chapterId).find(item => item.id === sectionId);
+    const rawMap = chosenMap();
     const checked = GuideProgress.validateRouteFields({
       title: data.get("title"),
       detail: data.get("detail"),
@@ -445,7 +448,7 @@
       deadline: data.get("deadline"),
       source: editing.source || "",
       trophy: data.get("trophy"),
-      map: chosenMap(),
+      map: section && rawMap === section.map ? "" : rawMap,
       parent: data.get("parent"),
       section: data.get("section") || editing.section || "",
       template: data.get("template") || "",
@@ -641,6 +644,10 @@
     if (sectionDelete) { removeSection(sectionDelete.getAttribute("data-section-delete")); return; }
     const sectionAdd = event.target.closest("[data-section-add]");
     if (sectionAdd) { addSection(sectionAdd.getAttribute("data-card-track"), sectionAdd.getAttribute("data-section-add")); return; }
+    const moveSelected = event.target.closest("[data-move-selected]");
+    if (moveSelected) { askMoveSelected(moveSelected.getAttribute("data-card-track"), moveSelected.getAttribute("data-move-selected")); return; }
+    const pick = event.target.closest("[data-card-pick]");
+    if (pick) { togglePick(pick, event.shiftKey); return; }
     const addAfter = event.target.closest("[data-card-add-after]");
     if (addAfter) {
       const id = addAfter.getAttribute("data-card-add-after");
@@ -731,6 +738,84 @@
     return row && row.sections ? row.sections.map(item => Object.assign({}, item)) : [];
   }
 
+  let lastPick = "";
+
+  function chapterDisplayIds(trackId, chapterId) {
+    const row = (GuideProgress.mergeTrack(ROUTE, GAME.chapters[trackId] || [], book(), trackId) || []).find(item => item.chapterId === chapterId);
+    return GuideProgress.displayItems(row && row.items || [], row && row.sections || []).map(item => item.id);
+  }
+
+  function selectedInChapter(trackId, chapterId) {
+    const ids = chapterDisplayIds(trackId, chapterId);
+    return ids.filter(id => GuideSelect.has(id));
+  }
+
+  function togglePick(box, shift) {
+    const id = box.getAttribute("data-card-pick");
+    const ordered = [...document.querySelectorAll("[data-card-pick]")].map(item => item.getAttribute("data-card-pick"));
+    if (shift && lastPick && ordered.indexOf(lastPick) >= 0) {
+      const a = ordered.indexOf(lastPick);
+      const b = ordered.indexOf(id);
+      const low = Math.min(a, b);
+      const high = Math.max(a, b);
+      for (let i = low; i <= high; i += 1) GuideSelect.add(ordered[i]);
+    } else if (box.checked) GuideSelect.add(id);
+    else GuideSelect.delete(id);
+    lastPick = id;
+    document.querySelectorAll("[data-card-pick]").forEach(item => {
+      item.checked = GuideSelect.has(item.getAttribute("data-card-pick"));
+    });
+  }
+
+  function moveCardsToSection(trackId, chapterId, sectionId, rawIds) {
+    const row = (GuideProgress.mergeTrack(ROUTE, GAME.chapters[trackId] || [], book(), trackId) || []).find(item => item.chapterId === chapterId);
+    const items = row && row.items || [];
+    const moving = GuideProgress.withChildIds(rawIds, items);
+    if (!moving.length) return;
+    const order = GuideApp.currentIds(trackId, chapterId);
+    const nextOrder = GuideProgress.orderAfterSectionMove(order, moving, id => {
+      const item = items.find(entry => entry.id === id);
+      return item && item.section || "";
+    }, sectionId);
+    const baseIds = GuideApp.baseItems(trackId, chapterId).map(entry => entry.id);
+    let next = book();
+    moving.forEach(id => {
+      const item = items.find(entry => entry.id === id);
+      if (!item) return;
+      const base = GuideApp.findBaseRoute(id);
+      next = GuideProgress.upsertRouteCard(
+        next, base && base.item, id,
+        cardFields(Object.assign({}, item, { section: sectionId }), item.parent || ""),
+        trackId, chapterId, nextOrder, baseIds
+      );
+    });
+    GuideApp.setCardBook(next);
+  }
+
+  function askMoveSelected(trackId, chapterId) {
+    const sections = chapterSections(trackId, chapterId);
+    const ids = selectedInChapter(trackId, chapterId);
+    if (!ids.length) {
+      window.alert("先にカードの「選択」を付けてください。Shiftを押しながら選ぶと範囲になります。");
+      return;
+    }
+    const options = sections.map(item => `<option value="${escapeAttr(item.id)}">${escapeText(item.title)}</option>`).join("");
+    editing = { chooser: true };
+    document.getElementById("card-edit-title").textContent = "選択を移動";
+    document.getElementById("card-edit-id").textContent = ids.length + "件。親を選ぶと、その子カードも一緒に移ります。";
+    fields.innerHTML = field("子チャプター", `<select name="target-section">${options}</select>`);
+    error.textContent = "";
+    const submit = form.querySelector("[type=submit]");
+    if (submit) submit.textContent = "移動";
+    dialog.hidden = false;
+    captureBaseline();
+    editing.onOk = () => {
+      const target = String(new FormData(form).get("target-section") || "");
+      dialog.hidden = true;
+      if (target) moveCardsToSection(trackId, chapterId, target, ids);
+    };
+  }
+
   function storeSections(trackId, chapterId, sections) {
     const next = JSON.parse(JSON.stringify(book()));
     GuideProgress.saveSections(next, trackId + ":" + chapterId, sections);
@@ -739,13 +824,29 @@
 
   function addSection(trackId, chapterId) {
     const sections = chapterSections(trackId, chapterId);
+    const id = chapterId + "-sec-" + Date.now().toString(36);
     sections.push({
-      id: chapterId + "-sec-" + Date.now().toString(36),
+      id: id,
       title: "(" + (sections.length + 1) + ") 新しい区分",
       map: "",
       note: ""
     });
     storeSections(trackId, chapterId, sections);
+    const selected = selectedInChapter(trackId, chapterId);
+    if (selected.length && window.confirm("選択中のカードを、新しい子チャプターへ移しますか。")) {
+      moveCardsToSection(trackId, chapterId, id, selected);
+      return;
+    }
+    const range = window.prompt("移す範囲を、章の上からの番号で入れてください。例: 3-8。空なら移しません。", "");
+    if (!range) return;
+    const match = String(range).match(/(\d+)\s*[-〜~]\s*(\d+)/);
+    if (!match) return;
+    const from = Number(match[1]);
+    const to = Number(match[2]);
+    const ordered = chapterDisplayIds(trackId, chapterId);
+    const low = Math.min(from, to);
+    const high = Math.max(from, to);
+    moveCardsToSection(trackId, chapterId, id, ordered.slice(low - 1, high));
   }
 
   function moveSection(sectionId, delta) {
@@ -827,9 +928,30 @@
     if (!section) return;
     section.title = String(new FormData(form).get("title") || "").trim() || section.title;
     section.note = String(new FormData(form).get("note") || "").trim();
+    const previousMap = section.map || "";
     section.map = chosenMap();
     dialog.hidden = true;
     storeSections(editing.trackId, editing.chapterId, sections);
+    if (previousMap && previousMap !== section.map) {
+      const row = (GuideProgress.mergeTrack(ROUTE, GAME.chapters[editing.trackId] || [], book(), editing.trackId) || []).find(item => item.chapterId === editing.chapterId);
+      (row && row.items || []).forEach(item => {
+        if (item.section === section.id && item.map === previousMap) retagMap(item.id, "");
+      });
+    }
+  }
+
+  function retagMap(id, map) {
+    const place = locate(id);
+    const item = place && routeRecord(place.trackId, place.chapterId, id);
+    if (!item || (item.map || "") === (map || "")) return;
+    const base = GuideApp.findBaseRoute(id);
+    const fields = cardFields(item, item.parent || "");
+    fields.map = map || "";
+    GuideApp.setCardBook(GuideProgress.upsertRouteCard(
+      book(), base && base.item, id, fields, place.trackId, place.chapterId,
+      GuideApp.currentIds(place.trackId, place.chapterId),
+      GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id)
+    ));
   }
 
   function openCardMap(id) {
@@ -839,7 +961,10 @@
     editing = Object.assign({ kind: "route", mapOnly: true, trackId: place.trackId, chapterId: place.chapterId }, item);
     document.getElementById("card-edit-title").textContent = "地図を変える";
     document.getElementById("card-edit-id").textContent = item.title || id;
-    fields.innerHTML = mapFields(item.map || "");
+    const sections = chapterSections(place.trackId, place.chapterId);
+    const section = sections.find(entry => entry.id === item.section);
+    const own = item.map && (!section || item.map !== section.map) ? item.map : "";
+    fields.innerHTML = "<p>空のまま保存すると、子チャプターの地図を使います。ここに入れた地図だけ、このカード専用になります。</p>" + mapFields(own);
     bindMapField();
     error.textContent = "";
     dialog.hidden = false;
@@ -852,7 +977,10 @@
     if (!item) return;
     const base = GuideApp.findBaseRoute(editing.id);
     const fields = cardFields(item, item.parent || "");
-    fields.map = chosenMap();
+    const sections = chapterSections(place.trackId, place.chapterId);
+    const section = sections.find(entry => entry.id === item.section);
+    const chosen = chosenMap();
+    fields.map = section && chosen === section.map ? "" : chosen;
     dialog.hidden = true;
     GuideApp.setCardBook(GuideProgress.upsertRouteCard(
       book(), base && base.item, editing.id, fields, place.trackId, place.chapterId,

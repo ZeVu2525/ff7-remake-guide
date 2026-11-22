@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v9");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v10");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -269,6 +269,26 @@ assert.deepStrictEqual(progress.templateHeadings([
   { id: "b", template: "tpl-chest" },
   { id: "c", template: "tpl-shinra" }
 ], progress.DEFAULT_TEMPLATES), { a: "宝箱①", b: "宝箱②", c: "神羅ボックス①" });
+assert.deepStrictEqual(progress.numbersFromTitle("宝箱①②", "宝箱"), [1, 2]);
+assert.deepStrictEqual(progress.numbersFromTitle("宝箱①〜③", "宝箱"), [1, 2, 3]);
+assert.deepStrictEqual(progress.templateHeadings([
+  { id: "free", title: "宝箱①②" },
+  { id: "child", template: "tpl-chest", parent: "p" },
+  { id: "next", template: "tpl-chest" }
+], progress.DEFAULT_TEMPLATES), { child: "宝箱③", next: "宝箱④" });
+assert.strictEqual(progress.visibleMap({ map: "" }, { map: "chapter01" }), "chapter01");
+assert.strictEqual(progress.visibleMap({ map: "chapter01" }, { map: "chapter01" }), "chapter01");
+assert.strictEqual(progress.visibleMap({ map: "maps/01.png" }, { map: "chapter01" }), "maps/01.png");
+assert.strictEqual(progress.visibleMap({ map: "" }, { map: "" }), "");
+const blank = progress.validateRouteFields({ title: "", detail: "", flag: "item", template: "tpl-chest" }, ["item"], []);
+assert.strictEqual(blank.error, undefined);
+assert.strictEqual(blank.value.template, "tpl-chest");
+assert.deepStrictEqual(progress.withChildIds(["p"], [
+  { id: "p" }, { id: "c", parent: "p" }, { id: "x" }
+]), ["p", "c"]);
+assert.deepStrictEqual(progress.orderAfterSectionMove(
+  ["a", "b", "c"], ["b"], id => id === "a" ? "s1" : "s2", "s1"
+), ["a", "b", "c"]);
 const ch1 = guide.ROUTE.main.find(row => row.chapterId === "ch01");
 assert.ok(ch1.sections && ch1.sections.length >= 1);
 assert.ok(ch1.items.every(item => item.section === ch1.sections[0].id));
