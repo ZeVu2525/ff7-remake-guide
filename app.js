@@ -268,7 +268,8 @@
   function renderTabs() {
     document.getElementById("tabs").innerHTML = GAME.hubs.map(hub => {
       const on = hub.id === ui.hub;
-      return `<button type="button" id="tab-${esc(hub.id)}" role="tab" data-hub="${esc(hub.id)}" aria-selected="${on ? "true" : "false"}" aria-controls="p-${esc(hub.id)}" tabindex="${on ? "0" : "-1"}" class="${on ? "on" : ""}">${esc(hub.label)}</button>`;
+      const text = GuideProgress.labelText(cardBook, "tab-" + hub.id, hub.label);
+      return `<button type="button" id="tab-${esc(hub.id)}" role="tab" data-hub="${esc(hub.id)}" aria-selected="${on ? "true" : "false"}" aria-controls="p-${esc(hub.id)}" tabindex="${on ? "0" : "-1"}" class="${on ? "on" : ""}">${esc(text)}</button>`;
     }).join("");
   }
 
@@ -349,7 +350,7 @@
     if (!item || !item.map) return "";
     const parts = mapParts(item.map, item.id, "地図");
     const href = parts.href ? ` data-map-href="${esc(parts.href)}"` : "";
-    return `<button type="button" class="map-open" data-map-owner="${esc(owner || "card")}" data-owner-id="${esc(item.id)}" data-map="${esc(parts.key)}" data-map-src="${esc(parts.src)}"${href} data-map-label="${esc(parts.label)}">MAP</button>`;
+    return `<button type="button" class="map-open" data-map-owner="${esc(owner || "card")}" data-owner-id="${esc(item.id)}" data-map="${esc(parts.key)}" data-map-src="${esc(parts.src)}"${href} data-map-label="${esc(parts.label)}">${esc(GuideProgress.labelText(cardBook, "map"))}</button>`;
   }
 
   function routeCard(item, ord, children, numbers, headings, section) {
@@ -364,50 +365,53 @@
       <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
       <div class="ibody">
         <div class="ihead">
-          <label for="check-${esc(item.id)}">${item.flag === "tips" ? '<span class="hint-mark">ヒント</span>' : ""}${flagTag(item.flag)}${exampleMark(item)}<span class="it-title">${esc((headings && headings[item.id]) || item.title || item.id)}</span></label>
+          <label for="check-${esc(item.id)}">${item.flag === "tips" ? `<span class="hint-mark">${esc(GuideProgress.labelText(cardBook, "hint"))}</span>` : ""}${flagTag(item.flag)}${exampleMark(item)}<span class="it-title" data-edit-text>${esc((headings && headings[item.id]) || item.title || item.id)}</span></label>
           <div class="imeta">
             ${item.trophy && trophyById(item.trophy) ? `<span class="tag tone-trophy">${esc(trophyById(item.trophy).name)}</span>` : ""}
             ${item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
             ${questLink}
-            <button type="button" class="route-item-toggle" data-toggle-item="${esc(item.id)}" aria-expanded="${collapsed ? "false" : "true"}">詳細</button>
+            <button type="button" class="route-item-toggle" data-toggle-item="${esc(item.id)}" aria-expanded="${collapsed ? "false" : "true"}">${esc(GuideProgress.labelText(cardBook, "detail"))}</button>
             ${mapButton(shownMap(item, section) ? { id: item.id, map: shownMap(item, section) } : null)}
           </div>
         </div>
         <div class="route-item-content"${collapsed ? " hidden" : ""}>
-          ${item.detail ? `<div class="det">${esc(item.detail)}</div>` : ""}
+          ${item.detail ? `<div class="det" data-edit-text>${esc(item.detail)}</div>` : ""}
           ${itemLine(item)}
           ${sourceLine(item.source)}
           ${cardTools(item)}
         </div>
-        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-toggle" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}">中のカード ${kids.length}</button><div class="kids"${kidsOpen ? "" : " hidden"}>${kids.map(child => routeCard(child, numbers[child.id], [], numbers, headings, section)).join("")}</div></div>` : ""}
+        ${kids.length ? `<div class="kids-wrap"><button type="button" class="kids-toggle" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}">${esc(GuideProgress.labelText(cardBook, "kids"))} ${kids.length}</button><div class="kids"${kidsOpen ? "" : " hidden"}>${kids.map(child => routeCard(child, numbers[child.id], [], numbers, headings, section)).join("")}</div></div>` : ""}
       </div>
     </article>`;
   }
 
   function chapterBlocks(items, sections) {
-    const groups = sections && sections.length ? sections : [{ id: "", title: "(1) 本章", map: "", note: "" }];
+    const groups = sections && sections.length ? sections : [{ id: "", title: "本章", map: "", note: "" }];
     const known = new Set(groups.map(section => section.id));
     const sectionOf = item => item.section && known.has(item.section) ? item.section : groups[0].id;
     const headings = GuideProgress.templateHeadings(GuideProgress.displayItems(items, groups), GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES));
     let visible = 0;
-    const html = groups.map(section => {
+    const html = groups.map((section, index) => {
       const mine = items.filter(item => sectionOf(item) === section.id);
       const built = blockCards(mine, headings, section);
       visible += built.visible;
       const closed = ui.collapsed["section:" + ui.trackId + ":" + section.id] === true;
+      const name = GuideProgress.sectionName(section.title) || "区分";
       const tools = cardEditing() ? `<span class="subch-tools">
-        <button type="button" data-section-edit="${esc(section.id)}">名前</button>
-        <button type="button" data-section-up="${esc(section.id)}">上へ</button>
-        <button type="button" data-section-down="${esc(section.id)}">下へ</button>
-        <button type="button" data-section-delete="${esc(section.id)}">削除</button>
+        <button type="button" data-section-edit="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "rename"))}</button>
+        <button type="button" data-section-up="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "up"))}</button>
+        <button type="button" data-section-down="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "down"))}</button>
+        <button type="button" data-move-here="${esc(section.id)}"${GuideSelect.size ? "" : " disabled"}>${esc(GuideProgress.labelText(cardBook, "moveSelected"))}</button>
+        <button type="button" data-section-delete="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "delete"))}</button>
       </span>` : "";
       return `<section class="subch${closed ? " closed" : ""}" data-section="${esc(section.id)}">
         <div class="subch-bar">
-          <button type="button" class="subch-toggle" data-toggle-section="${esc(section.id)}" aria-expanded="${closed ? "false" : "true"}"><span class="caret">▼</span>${esc(section.title || "区分")}</button>
+          <button type="button" class="subch-toggle" data-toggle-section="${esc(section.id)}" aria-expanded="${closed ? "false" : "true"}"><span class="caret">▼</span><span class="subch-num">(${index + 1})</span></button>
+          <span class="subch-name" data-edit-text>${esc(name)}</span>
           ${mapButton({ id: section.id, map: section.map }, "section")}
           ${tools}
         </div>
-        ${section.note ? `<p class="subch-note">${esc(section.note)}</p>` : ""}
+        ${section.note ? `<p class="subch-note" data-edit-text>${esc(section.note)}</p>` : ""}
         <div class="subch-body"${closed ? " hidden" : ""}>${built.html || '<p class="empty-chapter">この区分にはカードがありません。</p>'}</div>
       </section>`;
     }).join("");
@@ -456,17 +460,21 @@
     return `<button type="button" class="card-drag-handle" data-card-drag="${esc(id)}" aria-label="ドラッグして移動" title="ドラッグして移動">⋮⋮</button>`;
   }
 
+  function L(key) {
+    return GuideProgress.labelText(cardBook, key);
+  }
+
   function cardTools(item) {
     if (!cardEditing()) return "";
     return `<div class="card-edit-tools">
-      <button type="button" data-card-up="${esc(item.id)}">上へ</button>
-      <button type="button" data-card-down="${esc(item.id)}">下へ</button>
-      <button type="button" data-card-edit="${esc(item.id)}">編集</button>
-      <button type="button" data-card-move="${esc(item.id)}">移動</button>
-      <button type="button" data-card-add-after="${esc(item.id)}">＋追加</button>
-      <button type="button" data-card-copy="${esc(item.id)}">コピー</button>
-      <label class="pick-label"><input type="checkbox" data-card-pick="${esc(item.id)}"${globalThis.GuideSelect && GuideSelect.has(item.id) ? " checked" : ""}>選択</label>
-      <button type="button" data-card-delete="${esc(item.id)}">削除</button>
+      <button type="button" data-card-up="${esc(item.id)}">${esc(L("up"))}</button>
+      <button type="button" data-card-down="${esc(item.id)}">${esc(L("down"))}</button>
+      <button type="button" data-card-edit="${esc(item.id)}">${esc(L("edit"))}</button>
+      <button type="button" data-card-move="${esc(item.id)}">${esc(L("move"))}</button>
+      <button type="button" data-card-add-after="${esc(item.id)}">${esc(L("add"))}</button>
+      <button type="button" data-card-copy="${esc(item.id)}">${esc(L("copy"))}</button>
+      <label class="pick-label"><input type="checkbox" data-card-pick="${esc(item.id)}"${globalThis.GuideSelect && GuideSelect.has(item.id) ? " checked" : ""}>${esc(L("pick"))}</label>
+      <button type="button" data-card-delete="${esc(item.id)}">${esc(L("delete"))}</button>
     </div>`;
   }
 
@@ -491,7 +499,7 @@
           <span class="cht">${esc(chapter.title)}</span>
           <span class="chl"><span class="cnt${chapter.items.length && done === chapter.items.length ? " done" : ""}">${done}/${chapter.items.length}</span></span>
         </button></h2>
-        <div class="chb" data-card-track="${esc(ui.trackId)}">${cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">カードを追加</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">子チャプターを追加</button><button type="button" data-move-selected="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">選択を移動</button></p>` : ""}${built.html || '<p class="empty-chapter">項目はまだありません。</p>'}</div>
+        <div class="chb" data-card-track="${esc(ui.trackId)}">${cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">${esc(L("addCard"))}</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">${esc(L("addSection"))}</button><button type="button" data-move-selected="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}"${GuideSelect.size ? "" : " disabled"}>${esc(L("moveSelected"))}</button></p>` : ""}${built.html || '<p class="empty-chapter">項目はまだありません。</p>'}</div>
       </section>`;
     }).join("");
     document.getElementById("route-count").textContent = visible + " / " + total + " 件を表示";
@@ -904,7 +912,12 @@
         <div id="route"></div>
       </section>
       ${itemsPanel}
-      ${catalogs}`;
+      ${catalogs}
+      <section class="panel" id="p-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+        <h2>設定</h2>
+        <p class="lead">ボタンの名前、タブの名前、見出しの定型文をここで変える。変更はこのブラウザに残り、「書き出す」から取り出せる。</p>
+        <div id="settings-body"></div>
+      </section>`;
     document.getElementById("expand").addEventListener("click", () => {
       const chapters = chaptersFor(ui.trackId);
       const collapse = chapters.some(chapter => ui.collapsed[chapterKey(chapter.id)] !== true);
@@ -960,6 +973,7 @@
     });
     const next = "#/" + hub;
     if (location.hash !== next) history.replaceState(null, "", next);
+    if (hub === "settings") renderSettings();
   }
 
   function paintChecks() {
@@ -992,6 +1006,56 @@
     }
     const hub = GAME.hubs.find(item => item.id === ui.hub);
     if (hub && hub.kind === "catalog") renderCatalog(hub);
+    if (hub && hub.kind === "settings") renderSettings();
+  }
+
+  function renderSettings() {
+    const root = document.getElementById("settings-body");
+    if (!root) return;
+    const labels = GuideProgress.UI_LABELS;
+    const rows = Object.keys(labels).map(key => {
+      const value = cardBook.labels && cardBook.labels[key] ? cardBook.labels[key] : labels[key];
+      return `<label class="setting-row"><span>${esc(labels[key])}</span><input data-label-key="${esc(key)}" value="${esc(value)}"><button type="button" data-label-reset="${esc(key)}">初期値</button></label>`;
+    }).join("");
+    const templates = GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES || []);
+    root.innerHTML = `<h3>ボタンとタブの名前</h3><div class="setting-list">${rows}</div>
+      <h3>見出しの定型文</h3>
+      <p class="lead">1行が1つの定型文です。カードの見出しで選ぶと、章の中で 宝箱① のように番号が付きます。</p>
+      <textarea id="settings-templates" rows="6">${esc(templates.map(item => item.label).join("\n"))}</textarea>
+      <p><button type="button" id="settings-templates-save">定型文を保存</button></p>
+      <h3>今後の設定</h3>
+      <p class="lead">表示や操作で、あとから設定が必要になったものはこの画面に足します。</p>`;
+    root.querySelectorAll("[data-label-key]").forEach(input => {
+      input.addEventListener("change", () => {
+        const key = input.getAttribute("data-label-key");
+        const next = JSON.parse(JSON.stringify(cardBook));
+        next.labels = Object.assign({}, next.labels);
+        const text = input.value.trim();
+        if (!text || text === labels[key]) delete next.labels[key];
+        else next.labels[key] = text;
+        setCardBook(next);
+      });
+    });
+    root.querySelectorAll("[data-label-reset]").forEach(button => {
+      button.addEventListener("click", () => {
+        const key = button.getAttribute("data-label-reset");
+        const next = JSON.parse(JSON.stringify(cardBook));
+        next.labels = Object.assign({}, next.labels);
+        delete next.labels[key];
+        setCardBook(next);
+      });
+    });
+    const saveTemplates = document.getElementById("settings-templates-save");
+    if (saveTemplates) saveTemplates.addEventListener("click", () => {
+      const lines = String(document.getElementById("settings-templates").value || "").split(/\n/).map(line => line.trim()).filter(Boolean);
+      const current = GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES || []);
+      const next = JSON.parse(JSON.stringify(cardBook));
+      next.templates = lines.map(label => {
+        const found = current.find(item => item.label === label);
+        return { id: found ? found.id : ("tpl-" + Date.now().toString(36) + "-" + label.length), label };
+      });
+      setCardBook(next);
+    });
   }
 
   function exportProgress() {
@@ -1414,6 +1478,7 @@
     saveBook();
     renderRoute();
     renderCatalogs();
+    if (ui.hub === "settings") renderSettings();
   }
 
   function dropCard(id) {
@@ -1429,6 +1494,7 @@
 
   globalThis.GuideApp = {
     setCardBook,
+    showHub,
     dropCard,
     getBook: () => cardBook,
     baseItems,

@@ -246,7 +246,8 @@
   function beginEdit(event) {
     const node = textNodeFrom(event);
     if (!node || node.nodeValue == null || !node.nodeValue.trim()) return;
-    if (node.parentElement && node.parentElement.closest("#text-edit-root, script, style")) return;
+    if (!node.parentElement || !node.parentElement.closest("[data-edit-text]")) return;
+    if (node.parentElement.closest("button, a, input, select, textarea, #text-edit-root, script, style")) return;
     activeNode = node;
     activeFrom = canonicalFrom(node.nodeValue);
     input.value = node.nodeValue;
@@ -378,9 +379,14 @@
     }
   }, true);
 
+  function editableText(target) {
+    const el = elementFrom(target);
+    if (!el || !el.closest("[data-edit-text]")) return false;
+    if (el.closest("button, a, input, select, textarea, #card-edit-root, #text-edit-root, #map-pop, #map-zoom, #edit-toggle")) return false;
+    return true;
+  }
   function onInteract(event) {
     const el = elementFrom(event.target);
-    if (el && el.closest("button, a, input, select, textarea, label, #card-edit-root, #text-edit-root, #map-pop, #map-zoom, #edit-toggle")) return;
     if (dialogOpen) {
       if (!el || !el.closest("#text-edit-root")) {
         event.preventDefault();
@@ -388,7 +394,7 @@
       }
       return;
     }
-    if (!editOn || allowed(el)) return;
+    if (!editOn || !editableText(el)) return;
     event.preventDefault();
     event.stopPropagation();
     if (event.type === "click") beginEdit(event);
@@ -439,7 +445,27 @@
     if (edit === "1" && nav === "reload") return savedMode() === "1";
     return savedMode() === "1";
   }
+  function takeChrome() {
+    if (!globalThis.GuideProgress || !GuideProgress.UI_LABELS || !globalThis.GuideApp || !GuideApp.getBook) return;
+    const moved = {};
+    let changed = false;
+    Object.keys(GuideProgress.UI_LABELS).forEach(key => {
+      const from = GuideProgress.UI_LABELS[key];
+      if (!edits[from]) return;
+      changed = true;
+      if (edits[from].to && edits[from].to !== from) moved[key] = edits[from].to;
+      delete edits[from];
+    });
+    if (!changed) return;
+    persist();
+    applyAll();
+    if (!Object.keys(moved).length) return;
+    const book = JSON.parse(JSON.stringify(GuideApp.getBook()));
+    book.labels = Object.assign({}, moved, book.labels || {});
+    GuideApp.setCardBook(book);
+  }
   applyAll();
+  takeChrome();
   setEditOn(false);
   globalThis.GuideText = {
     setOn: setEditOn,

@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v10");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v11");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -348,5 +348,18 @@ const source = progress.routeModuleSource(progress.mergedRoute(baseRoute, baseDe
 assert.ok(source.startsWith("const ROUTE = "));
 assert.ok(source.includes("追加"));
 assert.ok(source.includes("globalThis.ROUTE = ROUTE;"));
+assert.strictEqual(progress.sectionName("(1) 壱番魔晄炉"), "壱番魔晄炉");
+assert.strictEqual(progress.sectionName("（12） 陥没道路"), "陥没道路");
+assert.strictEqual(progress.sectionName("3. 本章"), "本章");
+assert.strictEqual(progress.sectionName("新しい区分"), "新しい区分");
+assert.deepStrictEqual(progress.orderInsertGroup(["a", "b", "c", "d"], ["b", "d"], "c", false), ["a", "b", "d", "c"]);
+assert.deepStrictEqual(progress.orderInsertGroup(["a", "b", "c"], ["a", "c"], "b", true), ["b", "a", "c"]);
+const labeled = progress.normalizeCardBook({ labels: { "delete": "消す", "empty": "  " }, templates: [{ id: "tpl-x", label: "宝箱" }] });
+assert.strictEqual(labeled.labels.delete, "消す");
+assert.strictEqual(labeled.labels.empty, undefined);
+assert.strictEqual(progress.labelText(labeled, "delete"), "消す");
+assert.strictEqual(progress.labelText(labeled, "copy"), "コピー");
+const named = progress.resolveSections({ sections: [{ id: "s", title: "(2) 六番街", map: "", note: "" }] }, progress.emptyCardBook(), "main", "ch09");
+assert.strictEqual(named[0].title, "六番街");
 
 console.log("test-guide: ok");

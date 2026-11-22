@@ -21,7 +21,7 @@ const GAME = {
     theme: "ff7r-guide-theme",
     backup: "ff7r-guide-state-v1-last-backup"
   },
-  cache: "ff7r-guide-v10",
+  cache: "ff7r-guide-v11",
   cacheFiles: [
     "./",
     "./index.html",
@@ -78,7 +78,8 @@ const GAME = {
       { catalog: "materia", label: "マテリア" }
     ] },
     { id: "summons", label: "召喚獣", kind: "catalog", catalog: "summons" },
-    { id: "skills", label: "敵の技", kind: "catalog", catalog: "skills" }
+    { id: "skills", label: "敵の技", kind: "catalog", catalog: "skills" },
+    { id: "settings", label: "設定", kind: "settings" }
   ],
   maps: [
     { id: "chapter01", label: "壱番魔晄炉" },

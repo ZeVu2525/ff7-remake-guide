@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v10") fail("キャッシュ名が ff7r-guide-v10 ではない");
+  if (GAME.cache !== "ff7r-guide-v11") fail("キャッシュ名が ff7r-guide-v11 ではない");
   const mapFiles = guide.MAP_FILES;
   if (!Array.isArray(mapFiles)) fail("data/maps.js の MAP_FILES が配列ではない");
   else mapFiles.forEach(entry => {
@@ -40,6 +40,7 @@ function validateGuide(guide) {
 
   const sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
   const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
+  const progress = fs.readFileSync(path.join(root, "progress.js"), "utf8");
   const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
   if (!sw.includes(GAME.cache)) fail("sw.js のキャッシュ名が GAME.cache と違う");
   if (sw.includes("importScripts(")) fail("sw.js が importScripts で古いキャッシュ名を引き戻せる");
@@ -53,7 +54,7 @@ function validateGuide(guide) {
   for (const file of ["data/game.js", "data/route.js", "data/catalogs.js", "data/maps.js", "data/templates.js", "progress.js", "app.js", "edit-mode.js", "card-edit.js"]) {
     if (!html.includes(file + "?v=" + GAME.cache)) fail("index.html の " + file + " に版のクエリがない");
   }
-  if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw") || !app.includes("すべて表示") || !app.includes("data-map") || !app.includes("data-open-item") || !app.includes("data-item-section") || !app.includes("map-zoom") || !app.includes("中のカード") || !app.includes("data-open-weapon")) {
+  if (!html.includes("新しいバージョンがあります") || !app.includes('updateViaCache: "none"') || !app.includes("ff7r-reload") || !app.includes("ff7r-sw") || !app.includes("すべて表示") || !app.includes("data-map") || !app.includes("data-open-item") || !app.includes("data-item-section") || !app.includes("map-zoom") || !progress.includes('"kids": "中のカード"') || !app.includes("data-open-weapon")) {
     fail("画面がサービスワーカーの更新を見ていない");
   }
   if (/xc1de|xcde-guide|xenoblade/i.test(sw + fs.readFileSync(path.join(root, "app.js"), "utf8") + fs.readFileSync(path.join(root, "edit-mode.js"), "utf8"))) {

@@ -367,7 +367,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch01-sec-1",
-          "title": "(1) 壱番魔晄炉",
+          "title": "壱番魔晄炉",
           "map": "chapter01",
           "note": ""
         }
@@ -496,7 +496,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch02-sec-1",
-          "title": "(1) 八番街",
+          "title": "八番街",
           "map": "chapter02",
           "note": ""
         }
@@ -970,7 +970,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch03-sec-1",
-          "title": "(1) 七番街スラム",
+          "title": "七番街スラム",
           "map": "chapter03",
           "note": ""
         }
@@ -1176,7 +1176,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch04-sec-1",
-          "title": "(1) 七番街",
+          "title": "七番街",
           "map": "chapter04",
           "note": ""
         }
@@ -1434,7 +1434,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch05-sec-1",
-          "title": "(1) 螺旋トンネル",
+          "title": "螺旋トンネル",
           "map": "chapter05",
           "note": ""
         }
@@ -1712,7 +1712,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch06-sec-1",
-          "title": "(1) 四番街プレート内部",
+          "title": "四番街プレート内部",
           "map": "chapter06",
           "note": ""
         }
@@ -2036,7 +2036,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch07-sec-1",
-          "title": "(1) 伍番魔晄炉",
+          "title": "伍番魔晄炉",
           "map": "chapter07",
           "note": ""
         }
@@ -2558,7 +2558,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch08-sec-1",
-          "title": "(1) 伍番街スラム",
+          "title": "伍番街スラム",
           "map": "chapter08",
           "note": ""
         }
@@ -3033,19 +3033,19 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch09-sec-1",
-          "title": "(1) 六番街スラム",
+          "title": "六番街スラム",
           "map": "chapter09",
           "note": ""
         },
         {
           "id": "ch09-sec-2",
-          "title": "(2) 陥没道路",
+          "title": "陥没道路",
           "map": "chapter09-03",
           "note": ""
         },
         {
           "id": "ch09-sec-3",
-          "title": "(3) 六番街スラム",
+          "title": "六番街スラム",
           "map": "chapter09",
           "note": ""
         }
@@ -3283,7 +3283,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch10-sec-1",
-          "title": "(1) 地下下水道",
+          "title": "地下下水道",
           "map": "chapter10",
           "note": ""
         }
@@ -3539,7 +3539,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch11-sec-1",
-          "title": "(1) 列車墓場",
+          "title": "列車墓場",
           "map": "chapter11",
           "note": ""
         }
@@ -3743,7 +3743,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch12-sec-1",
-          "title": "(1) 七番街支柱",
+          "title": "七番街支柱",
           "map": "chapter12",
           "note": ""
         }
@@ -4068,7 +4068,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch13-sec-1",
-          "title": "(1) 地下実験場",
+          "title": "地下実験場",
           "map": "chapter13",
           "note": ""
         }
@@ -4437,55 +4437,55 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch14-sec-1",
-          "title": "(1) 伍番街スラム",
+          "title": "伍番街スラム",
           "map": "chapter08",
           "note": ""
         },
         {
           "id": "ch14-sec-2",
-          "title": "(2) 六番街スラム",
+          "title": "六番街スラム",
           "map": "chapter09",
           "note": ""
         },
         {
           "id": "ch14-sec-3",
-          "title": "(3) 伍番街スラム",
+          "title": "伍番街スラム",
           "map": "chapter08",
           "note": ""
         },
         {
           "id": "ch14-sec-4",
-          "title": "(4) 六番街スラム",
+          "title": "六番街スラム",
           "map": "chapter09",
           "note": ""
         },
         {
           "id": "ch14-sec-5",
-          "title": "(5) 伍番街スラム",
+          "title": "伍番街スラム",
           "map": "chapter08",
           "note": ""
         },
         {
           "id": "ch14-sec-6",
-          "title": "(6) 六番街スラム",
+          "title": "六番街スラム",
           "map": "chapter09",
           "note": ""
         },
         {
           "id": "ch14-sec-7",
-          "title": "(7) 伍番街スラム",
+          "title": "伍番街スラム",
           "map": "chapter08",
           "note": ""
         },
         {
           "id": "ch14-sec-8",
-          "title": "(8) 六番街スラム",
+          "title": "六番街スラム",
           "map": "chapter09",
           "note": ""
         },
         {
           "id": "ch14-sec-9",
-          "title": "(9) 伍番街スラム",
+          "title": "伍番街スラム",
           "map": "chapter08",
           "note": ""
         }
@@ -4640,7 +4640,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch15-sec-1",
-          "title": "(1) 七番街プレート断面",
+          "title": "七番街プレート断面",
           "map": "chapter15",
           "note": ""
         }
@@ -5072,7 +5072,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch16-sec-1",
-          "title": "(1) 神羅ビル外周",
+          "title": "神羅ビル外周",
           "map": "chapter16",
           "note": ""
         }
@@ -5629,7 +5629,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch17-sec-1",
-          "title": "(1) 神羅ビル特殊研究施設",
+          "title": "神羅ビル特殊研究施設",
           "map": "chapter17",
           "note": ""
         }
@@ -5724,7 +5724,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch18-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5748,7 +5748,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch01-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5760,7 +5760,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch02-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5772,7 +5772,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch03-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5784,7 +5784,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch04-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5796,7 +5796,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch05-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5808,7 +5808,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch06-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5820,7 +5820,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch07-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5832,7 +5832,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch08-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5844,7 +5844,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch09-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5856,7 +5856,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch10-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5868,7 +5868,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch11-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5880,7 +5880,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch12-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5892,7 +5892,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch13-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5904,7 +5904,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch14-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5916,7 +5916,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch15-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5928,7 +5928,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch16-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5940,7 +5940,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch17-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5952,7 +5952,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "ch18-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5976,7 +5976,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "im01-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
@@ -5988,7 +5988,7 @@ const ROUTE = {
       "sections": [
         {
           "id": "im02-sec-1",
-          "title": "(1) 本章",
+          "title": "本章",
           "map": "",
           "note": ""
         }
