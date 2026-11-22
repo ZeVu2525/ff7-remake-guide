@@ -422,10 +422,10 @@
       <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
       <div class="ibody">
         <div class="ihead">
-          <label for="check-${esc(item.id)}">${hasFlag(item, "tips") ? `<span class="hint-mark">${esc(GuideProgress.labelText(cardBook, "hint"))}</span>` : ""}${flagTags(item)}${exampleMark(item)}<span class="it-title" data-edit-text>${esc((headings && headings[item.id]) || item.title || item.id)}</span></label>
+          <div class="ihead-main"><span class="tag-spot" data-tag-spot="${esc(item.id)}">${flagTags(item)}</span><label for="check-${esc(item.id)}">${hasFlag(item, "tips") ? `<span class="hint-mark">${esc(GuideProgress.labelText(cardBook, "hint"))}</span>` : ""}${exampleMark(item)}<span class="it-title" data-edit-text>${esc((headings && headings[item.id]) || item.title || item.id)}</span></label></div>
           <div class="imeta">
             ${hasFlag(item, "trophy") && item.trophy && trophyById(item.trophy) ? `<span class="tag tone-trophy">${esc(trophyById(item.trophy).name)}</span>` : ""}
-            ${item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
+            ${(hasFlag(item, "deadline") || hasFlag(item, "missable")) && item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
             ${questLink}
             <button type="button" class="route-item-toggle" data-toggle-item="${esc(item.id)}" aria-expanded="${collapsed ? "false" : "true"}">${esc(GuideProgress.labelText(cardBook, "detail"))}</button>
             ${mapButton(shownMap(item, section) ? { id: item.id, map: shownMap(item, section) } : null)}
@@ -457,6 +457,7 @@
       const closed = ui.collapsed["section:" + ui.trackId + ":" + section.id] === true;
       const name = GuideProgress.sectionName(section.title);
       const tools = cardEditing() ? `<span class="subch-tools">
+        <button type="button" data-section-insert="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "addSection"))}</button>
         <button type="button" data-section-edit="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "rename"))}</button>
         <button type="button" data-section-up="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "up"))}</button>
         <button type="button" data-section-down="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "down"))}</button>
@@ -1044,8 +1045,28 @@
     updateRestore();
   }
 
+  const TAB_SCROLL_KEY = "ff7r-tab-scroll-v1";
+  const tabScroll = {};
+  try {
+    const savedScroll = JSON.parse(sessionStorage.getItem(TAB_SCROLL_KEY) || "{}");
+    if (savedScroll && typeof savedScroll === "object") Object.assign(tabScroll, savedScroll);
+  } catch (error) {}
+
+  function rememberTabScroll() {
+    try { sessionStorage.setItem(TAB_SCROLL_KEY, JSON.stringify(tabScroll)); } catch (error) {}
+  }
+
+  function restoreTabScroll(hub) {
+    const y = Number(tabScroll[hub]) || 0;
+    requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+  }
+
   function showHub(id) {
     const hub = GAME.hubs.some(item => item.id === id) ? id : "route";
+    if (ui.hub !== hub) {
+      tabScroll[ui.hub] = window.scrollY || document.documentElement.scrollTop || 0;
+      rememberTabScroll();
+    }
     if (!ui.keepEnemy) ui.enemyId = "";
     ui.hub = hub;
     document.querySelectorAll("#tabs [data-hub]").forEach(button => {
@@ -1063,6 +1084,7 @@
     if (location.hash !== next) history.replaceState(null, "", next);
     if (hub === "settings") renderSettings();
     if (hub === "enemies") renderEnemies();
+    restoreTabScroll(hub);
   }
 
   function enemyRecords() {
@@ -1662,6 +1684,10 @@
   renderTabs();
   shell();
   showHub(ui.hub);
+  window.addEventListener("pagehide", () => {
+    tabScroll[ui.hub] = window.scrollY || document.documentElement.scrollTop || 0;
+    rememberTabScroll();
+  });
 
   function setCardBook(book) {
     cardBook = GuideProgress.normalizeCardBook(book);
