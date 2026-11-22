@@ -252,7 +252,12 @@ html[data-theme="dark"] .blk-callout,html[data-theme="accent"] .blk-callout{back
 .blk-resize{display:none}
 .is-card-edit .blk-resize{display:block;position:absolute;right:0;bottom:0;width:14px;height:14px;background:#39c9ff;cursor:nwse-resize}
 .is-card-edit .is-layout-selected{outline:2px solid #39c9ff;outline-offset:2px}
-.enemy-row,.enemy-mini{display:flex;gap:8px;align-items:center;width:100%;min-height:44px;margin:0 0 6px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:inherit;text-align:left;cursor:pointer}
+.enemy-row{display:flex;gap:8px;align-items:center;width:100%;min-height:44px;margin:0 0 6px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:inherit;text-align:left;cursor:pointer}
+.enemy-mini{display:block;width:100%;margin:0 0 8px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:inherit;text-align:left}
+.enemy-stats{display:flex;flex-wrap:wrap;gap:10px 18px}
+.enemy-stat{display:flex;flex-direction:column;gap:2px;white-space:nowrap}
+.enemy-stat>span,.enemy-tactic>span{color:var(--fg2);font-size:12px;font-weight:700}
+.enemy-tactic{margin:10px 0 0;white-space:normal}
 .enemy-card{display:grid;gap:6px;margin-top:8px}
 .enemy-own,.enemy-hero{max-width:min(100%,420px);background:#fff}
 .enemy-table{width:100%;border-collapse:collapse;margin:0 0 12px}
@@ -355,16 +360,16 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
   <button type="button" id="edit-toggle" aria-pressed="false">編集：オフ</button>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v14"></script>
-<script src="data/route.js?v=ff7r-guide-v14"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v14"></script>
-<script src="data/maps.js?v=ff7r-guide-v14"></script>
-<script src="data/templates.js?v=ff7r-guide-v14"></script>
-<script src="data/images.js?v=ff7r-guide-v14"></script>
-<script src="data/enemies.js?v=ff7r-guide-v14"></script>
-<script src="progress.js?v=ff7r-guide-v14"></script>
-<script src="app.js?v=ff7r-guide-v14"></script>
-<script src="edit-mode.js?v=ff7r-guide-v14"></script>
-<script src="card-edit.js?v=ff7r-guide-v14"></script>
+<script src="data/game.js?v=ff7r-guide-v15"></script>
+<script src="data/route.js?v=ff7r-guide-v15"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v15"></script>
+<script src="data/maps.js?v=ff7r-guide-v15"></script>
+<script src="data/templates.js?v=ff7r-guide-v15"></script>
+<script src="data/images.js?v=ff7r-guide-v15"></script>
+<script src="data/enemies.js?v=ff7r-guide-v15"></script>
+<script src="progress.js?v=ff7r-guide-v15"></script>
+<script src="app.js?v=ff7r-guide-v15"></script>
+<script src="edit-mode.js?v=ff7r-guide-v15"></script>
+<script src="card-edit.js?v=ff7r-guide-v15"></script>
 </body>
 </html>
