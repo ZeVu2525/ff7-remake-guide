@@ -2211,12 +2211,13 @@
       return;
     }
     const map = event.target.closest("[data-map]");
-    if (map) {
+    if (map && map.id !== "map-pop") {
       event.preventDefault();
       event.stopPropagation();
       toggleMap(map, false);
       return;
     }
+    if (mapPinned || mapDrag) return;
     if (mapPop.dataset.pin !== "1" && !event.target.closest("#map-pop") && !event.target.closest("#map-zoom")) hideMap(true);
   });
 
@@ -2871,11 +2872,18 @@
   });
   const mapHandle = mapPop.querySelector("#map-pop-handle");
   let mapDrag = null;
+  let mapIgnoreClick = false;
+  document.addEventListener("click", event => {
+    if (!mapIgnoreClick) return;
+    mapIgnoreClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
   mapHandle.addEventListener("pointerdown", event => {
     if (event.target.closest("button, a")) return;
     try { mapHandle.setPointerCapture(event.pointerId); } catch (error) {}
     const rect = mapPop.getBoundingClientRect();
-    mapDrag = { id: event.pointerId, kind: "move", dx: event.clientX - rect.left, dy: event.clientY - rect.top };
+    mapDrag = { id: event.pointerId, kind: "move", dx: event.clientX - rect.left, dy: event.clientY - rect.top, originX: event.clientX, originY: event.clientY, moved: false };
   });
   mapPop.querySelectorAll("[data-resize]").forEach(handle => {
     handle.addEventListener("pointerdown", event => {
@@ -2898,7 +2906,10 @@
         y: event.clientY,
         imageWidth: Math.max(96, rect.width - mapPadX()),
         ratio: ratio,
-        chrome: mapChrome()
+        chrome: mapChrome(),
+        originX: event.clientX,
+        originY: event.clientY,
+        moved: false
       };
     });
   });
@@ -2919,6 +2930,7 @@
   }
   function moveMapPanel(event) {
     if (!mapDrag || mapDrag.id !== event.pointerId) return;
+    if (Math.hypot(event.clientX - mapDrag.originX, event.clientY - mapDrag.originY) > 4) mapDrag.moved = true;
     if (mapDrag.kind === "resize") {
       const edge = mapDrag.edge || "se";
       const fitted = GuideProgress.fitMapPanel({
@@ -2944,7 +2956,12 @@
   }
   function endMapPanel(event) {
     if (!mapDrag || mapDrag.id !== event.pointerId) return;
+    const dragged = !!mapDrag.moved && event.type !== "pointercancel";
     mapDrag = null;
+    if (dragged) {
+      mapIgnoreClick = true;
+      setTimeout(() => { mapIgnoreClick = false; }, 0);
+    }
     const rect = mapPop.getBoundingClientRect();
     const image = mapPop.querySelector("img");
     const ratio = image && image.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 0;
@@ -3017,15 +3034,15 @@
 
   document.addEventListener("mouseover", event => {
     const button = event.target.closest && event.target.closest("[data-map]");
-    if (!button || !window.matchMedia("(hover: hover)").matches || mapPinned) return;
+    if (!button || button.id === "map-pop" || !window.matchMedia("(hover: hover)").matches || mapPinned || mapDrag) return;
     toggleMap(button, true);
   });
   document.addEventListener("mouseout", event => {
-    if (mapPinned) return;
+    if (mapPinned || mapDrag) return;
     const fromMap = event.target.closest && (event.target.closest("[data-map]") || event.target.closest("#map-pop"));
     if (!fromMap) return;
     const next = event.relatedTarget && event.relatedTarget.closest && (event.relatedTarget.closest("[data-map]") || event.relatedTarget.closest("#map-pop"));
-    if (!next) hideMap(true);
+    if (!next) hideMap();
   });
 
   try {
