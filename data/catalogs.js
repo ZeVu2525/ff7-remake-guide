@@ -2040,126 +2040,126 @@ const CATALOGS = {
         "id": "trophy-ch01",
         "name": "壱番魔晄炉爆破",
         "area": "STORY",
-        "detail": "１章をクリアした",
+        "detail": "1章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch02",
         "name": "八番街の逃走",
         "area": "STORY",
-        "detail": "２章をクリアした",
+        "detail": "2章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch03",
         "name": "なんでも屋の仕事",
         "area": "STORY",
-        "detail": "３章をクリアした",
+        "detail": "3章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch04",
         "name": "アバランチとの絆",
         "area": "STORY",
-        "detail": "４章をクリアした",
+        "detail": "4章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch05",
-        "name": "プランＥ展開",
+        "name": "プランE展開",
         "area": "STORY",
-        "detail": "５章をクリアした",
+        "detail": "5章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch06",
         "name": "スラムの太陽",
         "area": "STORY",
-        "detail": "６章をクリアした",
+        "detail": "6章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch07",
         "name": "罠に落ちたネズミ",
         "area": "STORY",
-        "detail": "７章をクリアした",
+        "detail": "7章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch08",
         "name": "再会",
         "area": "STORY",
-        "detail": "８章をクリアした",
+        "detail": "8章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch09",
         "name": "欲望の街",
         "area": "STORY",
-        "detail": "９章をクリアした",
+        "detail": "9章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch10",
         "name": "焦燥の迷宮",
         "area": "STORY",
-        "detail": "１０章をクリアした",
+        "detail": "10章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch11",
         "name": "亡霊の墓場",
         "area": "STORY",
-        "detail": "１１章をクリアした",
+        "detail": "11章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch12",
         "name": "死闘",
         "area": "STORY",
-        "detail": "１２章をクリアした",
+        "detail": "12章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch13",
         "name": "醒めない悪夢",
         "area": "STORY",
-        "detail": "１３章をクリアした",
+        "detail": "13章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch14",
         "name": "希望への救済",
         "area": "STORY",
-        "detail": "１４章をクリアした",
+        "detail": "14章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch15",
         "name": "腐ったピザ",
         "area": "STORY",
-        "detail": "１５章をクリアした",
+        "detail": "15章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch16",
         "name": "ノーアポイントメント",
         "area": "STORY",
-        "detail": "１６章をクリアした",
+        "detail": "16章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch17",
         "name": "混沌からの脱出",
         "area": "STORY",
-        "detail": "１７章をクリアした",
+        "detail": "17章をクリアした",
         "source": ""
       },
       {
         "id": "trophy-ch18",
         "name": "運命の断裂",
         "area": "STORY",
-        "detail": "１８章をクリアした",
+        "detail": "18章をクリアした",
         "source": ""
       },
       {
@@ -2194,7 +2194,7 @@ const CATALOGS = {
         "id": "trophy-music-3",
         "name": "音楽愛好家",
         "area": "収集",
-        "detail": "ミュージックディスクを３個集めた",
+        "detail": "ミュージックディスクを3個集めた",
         "source": ""
       },
       {
@@ -2243,7 +2243,7 @@ const CATALOGS = {
         "id": "trophy-moogle",
         "name": "凄腕の整備士",
         "area": "行動",
-        "detail": "「チョコボ＆モーグリ」マテリアを入手した",
+        "detail": "「チョコボ&モーグリ」マテリアを入手した",
         "source": ""
       },
       {
@@ -2299,7 +2299,7 @@ const CATALOGS = {
         "id": "trophy-dress-3",
         "name": "新米ドレッサー",
         "area": "収集",
-        "detail": "嫁オーディションの衣装を３種類着こなした",
+        "detail": "嫁オーディションの衣装を3種類着こなした",
         "source": ""
       },
       {
@@ -2362,7 +2362,7 @@ const CATALOGS = {
         "id": "trophy-burst-max",
         "name": "バーストマスター",
         "area": "戦闘",
-        "detail": "バースト時のダメージ倍率300％を突破した",
+        "detail": "バースト時のダメージ倍率300%を突破した",
         "source": ""
       },
       {
@@ -2597,7 +2597,7 @@ const CATALOGS = {
             "sell": "3000"
           }
         ],
-        "obtain": "店 各地（CHAPTER8以降）、宝箱 七番街 社宅地区",
+        "obtain": "店 各地(CHAPTER8以降)、宝箱 七番街 社宅地区",
         "buy": "3000"
       },
       {
@@ -2701,7 +2701,7 @@ const CATALOGS = {
             "sell": "-"
           }
         ],
-        "obtain": "その他 バトルレポート02達成後にチャドリーから購入、3個まで。1個目：100ギル、2個目：2000ギル、3個目：5000ギル",
+        "obtain": "その他 バトルレポート02達成後にチャドリーから購入、3個まで。1個目:100ギル、2個目:2000ギル、3個目:5000ギル",
         "buy": "-"
       },
       {
@@ -2727,7 +2727,7 @@ const CATALOGS = {
             "sell": "3000"
           }
         ],
-        "obtain": "店 各地（CHAPTER5以降）、宝箱 地下下水道六番地区、神羅ビル 鑼牟第一層、アノニマス",
+        "obtain": "店 各地(CHAPTER5以降)、宝箱 地下下水道六番地区、神羅ビル 鑼牟第一層、アノニマス",
         "buy": "1500"
       },
       {
@@ -2753,7 +2753,7 @@ const CATALOGS = {
             "sell": "3000"
           }
         ],
-        "obtain": "店 各地（CHAPTER5以降）、宝箱 ウォール・マーケット、その他 CHAPTER4でジェシーからもらう",
+        "obtain": "店 各地(CHAPTER5以降)、宝箱 ウォール・マーケット、その他 CHAPTER4でジェシーからもらう",
         "buy": "1500"
       },
       {
@@ -2779,7 +2779,7 @@ const CATALOGS = {
             "sell": "6000"
           }
         ],
-        "obtain": "店 各地（CHAPTER9以降）、宝箱 陥没道路 下層",
+        "obtain": "店 各地(CHAPTER9以降)、宝箱 陥没道路 下層",
         "buy": "3000"
       },
       {
@@ -2800,7 +2800,7 @@ const CATALOGS = {
             "sell": "3000"
           }
         ],
-        "obtain": "店 各地（CHAPTER12以降）、クロウガイスト",
+        "obtain": "店 各地(CHAPTER12以降)、クロウガイスト",
         "buy": "3000"
       },
       {
@@ -3437,7 +3437,7 @@ const CATALOGS = {
                   "text": "10%"
                 },
                 {
-                  "text": "各地（CHAPTER6以降）、八番街 市街地区、列車墓場 B区画、神羅ビル 64F天井裏 空調設備内部",
+                  "text": "各地(CHAPTER6以降)、八番街 市街地区、列車墓場 B区画、神羅ビル 64F天井裏 空調設備内部",
                   "rowspan": 5
                 },
                 {
@@ -3534,7 +3534,7 @@ const CATALOGS = {
                   "text": "10%"
                 },
                 {
-                  "text": "各地（CHAPTER6以降）、四番街 プレート内部下層、伍番街スラム エアリスの家",
+                  "text": "各地(CHAPTER6以降)、四番街 プレート内部下層、伍番街スラム エアリスの家",
                   "rowspan": 5
                 },
                 {
@@ -3631,7 +3631,7 @@ const CATALOGS = {
                   "text": "5%"
                 },
                 {
-                  "text": "伍番魔晄炉 正面ゲート、けんすい勝負（中級クリア）",
+                  "text": "伍番魔晄炉 正面ゲート、けんすい勝負(中級クリア)",
                   "rowspan": 5
                 },
                 {
@@ -3717,7 +3717,7 @@ const CATALOGS = {
                   "text": "10%"
                 },
                 {
-                  "text": "ダーツ（ランキング1位）、スクワット勝負（中級クリア）",
+                  "text": "ダーツ(ランキング1位)、スクワット勝負(中級クリア)",
                   "rowspan": 5
                 },
                 {
@@ -3972,7 +3972,7 @@ const CATALOGS = {
                   "rowspan": 2
                 },
                 {
-                  "text": "1個目：100 2個目：2000 3個目：5000",
+                  "text": "1個目:100 2個目:2000 3個目:5000",
                   "rowspan": 2
                 },
                 {
@@ -4047,7 +4047,7 @@ const CATALOGS = {
                   "rowspan": 3
                 },
                 {
-                  "text": "1個目：100 2個目：5000",
+                  "text": "1個目:100 2個目:5000",
                   "rowspan": 3
                 },
                 {
@@ -4185,7 +4185,7 @@ const CATALOGS = {
                   "rowspan": 3
                 },
                 {
-                  "text": "1個目：100 2個目：5000",
+                  "text": "1個目:100 2個目:5000",
                   "rowspan": 3
                 },
                 {
@@ -4255,7 +4255,7 @@ const CATALOGS = {
                   "rowspan": 3
                 },
                 {
-                  "text": "1個目：100 2個目：2000 3個目：5000",
+                  "text": "1個目:100 2個目:2000 3個目:5000",
                   "rowspan": 3
                 },
                 {
@@ -4583,7 +4583,7 @@ const CATALOGS = {
                   "rowspan": 3
                 },
                 {
-                  "text": "1個目：100 2個目：2000 3個目：5000",
+                  "text": "1個目:100 2個目:2000 3個目:5000",
                   "rowspan": 3
                 },
                 {
@@ -4637,7 +4637,7 @@ const CATALOGS = {
                   "rowspan": 3
                 },
                 {
-                  "text": "1個目：100 2個目：2000 3個目：5000",
+                  "text": "1個目:100 2個目:2000 3個目:5000",
                   "rowspan": 3
                 },
                 {
@@ -4772,7 +4772,7 @@ const CATALOGS = {
                   "text": "装備している間、歩数を数える。5000歩でこのマテリアが変わる。"
                 },
                 {
-                  "text": "伍番街スラム エアリスの家（CHAPTER14限定）"
+                  "text": "伍番街スラム エアリスの家(CHAPTER14限定)"
                 },
                 {
                   "text": "非売品"
@@ -5462,7 +5462,7 @@ const CATALOGS = {
             "mp": "-",
             "luck": "-",
             "speed": "-",
-            "other": "「ぞくせい」マテリア効果5%Up 状態異常耐性値+5 ダメージアスピル MP満タンで魔法20％Up HPが高いと物理攻撃+5",
+            "other": "「ぞくせい」マテリア効果5%Up 状態異常耐性値+5 ダメージアスピル MP満タンで魔法20%Up HPが高いと物理攻撃+5",
             "slots": [],
             "slotText": "初期状態",
             "sp": "70"
@@ -5606,7 +5606,7 @@ const CATALOGS = {
             "mp": "10×2",
             "luck": "-",
             "speed": "-",
-            "other": "強化効果時間10%Up 弱体化効果時間10％Up",
+            "other": "強化効果時間10%Up 弱体化効果時間10%Up",
             "slots": [
               "holl09"
             ],
@@ -5624,7 +5624,7 @@ const CATALOGS = {
             "mp": "+15",
             "luck": "-",
             "speed": "-",
-            "other": "ガード時の物理ダメージ10%Down ガード時の魔法ダメージ10%Down MP回復スピード10％Up",
+            "other": "ガード時の物理ダメージ10%Down ガード時の魔法ダメージ10%Down MP回復スピード10%Up",
             "slots": [
               "holl10",
               "holl11"
@@ -6147,7 +6147,7 @@ const CATALOGS = {
             "mp": "-",
             "luck": "-",
             "speed": "-",
-            "other": "炎属性攻撃5%Up 氷属性攻撃5%Up 雷属性攻撃5%Up 風属性攻撃5%Up 「ぞくせい」マテリア効果10%Up 弱体化効果時間10％Up",
+            "other": "炎属性攻撃5%Up 氷属性攻撃5%Up 雷属性攻撃5%Up 風属性攻撃5%Up 「ぞくせい」マテリア効果10%Up 弱体化効果時間10%Up",
             "slots": [],
             "slotText": "初期状態",
             "sp": "60"
@@ -6341,7 +6341,7 @@ const CATALOGS = {
             "mp": "-",
             "luck": "-",
             "speed": "-",
-            "other": "強化効果時間10%Up ガード時の魔法ダメージ10%Down 部位破壊の攻撃力10％Up",
+            "other": "強化効果時間10%Up ガード時の魔法ダメージ10%Down 部位破壊の攻撃力10%Up",
             "slots": [
               "holl08",
               "holl13"
@@ -6487,7 +6487,7 @@ const CATALOGS = {
             "mp": "-",
             "luck": "-",
             "speed": "-",
-            "other": "アビリティクリティカル率10%Up ピンチでクリティカル率50％Up ピンチで物理防御力+10 ピンチで魔法防御力+10",
+            "other": "アビリティクリティカル率10%Up ピンチでクリティカル率50%Up ピンチで物理防御力+10 ピンチで魔法防御力+10",
             "slots": [
               "holl14"
             ],
@@ -6505,7 +6505,7 @@ const CATALOGS = {
             "mp": "-",
             "luck": "-",
             "speed": "-",
-            "other": "「たたかう」強化5%Up 「ぶっぱなす」強化10%Up クリティカルダメージ10％Up",
+            "other": "「たたかう」強化5%Up 「ぶっぱなす」強化10%Up クリティカルダメージ10%Up",
             "slots": [
               "holl13",
               "holl10"
@@ -7074,7 +7074,7 @@ const CATALOGS = {
             "mp": "-",
             "luck": "-",
             "speed": "-",
-            "other": "キルドレイン MP満タンで魔法20％Up",
+            "other": "キルドレイン MP満タンで魔法20%Up",
             "slots": [],
             "slotText": "初期状態",
             "sp": "70"
@@ -7364,7 +7364,7 @@ const CATALOGS = {
             "mp": "10×2",
             "luck": "-",
             "speed": "-",
-            "other": "ガード時の物理ダメージ10%Down ガード時の魔法ダメージ10%Down HPが高いと魔法攻撃力+5 ピンチで回復50％Up",
+            "other": "ガード時の物理ダメージ10%Down ガード時の魔法ダメージ10%Down HPが高いと魔法攻撃力+5 ピンチで回復50%Up",
             "slots": [
               "holl07"
             ],
@@ -7382,7 +7382,7 @@ const CATALOGS = {
             "mp": "+10",
             "luck": "-",
             "speed": "-",
-            "other": "「テンペスト」強化5％Up HPが高いと物理防御力+5",
+            "other": "「テンペスト」強化5%Up HPが高いと物理防御力+5",
             "slots": [
               "holl08",
               "holl13"
@@ -7661,7 +7661,7 @@ const CATALOGS = {
             "mp": "-",
             "luck": "-",
             "speed": "-",
-            "other": "キルドレイン サンガン流精神統一30％Up",
+            "other": "キルドレイン サンガン流精神統一30%Up",
             "slots": [
               "holl07"
             ],
@@ -7807,7 +7807,7 @@ const CATALOGS = {
             "mp": "+6",
             "luck": "-",
             "speed": "+5",
-            "other": "サンガン流精神統一の発動率50％",
+            "other": "サンガン流精神統一の発動率50%",
             "slots": [
               "holl09"
             ],
@@ -7950,7 +7950,7 @@ const CATALOGS = {
             "mp": "-",
             "luck": "-",
             "speed": "+7",
-            "other": "サンガン流精神統一の発動率70％",
+            "other": "サンガン流精神統一の発動率70%",
             "slots": [
               "holl12"
             ],
@@ -8099,7 +8099,7 @@ const CATALOGS = {
             "mp": "-",
             "luck": "-",
             "speed": "-",
-            "other": "状態異常耐性値+5 四属性防御5%Up サンガン流精神統一の発動率30％ MP満タンで魔法20％Up 攻撃魔法MP消費量20％Down",
+            "other": "状態異常耐性値+5 四属性防御5%Up サンガン流精神統一の発動率30% MP満タンで魔法20%Up 攻撃魔法MP消費量20%Down",
             "slots": [],
             "slotText": "-",
             "sp": "70"
@@ -8243,7 +8243,7 @@ const CATALOGS = {
             "mp": "-",
             "luck": "-",
             "speed": "-",
-            "other": "「たたかう」強化5%Up 「秘技」強化10％Up サンガン流精神統一の発動率70%Up ピンチでクリティカル率50%Up ピンチでリミットブースト5%Up",
+            "other": "「たたかう」強化5%Up 「秘技」強化10%Up サンガン流精神統一の発動率70%Up ピンチでクリティカル率50%Up ピンチでリミットブースト5%Up",
             "slots": [
               "holl08"
             ],

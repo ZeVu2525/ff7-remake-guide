@@ -12,7 +12,7 @@
     "#card-edit-bar button{box-sizing:border-box;min-height:40px;padding:6px 10px;border:1px solid #8fb6cc;border-radius:6px;background:#0d2436;color:#fff;font:inherit;cursor:pointer}",
     "body.is-card-edit{padding-bottom:128px}",
     ".card-edit-tools,.card-edit-chapter{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}",
-    ".card-edit-tools button,.card-edit-chapter button,.subch-tools button{min-height:32px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:var(--fg);font-size:13px;line-height:1.3;cursor:pointer}",
+    ".card-edit-tools button,.card-edit-chapter button,.subch-tools button,.chapter-tools .icon-edit{min-height:32px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:var(--fg);font-size:13px;line-height:1.3;cursor:pointer}",
     ".card-edit-tools button[data-card-delete]{color:var(--red)}",
     ".card-drag-handle{flex:0 0 auto;touch-action:none;cursor:grab;width:32px;height:32px;padding:0;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:var(--fg);font-size:14px;font-weight:700;line-height:1}",
     ".card-drag-handle:active,body.is-card-dragging .card-drag-handle{cursor:grabbing}",
@@ -215,10 +215,15 @@
         }
       }
     }
-    for (const hub of GAME.hubs) {
-      if (hub.kind !== "catalog") continue;
-      if (GuideApp.currentCatalogIds(hub.catalog).indexOf(id) >= 0) return { kind: "catalog", catalogId: hub.catalog };
+    const catalogs = new Set();
+    GAME.hubs.forEach(hub => {
+      if (hub.catalog) catalogs.add(hub.catalog);
+      (hub.sections || []).forEach(section => { if (section.catalog) catalogs.add(section.catalog); });
+    });
+    for (const catalogId of catalogs) {
+      if (GuideApp.currentCatalogIds(catalogId).indexOf(id) >= 0) return { kind: "catalog", catalogId };
     }
+    if (GuideApp.currentEnemyIds && GuideApp.currentEnemyIds().indexOf(id) >= 0) return { kind: "enemy" };
     return null;
   }
 
@@ -1110,10 +1115,19 @@
     document.getElementById("card-edit-title").textContent = seed.id ? "台帳を直す" : "台帳に追加";
     document.getElementById("card-edit-id").textContent = seed.id ? "ID: " + seed.id : "IDは保存時に付きます。";
     const mapEditor = seed.catalogId === "quests" || seed.map ? mapFields(seed.map || "") : "";
+    const questFields = ["client", "place", "when", "condition", "clear", "level"];
+    const itemFields = ["obtain", "buy", "sell", "use", "ability"];
+    const itemCatalogs = ["keyItems", "consumables", "accessories", "weapons", "armor", "materia", "summons"];
+    const shownFields = seed.catalogId === "quests" ? questFields : itemCatalogs.indexOf(seed.catalogId) >= 0 ? itemFields : [];
+    const extras = [
+      ["obtain", "入手"], ["buy", "買値"], ["sell", "売値"], ["use", "用途"], ["ability", "アビリティ"],
+      ["client", "依頼人"], ["place", "受注場所"], ["when", "時期"], ["condition", "条件"], ["clear", "クリア"], ["level", "レベル"]
+    ].filter(pair => shownFields.indexOf(pair[0]) >= 0 || seed[pair[0]]);
     fields.innerHTML = [
       field("名前", `<input name="name" required value="${escapeAttr(seed.name || "")}">`),
       field("説明", `<textarea name="detail" required>${escapeText(seed.detail || "")}</textarea>`),
       field("場所・種別", `<input name="area" value="${escapeAttr(seed.area || "")}">`),
+      extras.map(pair => field(pair[1], `<input name="${pair[0]}" value="${escapeAttr(seed[pair[0]] || "")}">`)).join(""),
       mapEditor,
       `<label><input type="checkbox" name="missable"${seed.missable ? " checked" : ""}> 取り逃し</label>`
     ].join("");
@@ -1207,9 +1221,14 @@
       error.textContent = checked.error;
       return;
     }
-    const ids = GuideApp.currentCatalogIds(editing.catalogId);
+    const ids = GuideApp.currentCatalogIds(editing.catalogId).filter(item => item !== (editing.id || ""));
     const id = editing.id || GuideProgress.createCardId(usedIds());
-    const order = ids.indexOf(id) >= 0 ? ids : ids.concat(id);
+    const at = editing.insertAfter ? ids.indexOf(editing.insertAfter) : -1;
+    const order = ids.slice();
+    order.splice(at < 0 ? order.length : at + 1, 0, id);
+    ["obtain", "buy", "sell", "use", "ability", "client", "place", "when", "condition", "clear", "level"].forEach(key => {
+      if (form.elements[key]) checked.value[key] = GuideProgress.toHalfWidth(form.elements[key].value || "").trim();
+    });
     const base = editing.id ? GuideApp.findBaseCatalog(editing.id) : null;
     const next = GuideProgress.upsertCatalogCard(
       book(),
@@ -1227,6 +1246,16 @@
   function shift(id, delta) {
     const place = locate(id);
     if (!place) return;
+    if (place.kind === "enemy") {
+      const ids = GuideApp.currentEnemyIds();
+      const index = ids.indexOf(id);
+      const nextIndex = index + delta;
+      if (index < 0 || nextIndex < 0 || nextIndex >= ids.length) return;
+      ids.splice(index, 1);
+      ids.splice(nextIndex, 0, id);
+      GuideApp.setCardBook(GuideProgress.saveEnemyOrder(book(), ids), "並べ替え");
+      return;
+    }
     if (place.kind === "catalog") {
       const ids = GuideApp.currentCatalogIds(place.catalogId);
       const index = ids.indexOf(id);
@@ -1324,6 +1353,14 @@
     }
     if (editing && editing.sectionEdit) {
       saveSectionEdit();
+      return;
+    }
+    if (editing && editing.chapterEdit) {
+      saveChapterEdit();
+      return;
+    }
+    if (editing && editing.kind === "enemy") {
+      saveEnemy();
       return;
     }
     if (editing && editing.move) {
@@ -1448,10 +1485,28 @@
     if (moveSelected) { askMoveSelected(moveSelected.getAttribute("data-card-track"), moveSelected.getAttribute("data-move-selected")); return; }
     const pick = event.target.closest("[data-card-pick]");
     if (pick) { togglePick(pick, event.shiftKey); return; }
+    const enemyAdd = event.target.closest("[data-enemy-add]");
+    if (enemyAdd) {
+      openEnemyForm({ enemyKind: enemyAdd.getAttribute("data-enemy-add") || "normal" });
+      return;
+    }
+    const chapterEdit = event.target.closest("[data-chapter-edit]");
+    if (chapterEdit) {
+      openChapterEdit(chapterEdit.getAttribute("data-card-track"), chapterEdit.getAttribute("data-chapter-edit"));
+      return;
+    }
     const addAfter = event.target.closest("[data-card-add-after]");
     if (addAfter) {
       const id = addAfter.getAttribute("data-card-add-after");
       const place = locate(id);
+      if (place && place.kind === "catalog") {
+        openCatalogForm({ kind: "catalog", catalogId: place.catalogId, name: "", detail: "", area: "", source: "", missable: false, insertAfter: id });
+        return;
+      }
+      if (place && place.kind === "enemy") {
+        openEnemyForm({ enemyKind: "normal", insertAfter: id });
+        return;
+      }
       const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
       if (!place || !item) return;
       openRouteForm({
@@ -1501,6 +1556,12 @@
       const id = edit.getAttribute("data-card-edit");
       const place = locate(id);
       if (!place) return;
+      if (place.kind === "enemy") {
+        const enemy = (GuideApp.currentEnemyIds ? GuideProgress.mergeEnemies(globalThis.ENEMIES || [], book()) : []).find(item => item.id === id);
+        if (!enemy) return;
+        openEnemyForm(enemy);
+        return;
+      }
       if (place.kind === "catalog") {
         const item = GuideApp.currentCatalogIds(place.catalogId).includes(id)
           ? catalogRecord(place.catalogId, id)
@@ -1517,6 +1578,12 @@
     const remove = event.target.closest("[data-card-delete]");
     if (remove) {
       const id = remove.getAttribute("data-card-delete");
+      const place = locate(id);
+      if (place && place.kind === "enemy") {
+        if (!window.confirm("この敵を一覧から外します。元の原稿に戻すには「編集をすべて戻す」を使います。")) return;
+        GuideApp.setCardBook(GuideProgress.removeEnemy(book(), id), "エネミー");
+        return;
+      }
       if (!window.confirm("このカードを削除します。チェックも外れます。元の原稿に戻すには「編集をすべて戻す」を使います。")) return;
       GuideApp.dropCard(id);
     }
@@ -1527,8 +1594,7 @@
     return chapter && (chapter.items || []).find(item => item.id === id);
   }
   function catalogRecord(catalogId, id) {
-    const hub = GAME.hubs.find(item => item.catalog === catalogId);
-    if (!hub) return null;
+    if (!CATALOGS[catalogId]) return null;
     return GuideProgress.mergeCatalog(CATALOGS[catalogId], book(), catalogId).find(item => item.id === id);
   }
 
@@ -1614,7 +1680,7 @@
       window.alert("先にカードの「選択」を付けてください。Shiftを押しながら選ぶと範囲になります。");
       return;
     }
-    const options = sections.map((item, index) => `<option value="${escapeAttr(item.id)}">(${index + 1}) ${escapeText(GuideProgress.sectionName(item.title) || "区分")}</option>`).join("");
+    const options = sections.map((item, index) => `<option value="${escapeAttr(item.id)}">${index + 1} ${escapeText(GuideProgress.sectionName(item.title) || "区分")}</option>`).join("");
     editing = { chooser: true };
     document.getElementById("card-edit-title").textContent = "選択を移動";
     document.getElementById("card-edit-id").textContent = ids.length + "件。親を選ぶと、その子カードも一緒に移ります。";
@@ -1755,17 +1821,98 @@
     ));
   }
 
+  function openChapterEdit(trackId, chapterId) {
+    const list = GuideApp.chapterList(trackId);
+    const chapter = list.find(item => item.id === chapterId);
+    if (!chapter) return;
+    editing = { chapterEdit: true, trackId, chapterId };
+    document.getElementById("card-edit-title").textContent = "チャプター";
+    document.getElementById("card-edit-id").textContent = chapter.id;
+    fields.innerHTML = field("名前", `<input name="title" value="${escapeAttr(chapter.title || "")}">`);
+    error.textContent = "";
+    dialog.hidden = false;
+    captureBaseline();
+  }
+
+  function saveChapterEdit() {
+    const title = GuideProgress.toHalfWidth(new FormData(form).get("title") || "").trim();
+    if (!title) {
+      error.textContent = "名前が空です。";
+      return;
+    }
+    const list = GuideApp.chapterList(editing.trackId);
+    const next = JSON.parse(JSON.stringify(book()));
+    next.chapterLists = Object.assign({}, next.chapterLists, {
+      [editing.trackId]: GuideProgress.renameChapter(list, editing.chapterId, title)
+    });
+    dialog.hidden = true;
+    GuideApp.setCardBook(next, "チャプター");
+  }
+
+  function openEnemyForm(seed) {
+    const enemy = seed || {};
+    editing = {
+      kind: "enemy",
+      id: enemy.id || "",
+      insertAfter: enemy.insertAfter || "",
+      enemyKind: enemy.kind || enemy.enemyKind || "normal"
+    };
+    document.getElementById("card-edit-title").textContent = enemy.id ? "エネミーを直す" : "エネミーを追加";
+    document.getElementById("card-edit-id").textContent = enemy.id || "IDは保存時に付きます。";
+    const kind = editing.enemyKind;
+    fields.innerHTML = [
+      field("名前", `<input name="name" required value="${escapeAttr(enemy.name || "")}">`),
+      field("番号", `<input name="no" value="${escapeAttr(enemy.no || "")}">`),
+      field("種類", `<select name="enemyKind"><option value="normal"${kind === "normal" ? " selected" : ""}>通常</option><option value="boss"${kind === "boss" ? " selected" : ""}>ボス</option><option value="summon"${kind === "summon" ? " selected" : ""}>召喚</option></select>`),
+      field("攻略", `<textarea name="tactic">${escapeText(enemy.tactic || "")}</textarea>`),
+      field("出典", `<input name="source" value="${escapeAttr(enemy.source || "")}">`)
+    ].join("");
+    error.textContent = "";
+    dialog.hidden = false;
+    captureBaseline();
+  }
+
+  function saveEnemy() {
+    const data = new FormData(form);
+    const name = GuideProgress.toHalfWidth(data.get("name") || "").trim();
+    if (!name) {
+      error.textContent = "名前が空です。";
+      return;
+    }
+    const source = String(data.get("source") || "").trim();
+    if (source && !/^https:\/\//i.test(source)) {
+      error.textContent = "出典は https:// から始めるか、空にします。";
+      return;
+    }
+    const id = editing.id || GuideProgress.createCardId(usedIds());
+    const base = (globalThis.ENEMIES || []).find(item => item.id === id) || null;
+    const ids = GuideApp.currentEnemyIds();
+    dialog.hidden = true;
+    GuideApp.setCardBook(GuideProgress.upsertEnemy(book(), base, id, {
+      name: name,
+      no: GuideProgress.toHalfWidth(data.get("no") || "").trim(),
+      kind: data.get("enemyKind") || "normal",
+      tactic: GuideProgress.toHalfWidth(data.get("tactic") || "").trim(),
+      source: source,
+      image: base && base.image || "",
+      insertAfter: editing.insertAfter || ""
+    }, ids), "エネミー");
+  }
+
   function openSectionEdit(sectionId) {
     const place = sectionPlace(sectionId);
     if (!place) return;
     const section = chapterSections(place.trackId, place.chapterId).find(item => item.id === sectionId);
     if (!section) return;
     editing = { sectionEdit: true, sectionId, trackId: place.trackId, chapterId: place.chapterId };
-    document.getElementById("card-edit-title").textContent = "子チャプター";
+    const colors = GuideProgress.calloutColors(book(), section);
+    document.getElementById("card-edit-title").textContent = "小見出し";
     document.getElementById("card-edit-id").textContent = section.id;
     fields.innerHTML = [
-      field("名前", `<input name="title" value="${escapeAttr(GuideProgress.sectionName(section.title))}" placeholder="区分名を入力">`),
-      field("共通のメモ", `<textarea name="note">${escapeText(section.note || "")}</textarea>`),
+      field("区分名", `<input name="title" value="${escapeAttr(GuideProgress.sectionName(section.title))}" placeholder="区分名を入力">`),
+      field("小見出し", `<textarea name="note">${escapeText(section.note || "")}</textarea>`),
+      field("背景", `<input name="bg" type="color" value="${escapeAttr(colors.bg)}">`),
+      field("枠", `<input name="border" type="color" value="${escapeAttr(colors.border)}">`),
       mapFields(section.map || "")
     ].join("");
     bindMapField();
@@ -1778,8 +1925,14 @@
     const sections = chapterSections(editing.trackId, editing.chapterId);
     const section = sections.find(item => item.id === editing.sectionId);
     if (!section) return;
-    section.title = String(new FormData(form).get("title") || "").trim() || section.title;
-    section.note = String(new FormData(form).get("note") || "").trim();
+    const data = new FormData(form);
+    const globalColors = GuideProgress.calloutColors(book(), null);
+    section.title = GuideProgress.toHalfWidth(data.get("title") || "").trim() || section.title;
+    section.note = GuideProgress.toHalfWidth(data.get("note") || "").trim();
+    const nextBg = String(data.get("bg") || "");
+    const nextBorder = String(data.get("border") || "");
+    section.bg = nextBg && nextBg.toLowerCase() !== globalColors.bg ? nextBg : "";
+    section.border = nextBorder && nextBorder.toLowerCase() !== globalColors.border ? nextBorder : "";
     const previousMap = section.map || "";
     section.map = chosenMap();
     dialog.hidden = true;
@@ -1931,12 +2084,56 @@
       else openCardMap(ownerId);
       return;
     }
+    const chapterTitle = event.target.closest && event.target.closest(".cht");
+    if (chapterTitle) {
+      const section = chapterTitle.closest("section.ch");
+      if (section) {
+        event.preventDefault();
+        openChapterEdit(section.getAttribute("data-card-track"), section.getAttribute("data-chapter"));
+        return;
+      }
+    }
+    const subhead = event.target.closest && event.target.closest(".subhead-callout, .subch-name");
+    if (subhead) {
+      const section = subhead.closest("[data-section]");
+      if (section) {
+        event.preventDefault();
+        openSectionEdit(section.getAttribute("data-section"));
+        return;
+      }
+    }
+    const enemyRow = event.target.closest && event.target.closest(".enemy-row[data-id], .enemy-page[data-id]");
+    if (enemyRow) {
+      event.preventDefault();
+      const enemy = GuideProgress.mergeEnemies(globalThis.ENEMIES || [], book()).find(item => item.id === enemyRow.getAttribute("data-id"));
+      if (enemy) openEnemyForm(enemy);
+      return;
+    }
+    const row = event.target.closest && event.target.closest("tr[data-id], article.quest[data-id], article.materia-block[data-id]");
+    if (row && !event.target.closest(".card-edit-tools, a, input, textarea, select")) {
+      const id = row.getAttribute("data-id");
+      const place = locate(id);
+      if (place && place.kind === "catalog") {
+        event.preventDefault();
+        const item = catalogRecord(place.catalogId, id);
+        if (item) openCatalogForm(Object.assign({ kind: "catalog", catalogId: place.catalogId, id }, item));
+        return;
+      }
+    }
     if (event.target.closest("button, a, input, textarea, select")) return;
-    const card = event.target.closest("article.it[data-id]");
+    const card = event.target.closest("article.it[data-id], article.quest[data-id]");
     if (!card) return;
     const id = card.getAttribute("data-id");
     const place = locate(id);
-    if (!place || place.kind !== "route") return;
+    if (!place) return;
+    if (place.kind === "catalog") {
+      const item = catalogRecord(place.catalogId, id);
+      if (!item) return;
+      event.preventDefault();
+      openCatalogForm(Object.assign({ kind: "catalog", catalogId: place.catalogId, id }, item));
+      return;
+    }
+    if (place.kind !== "route") return;
     const item = routeRecord(place.trackId, place.chapterId, id);
     if (!item) return;
     event.preventDefault();
@@ -2509,7 +2706,7 @@
   }
 
   function rejectPartialCatalogs(route, catalogs) {
-    const errors = GuideProgress.validateExportBundle(route, catalogs, globalThis.CATALOGS);
+    const errors = GuideProgress.validateExportBundle(route, catalogs, globalThis.CATALOGS).concat(GuideProgress.validateEnemies(GuideProgress.exportEnemies(globalThis.ENEMIES || [], book())));
     if (!errors.length) return;
     throw new Error("書き出せません。台帳が欠けています。\n" + errors.slice(0, 8).join("\n"));
   }
@@ -2619,7 +2816,13 @@
     const images = await prepareImages(prepared.route);
     prepared.route = images.route;
     if (flags.route) download("data-route.js", GuideProgress.routeModuleSource(prepared.route), "text/javascript");
-    if (flags.catalog) download("data-catalogs.js", GuideProgress.catalogsModuleSource(prepared.catalogs), "text/javascript");
+    if (flags.catalog) {
+      download("data-catalogs.js", GuideProgress.catalogsModuleSource(prepared.catalogs), "text/javascript");
+      const enemies = GuideProgress.exportEnemies(globalThis.ENEMIES || [], book());
+      const enemyErrors = GuideProgress.validateEnemies(enemies);
+      if (enemyErrors.length) throw new Error(enemyErrors.slice(0, 4).join("\n"));
+      download("data-enemies.js", GuideProgress.enemiesModuleSource(enemies), "text/javascript");
+    }
     if (flags.json) download("ff7r-card-edits.json", JSON.stringify({ app: GuideProgress.APP, cards: book() }, null, 2), "application/json");
     if (flags.templates) {
       const templates = GuideProgress.activeTemplates(book(), globalThis.TEMPLATES);
@@ -2631,6 +2834,7 @@
         app: GuideProgress.APP,
         labels: book().labels || {},
         difficulty: book().difficulty || "normal",
+        callout: book().callout || {},
         templates: GuideProgress.activeTemplates(book(), globalThis.TEMPLATES)
       }, null, 2), "application/json");
     }
@@ -3026,7 +3230,8 @@
       { path: "data/maps.js", text: "const MAP_FILES = " + JSON.stringify(prepared.manifest, null, 2) + ";\n\nglobalThis.MAP_FILES = MAP_FILES;\n" },
       { path: "data/images.js", text: "const IMAGE_FILES = " + JSON.stringify(images.manifest, null, 2) + ";\n\nglobalThis.IMAGE_FILES = IMAGE_FILES;\n" },
       { path: "data/templates.js", text: "const TEMPLATES = " + JSON.stringify(templates, null, 2) + ";\n\nglobalThis.TEMPLATES = TEMPLATES;\n" },
-      { path: "data/settings.js", text: "const UI_SETTINGS = " + JSON.stringify({ difficulty: book().difficulty || "normal", labels: book().labels || {} }, null, 2) + ";\n\nglobalThis.UI_SETTINGS = UI_SETTINGS;\n" }
+      { path: "data/enemies.js", text: GuideProgress.enemiesModuleSource(GuideProgress.exportEnemies(globalThis.ENEMIES || [], book())) },
+      { path: "data/settings.js", text: "const UI_SETTINGS = " + JSON.stringify({ difficulty: book().difficulty || "normal", labels: book().labels || {}, callout: book().callout || {} }, null, 2) + ";\n\nglobalThis.UI_SETTINGS = UI_SETTINGS;\n" }
     ];
     for (const item of prepared.fresh.concat(images.fresh)) {
       if (!item.blob) continue;
@@ -3079,6 +3284,7 @@
     if (globalThis.UI_SETTINGS) {
       next.labels = UI_SETTINGS.labels || {};
       next.difficulty = UI_SETTINGS.difficulty || "normal";
+      if (UI_SETTINGS.callout) next.callout = UI_SETTINGS.callout;
     }
     GuideApp.setCardBook(next, "GitHubから読み込む");
     if (status) status.textContent = "GitHubの原稿を読み込みました。";
@@ -3097,6 +3303,7 @@
         const next = JSON.parse(JSON.stringify(book()));
         if (parsed.labels && typeof parsed.labels === "object") next.labels = parsed.labels;
         if (parsed.difficulty) next.difficulty = parsed.difficulty;
+        if (parsed.callout && typeof parsed.callout === "object") next.callout = parsed.callout;
         if (Array.isArray(parsed.templates)) next.templates = parsed.templates;
         GuideApp.setCardBook(next, "読み込む");
         return;
@@ -3107,6 +3314,28 @@
     } catch (e) {
       window.alert("カードの編集データとして読めませんでした。");
     }
+  });
+  document.addEventListener("input", event => {
+    const el = event.target;
+    if (!el || !el.closest) return;
+    if (!el.closest("#card-edit-dialog, #text-edit-dialog, #settings-body")) return;
+    if (el.type === "password" || el.type === "color" || el.type === "file" || el.type === "checkbox") return;
+    if (el.isContentEditable) {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let node = walker.nextNode();
+      while (node) {
+        const next = GuideProgress.toHalfWidth(node.nodeValue);
+        if (next !== node.nodeValue) node.nodeValue = next;
+        node = walker.nextNode();
+      }
+      return;
+    }
+    if (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") return;
+    const next = GuideProgress.toHalfWidth(el.value);
+    if (next === el.value) return;
+    const caret = el.selectionStart;
+    el.value = next;
+    if (caret != null) el.setSelectionRange(caret, caret);
   });
   document.getElementById("card-edit-reset").addEventListener("click", () => {
     if (!window.confirm("このブラウザのカード編集をすべて消し、原稿の並びに戻します。チェックした進行は残ります。")) return;
