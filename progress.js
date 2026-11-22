@@ -101,6 +101,7 @@
   }
 
   const CARD_FIELDS = ["title", "detail", "flag", "deadline", "source", "trophy", "map", "parent", "quest", "section", "template"];
+  const DEFAULT_ACHIEVE_TAGS = ["trophy", "deadline", "missable", "request", "item"];
   const DEFAULT_TEMPLATES = [
     { id: "tpl-chest", label: "宝箱" },
     { id: "tpl-shinra", label: "神羅ボックス" },
@@ -137,6 +138,19 @@
       if (group[fallback]) return { value: String(group[fallback]), note: fallback.toUpperCase() + "の値" };
     }
     return { value: "", note: "" };
+  }
+
+  function achieveTagList(book, knownIds) {
+    const known = Array.isArray(knownIds) && knownIds.length ? knownIds : DEFAULT_ACHIEVE_TAGS;
+    if (book && Array.isArray(book.achieveTags)) return book.achieveTags.filter(id => known.indexOf(id) >= 0);
+    return DEFAULT_ACHIEVE_TAGS.filter(id => known.indexOf(id) >= 0);
+  }
+
+  function hasAchievementTag(item, tags, catalogId) {
+    const list = tags || DEFAULT_ACHIEVE_TAGS;
+    if (catalogId === "quests") return list.indexOf("request") >= 0;
+    if (catalogId === "trophies") return list.indexOf("trophy") >= 0;
+    return cardFlags(item).some(flag => list.indexOf(flag) >= 0);
   }
 
   function cardFlags(item) {
@@ -246,6 +260,7 @@
       if (typeof labels[key] === "string" && labels[key].trim()) book.labels[key] = labels[key].trim();
     });
     book.difficulty = src.difficulty === "easy" || src.difficulty === "hard" ? src.difficulty : "normal";
+    if (Array.isArray(src.achieveTags)) book.achieveTags = src.achieveTags.filter(id => typeof id === "string" && id);
     book.chapterLists = {};
     const lists = asObject(src.chapterLists);
     Object.keys(lists).forEach(trackId => {
@@ -813,19 +828,33 @@
     return next;
   }
 
-  function foldChildDetails(flags, id, childrenOf) {
-    const next = Object.assign(Object.create(null), flags || {});
+  function childDetailIds(id, childrenOf) {
+    const out = [];
     const seen = new Set();
     const visit = current => {
       if (!current || seen.has(current)) return;
       seen.add(current);
-      next[current] = true;
+      out.push(current);
       const children = childrenOf && childrenOf[current];
       if (children) children.forEach(visit);
     };
     const children = childrenOf && childrenOf[id];
     if (children) children.forEach(visit);
+    return out;
+  }
+
+  function foldChildDetails(flags, id, childrenOf) {
+    const next = Object.assign(Object.create(null), flags || {});
+    childDetailIds(id, childrenOf).forEach(child => { next[child] = true; });
     return next;
+  }
+
+  function toggleChildDetails(flags, id, childrenOf) {
+    const ids = childDetailIds(id, childrenOf);
+    const close = ids.some(child => !flags || flags[child] !== true);
+    const next = Object.assign(Object.create(null), flags || {});
+    ids.forEach(child => { next[child] = close; });
+    return { flags: next, closed: close };
   }
 
   function foldAll(flags, ids, closed) {
@@ -849,6 +878,46 @@
     const left = Math.min(Math.max(8, Number(frame && frame.left) || 8), Math.max(8, viewWidth - width - 8));
     const top = Math.min(Math.max(8, Number(frame && frame.top) || 8), Math.max(8, viewHeight - height - 8));
     return { left: left, top: top, width: width, height: height };
+  }
+
+  function fitMapPanel(request, viewport) {
+    const ratio = Number(request && request.ratio) > 0 ? Number(request.ratio) : 1;
+    const padX = Number(request && request.padX) >= 0 ? Number(request.padX) : 16;
+    const chrome = Number(request && request.chrome) >= 0 ? Number(request.chrome) : 48;
+    const viewW = Math.max(0, Number(viewport && viewport.width) || 0);
+    const viewH = Math.max(0, Number(viewport && viewport.height) || 0);
+    const minImage = 96;
+    const maxImageW = Math.max(minImage, viewW - 16 - padX);
+    const maxImageH = Math.max(minImage / ratio, viewH - 16 - chrome);
+    let imageWidth = Number(request && request.imageWidth) || Math.min(320, maxImageW);
+    let imageHeight = imageWidth / ratio;
+    if (imageWidth > maxImageW) {
+      imageWidth = maxImageW;
+      imageHeight = imageWidth / ratio;
+    }
+    if (imageHeight > maxImageH) {
+      imageHeight = maxImageH;
+      imageWidth = imageHeight * ratio;
+    }
+    if (imageWidth < minImage && minImage <= maxImageW && minImage / ratio <= maxImageH) {
+      imageWidth = minImage;
+      imageHeight = imageWidth / ratio;
+    }
+    const width = Math.round(imageWidth + padX);
+    const height = Math.round(imageHeight + chrome);
+    let left = request && request.anchorRight != null ? Number(request.anchorRight) - width : Number(request && request.left);
+    let top = request && request.anchorBottom != null ? Number(request.anchorBottom) - height : Number(request && request.top);
+    if (!Number.isFinite(left)) left = 8;
+    if (!Number.isFinite(top)) top = 8;
+    left = Math.min(Math.max(8, left), Math.max(8, viewW - width - 8));
+    top = Math.min(Math.max(8, top), Math.max(8, viewH - height - 8));
+    return {
+      left: Math.round(left),
+      top: Math.round(top),
+      width: width,
+      height: height,
+      imageWidth: Math.round(width - padX)
+    };
   }
 
   function defaultMapFrame(viewport, anchor) {
@@ -1237,6 +1306,7 @@
     if (JSON.stringify(a.chapterLists || {}) !== JSON.stringify(b.chapterLists || {})) return "チャプター";
     if (JSON.stringify(a.templates || []) !== JSON.stringify(b.templates || [])) return "定型文";
     if (JSON.stringify(a.labels || {}) !== JSON.stringify(b.labels || {})) return "ボタン名";
+    if (JSON.stringify(a.achieveTags || null) !== JSON.stringify(b.achieveTags || null)) return "達成表示するタグ";
     if ((a.difficulty || "normal") !== (b.difficulty || "normal")) return "難易度";
     const sectionChanged = JSON.stringify(a.chapters || {}) !== JSON.stringify(b.chapters || {});
     if (sectionChanged) {
@@ -1906,6 +1976,10 @@
     numberCards,
     foldCards,
     foldChildDetails,
+    toggleChildDetails,
+    DEFAULT_ACHIEVE_TAGS,
+    achieveTagList,
+    hasAchievementTag,
     foldAll,
     convertBlock,
     headerCopyFields,
@@ -1928,6 +2002,7 @@
     libraryExportPlan,
     replaceLibraryKey,
     clampMapFrame,
+    fitMapPanel,
     defaultMapFrame,
     numberChapter,
     circledNumber,

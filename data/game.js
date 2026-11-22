@@ -21,7 +21,7 @@ const GAME = {
     theme: "ff7r-guide-theme",
     backup: "ff7r-guide-state-v1-last-backup"
   },
-  cache: "ff7r-guide-v29",
+  cache: "ff7r-guide-v31",
   cacheFiles: [
     "./",
     "./index.html",

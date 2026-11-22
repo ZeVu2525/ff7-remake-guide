@@ -247,8 +247,9 @@ tr.is-target td{background:rgba(57,201,255,.18)}
 .map-pop-bar:active{cursor:grabbing}
 #map-pop-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
 #map-pop-close{min-width:36px;min-height:36px;border:0;border-radius:8px;background:transparent;color:#142635;font-size:20px;line-height:1;cursor:pointer}
-.map-pop-body{flex:1;min-height:0;overflow:auto;padding:8px;touch-action:auto}
-#map-pop img{display:block;width:100%;height:100%;max-height:none;object-fit:contain;background:#111;border-radius:8px}
+.map-pop-body{flex:1;min-height:0;overflow:hidden;padding:8px;touch-action:auto}
+.map-pop-stage{position:relative;width:100%;overflow:hidden;background:#111;border-radius:8px}
+#map-pop img{display:block;width:100%;height:100%;max-height:none;object-fit:fill;background:#111}
 .map-missing{margin:8px 0;color:#8a5a00;font-weight:700}
 #image-library-drop{padding:8px;border:1px dashed var(--line);border-radius:8px}
 .image-lib-folders{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
@@ -257,12 +258,27 @@ tr.is-target td{background:rgba(57,201,255,.18)}
 .image-lib-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .image-lib-row img{width:72px;height:48px;object-fit:contain;background:#111;border-radius:4px}
 #map-pop a{color:var(--accent)}
-.map-pop-resize{position:absolute;right:0;bottom:0;width:22px;height:22px;border:0;background:linear-gradient(135deg,transparent 50%,#8aa4b4 50%);cursor:nwse-resize;touch-action:none}
+.map-pop-resize{display:none;position:absolute;z-index:3;padding:0;border:0;background:transparent;touch-action:none}
+#map-pop[data-pin="1"] .map-pop-resize{display:block}
+.map-pop-resize[data-resize="n"],.map-pop-resize[data-resize="s"]{left:18px;right:18px;height:12px;cursor:ns-resize}
+.map-pop-resize[data-resize="n"]{top:0}
+.map-pop-resize[data-resize="s"]{bottom:0}
+.map-pop-resize[data-resize="e"],.map-pop-resize[data-resize="w"]{top:18px;bottom:18px;width:12px;cursor:ew-resize}
+.map-pop-resize[data-resize="e"]{right:0}
+.map-pop-resize[data-resize="w"]{left:0}
+.map-pop-resize[data-resize="se"],.map-pop-resize[data-resize="sw"],.map-pop-resize[data-resize="ne"],.map-pop-resize[data-resize="nw"]{width:22px;height:22px}
+.map-pop-resize[data-resize="se"]{right:0;bottom:0;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,#8aa4b4 50%)}
+.map-pop-resize[data-resize="sw"]{left:0;bottom:0;cursor:nesw-resize}
+.map-pop-resize[data-resize="ne"]{right:0;top:0;cursor:nesw-resize}
+.map-pop-resize[data-resize="nw"]{left:0;top:0;cursor:nwse-resize}
 .item-links{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .facet-switch{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
 .is-target{outline:2px solid var(--accent)}
 .it:last-child{border-bottom:0}
 .it input{width:24px;height:24px;margin-top:3px;flex:0 0 auto;accent-color:var(--accent)}
+.achieve{display:inline-flex;margin-left:8px;padding:1px 7px;border-radius:999px;color:var(--fg3);background:transparent;font-size:12px;font-weight:700}
+.achieve.is-done{color:#0c6a38;background:#e7f6ee}
+.achieve-tags{display:flex;flex-wrap:wrap;gap:8px 14px;margin:8px 0 16px}
 .ibody{flex:1;min-width:0}
 .ihead{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 12px}
 .it label{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;font-weight:650;cursor:pointer}
@@ -448,19 +464,19 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <footer>
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v29"></script>
-<script src="data/route.js?v=ff7r-guide-v29"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v29"></script>
-<script src="data/maps.js?v=ff7r-guide-v29"></script>
-<script src="data/templates.js?v=ff7r-guide-v29"></script>
-<script src="data/settings.js?v=ff7r-guide-v29"></script>
-<script src="data/images.js?v=ff7r-guide-v29"></script>
-<script src="data/enemies.js?v=ff7r-guide-v29"></script>
-<script src="zip-store.js?v=ff7r-guide-v29"></script>
-<script src="progress.js?v=ff7r-guide-v29"></script>
-<script src="image-library.js?v=ff7r-guide-v29"></script>
-<script src="app.js?v=ff7r-guide-v29"></script>
-<script src="edit-mode.js?v=ff7r-guide-v29"></script>
-<script src="card-edit.js?v=ff7r-guide-v29"></script>
+<script src="data/game.js?v=ff7r-guide-v31"></script>
+<script src="data/route.js?v=ff7r-guide-v31"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v31"></script>
+<script src="data/maps.js?v=ff7r-guide-v31"></script>
+<script src="data/templates.js?v=ff7r-guide-v31"></script>
+<script src="data/settings.js?v=ff7r-guide-v31"></script>
+<script src="data/images.js?v=ff7r-guide-v31"></script>
+<script src="data/enemies.js?v=ff7r-guide-v31"></script>
+<script src="zip-store.js?v=ff7r-guide-v31"></script>
+<script src="progress.js?v=ff7r-guide-v31"></script>
+<script src="image-library.js?v=ff7r-guide-v31"></script>
+<script src="app.js?v=ff7r-guide-v31"></script>
+<script src="edit-mode.js?v=ff7r-guide-v31"></script>
+<script src="card-edit.js?v=ff7r-guide-v31"></script>
 </body>
 </html>
