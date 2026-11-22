@@ -95,7 +95,7 @@
     for (const item of list) {
       const on = doneMap[item.id] === true;
       if (on) done += 1;
-      else if (band.has(item.flag)) openBand += 1;
+      else if (cardFlags(item).some(flag => band.has(flag))) openBand += 1;
     }
     return { total: list.length, done, openBand };
   }
@@ -119,6 +119,25 @@
   function stringList(value) {
     if (!Array.isArray(value)) return [];
     return value.filter(item => typeof item === "string" && item);
+  }
+
+  function cardFlags(item) {
+    const listed = item && Array.isArray(item.flags) ? item.flags.filter(id => typeof id === "string" && id) : [];
+    if (listed.length) return listed;
+    return item && item.flag ? [item.flag] : [];
+  }
+
+  function enemyLinks(value) {
+    if (!Array.isArray(value)) return [];
+    const out = [];
+    const seen = new Set();
+    for (const entry of value) {
+      const id = typeof entry === "string" ? entry : entry && entry.id;
+      if (typeof id !== "string" || !/^[a-z][a-z0-9-]+$/.test(id) || seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+    return out.slice(0, 8);
   }
 
   function itemLinks(value) {
@@ -151,6 +170,10 @@
       if (Object.prototype.hasOwnProperty.call(raw, "missable")) patch.missable = raw.missable === true;
       if (Array.isArray(raw.items)) patch.items = itemLinks(raw.items);
       if (Array.isArray(raw.blocks)) patch.blocks = normalizeBlocks(raw.blocks);
+      if (Array.isArray(raw.flags)) patch.flags = raw.flags.filter(id => typeof id === "string" && id).slice(0, 8);
+      if (Array.isArray(raw.enemies)) patch.enemies = enemyLinks(raw.enemies);
+      if (typeof raw.enemyNote === "string") patch.enemyNote = raw.enemyNote;
+      if (typeof raw.enemyImage === "string") patch.enemyImage = raw.enemyImage;
       if (Object.keys(patch).length) book.patches[id] = patch;
     }
     for (const id of Object.keys(asObject(src.custom))) {
@@ -164,6 +187,10 @@
         card.map = typeof raw.map === "string" ? raw.map : "";
         card.items = itemLinks(raw.items);
         if (Array.isArray(raw.blocks)) card.blocks = normalizeBlocks(raw.blocks);
+        if (Array.isArray(raw.flags)) card.flags = raw.flags.filter(id => typeof id === "string" && id).slice(0, 8);
+        if (Array.isArray(raw.enemies)) card.enemies = enemyLinks(raw.enemies);
+        if (typeof raw.enemyNote === "string") card.enemyNote = raw.enemyNote;
+        if (typeof raw.enemyImage === "string") card.enemyImage = raw.enemyImage;
       } else {
         card.catalogId = typeof raw.catalogId === "string" ? raw.catalogId : "";
         card.name = raw.name == null ? "" : String(raw.name);
@@ -240,6 +267,10 @@
     else if (!out.trophy) delete out.trophy;
     if (Object.prototype.hasOwnProperty.call(patch, "items")) out.items = itemLinks(patch.items);
     if (Object.prototype.hasOwnProperty.call(patch, "blocks")) out.blocks = normalizeBlocks(patch.blocks);
+    if (Object.prototype.hasOwnProperty.call(patch, "flags")) out.flags = patch.flags.slice();
+    if (Object.prototype.hasOwnProperty.call(patch, "enemies")) out.enemies = enemyLinks(patch.enemies);
+    if (Object.prototype.hasOwnProperty.call(patch, "enemyNote")) out.enemyNote = patch.enemyNote || "";
+    if (Object.prototype.hasOwnProperty.call(patch, "enemyImage")) out.enemyImage = patch.enemyImage || "";
     if (out.flag !== "item") delete out.items;
     if (!out.map) delete out.map;
     return out;
@@ -333,6 +364,10 @@
         if (custom.template) card.template = custom.template;
         if (custom.flag === "item" && custom.items && custom.items.length) card.items = itemLinks(custom.items);
         if (custom.blocks && custom.blocks.length) card.blocks = normalizeBlocks(custom.blocks);
+        if (custom.flags && custom.flags.length) card.flags = custom.flags.slice();
+        if (custom.enemies && custom.enemies.length) card.enemies = enemyLinks(custom.enemies);
+        if (custom.enemyNote) card.enemyNote = custom.enemyNote;
+        if (custom.enemyImage) card.enemyImage = custom.enemyImage;
       return card;
     }
     const base = routeIndex.byId.get(id);
@@ -477,8 +512,12 @@
       quest: fields.quest || "",
       section: fields.section || "",
       template: fields.template || "",
-      items: fields.flag === "item" ? itemLinks(fields.items) : [],
-      blocks: normalizeBlocks(fields.blocks)
+      items: itemLinks(fields.items),
+      blocks: normalizeBlocks(fields.blocks),
+      flags: cardFlags(fields),
+      enemies: enemyLinks(fields.enemies),
+      enemyNote: fields.enemyNote || "",
+      enemyImage: fields.enemyImage || ""
     };
   }
 
@@ -488,9 +527,18 @@
       rememberRouteCustom(next, id, fields, trackId, chapterId);
     } else if (baseItem) {
       const patch = diffFields(baseItem, fields, CARD_FIELDS);
-      const nextItems = fields.flag === "item" ? itemLinks(fields.items) : [];
+      const nextItems = itemLinks(fields.items);
       const prevItems = itemLinks(baseItem && baseItem.items);
       if (JSON.stringify(nextItems) !== JSON.stringify(prevItems)) patch.items = nextItems;
+      const nextFlags = cardFlags(fields);
+      if (JSON.stringify(nextFlags) !== JSON.stringify(cardFlags(baseItem))) {
+        patch.flags = nextFlags;
+        patch.flag = nextFlags[0] || "";
+      }
+      const nextEnemies = enemyLinks(fields.enemies);
+      if (JSON.stringify(nextEnemies) !== JSON.stringify(enemyLinks(baseItem && baseItem.enemies))) patch.enemies = nextEnemies;
+      if (String(fields.enemyNote || "") !== String(baseItem.enemyNote || "")) patch.enemyNote = fields.enemyNote || "";
+      if (String(fields.enemyImage || "") !== String(baseItem.enemyImage || "")) patch.enemyImage = fields.enemyImage || "";
       const nextBlocks = blockPatchFor(baseItem, fields);
       if (nextBlocks) patch.blocks = nextBlocks;
       if (nextBlocks) {
@@ -746,7 +794,8 @@
     "tab-items": "アイテム",
     "tab-summons": "召喚獣",
     "tab-skills": "敵の技",
-    "tab-settings": "設定"
+    "tab-settings": "設定",
+    "tab-enemies": "エネミー"
   };
 
   function labelText(book, key, fallback) {
@@ -874,7 +923,10 @@
       if (!validImageValue(src)) return null;
       const width = ["s", "m", "l", "full"].indexOf(block.width) >= 0 ? block.width : "m";
       const align = ["left", "center", "right"].indexOf(block.align) >= 0 ? block.align : "center";
-      return { type: "image", src, caption: String(block.caption || "").slice(0, 200), width, align };
+      const image = { type: "image", src, caption: String(block.caption || "").slice(0, 200), width, align };
+      const pct = Math.round(Number(block.pct) / 5) * 5;
+      if (pct >= 20 && pct <= 100) image.pct = pct;
+      return image;
     }
     if (type === "columns") {
       const count = block.count === 3 ? 3 : 2;
@@ -888,7 +940,13 @@
         }).filter(Boolean).slice(0, 6));
       }
       if (!columns.some(col => col.length)) return null;
-      return { type: "columns", count, arrow: block.arrow === true && count === 2, columns };
+      let widths = Array.isArray(block.widths) ? block.widths.map(n => Number(n)).filter(n => n > 0).slice(0, count) : [];
+      if (widths.length !== count) widths = Array.from({ length: count }, () => 100 / count);
+      const sum = widths.reduce((total, n) => total + n, 0) || 100;
+      widths = widths.map(n => Math.max(15, Math.round((n / sum) * 20) * 5));
+      const head = widths.slice(0, -1).reduce((total, n) => total + n, 0);
+      widths[widths.length - 1] = Math.max(15, 100 - head);
+      return { type: "columns", count, arrow: block.arrow === true && count === 2, widths, columns };
     }
     if (type === "tiles") {
       const items = (Array.isArray(block.items) ? block.items : []).map(item => {
@@ -939,55 +997,66 @@
   }
 
   function blockHtml(blocks) {
-    return normalizeBlocks(blocks).map(renderBlock).join("");
+    return normalizeBlocks(blocks).map((block, index) => renderBlock(block, String(index))).join("");
   }
 
-  function renderBlock(block) {
-    if (block.type === "text") return '<div class="blk-text">' + block.html + "</div>";
-    if (block.type === "callout") return '<div class="blk-callout">' + block.html + "</div>";
-    if (block.type === "image") return renderImage(block);
+  function renderBlock(block, path) {
+    const attr = ' data-bpath="' + path + '"';
+    if (block.type === "text") return '<div class="blk-text"' + attr + ">" + block.html + "</div>";
+    if (block.type === "callout") return '<div class="blk-callout"' + attr + ">" + block.html + "</div>";
+    if (block.type === "image") return renderImage(block, false, path);
     if (block.type === "tiles") {
-      return '<div class="blk-tiles">' + block.items.map(item => '<figure class="blk-tile">' + renderImage(item, true) + (item.label ? "<figcaption>" + escapeRichText(item.label) + "</figcaption>" : "") + "</figure>").join("") + "</div>";
+      return '<div class="blk-tiles"' + attr + ">" + block.items.map((item, index) => '<figure class="blk-tile" data-bpath="' + path + ".tile." + index + '">' + renderImage(item, true, path + ".tile." + index) + (item.label ? "<figcaption>" + escapeRichText(item.label) + "</figcaption>" : "") + "</figure>").join("") + "</div>";
     }
-    const arrow = block.arrow ? '<div class="blk-arrow" aria-hidden="true">→</div>' : "";
-    const cols = block.columns.map(col => '<div class="blk-col">' + col.map(renderBlock).join("") + "</div>");
-    if (block.arrow) cols.splice(1, 0, arrow);
-    return '<div class="blk-cols c' + block.count + (block.arrow ? " has-arrow" : "") + '">' + cols.join("") + "</div>";
+    const style = block.arrow
+      ? ' style="grid-template-columns:' + block.widths[0] + '% auto ' + block.widths[1] + '%"'
+      : ' style="grid-template-columns:' + block.widths.map(n => n + "%").join(" ") + '"';
+    const cols = block.columns.map((col, index) => {
+      const split = index < block.columns.length - 1 ? '<i class="blk-split" data-split="' + index + '" data-bpath="' + path + '"></i>' : "";
+      return '<div class="blk-col">' + col.map((child, childIndex) => renderBlock(child, path + "." + index + "." + childIndex)).join("") + split + "</div>";
+    });
+    if (block.arrow) cols.splice(1, 0, '<div class="blk-arrow" aria-hidden="true">→</div>');
+    return '<div class="blk-cols c' + block.count + (block.arrow ? " has-arrow" : "") + '"' + attr + style + ">" + cols.join("") + "</div>";
   }
 
-  function renderImage(block, bare) {
+  function renderImage(block, bare, path) {
     const src = escapeRichText(block.src);
     const caption = escapeRichText(block.caption || "");
     const width = block.width || "m";
     const align = block.align || "center";
+    const pct = block.pct ? ' style="width:' + block.pct + '%"' : "";
     const image = '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img src="' + src + '" alt="' + (caption || escapeRichText(block.label || "")) + '" loading="lazy"></button>';
     if (bare) return image;
-    return '<figure class="blk-img w-' + width + " align-" + align + '">' + image + (caption ? "<figcaption>" + caption + "</figcaption>" : "") + "</figure>";
+    return '<figure class="blk-img w-' + width + " align-" + align + '" data-bpath="' + path + '"' + pct + ">" + image + '<i class="blk-resize" data-bpath="' + path + '"></i>' + (caption ? "<figcaption>" + caption + "</figcaption>" : "") + "</figure>";
   }
 
   function validateRouteFields(fields, flagIds, trophyIds) {
     const title = String(fields && fields.title || "").trim();
     const detail = String(fields && fields.detail || "").trim();
-    const flag = fields && fields.flag;
+    const flags = cardFlags(fields).filter(id => !flagIds || flagIds.indexOf(id) >= 0);
+    const flag = flags[0] || "";
     const source = String(fields && fields.source || "").trim();
     const deadline = String(fields && fields.deadline || "").trim();
     const trophy = String(fields && fields.trophy || "").trim();
     const template = String(fields && fields.template || "").trim();
     if (!title && !template) return { error: "見出しが空です。" };
-    if (!flagIds || flagIds.indexOf(flag) < 0) return { error: "タグが未定義です。" };
+    if (!flags.length) return { error: "タグを1つ以上選んでください。" };
     if (source && !/^https:\/\//i.test(source)) return { error: "出典は https:// から始めるか、空にします。" };
-    if (flag === "trophy" && !trophy) return { error: "トロフィーを選んでください。" };
+    if (flags.indexOf("trophy") >= 0 && !trophy) return { error: "トロフィーを選んでください。" };
     if (trophy && trophyIds && trophyIds.indexOf(trophy) < 0) return { error: "選んだトロフィーが台帳にありません。" };
-    if (flag !== "trophy" && trophy) return { error: "トロフィーの紐付けは、タグがトロフィーのときだけです。" };
     const map = String(fields && fields.map || "").trim();
     if (map && !validMapValue(map)) return { error: "地図は章のID、https:// の画像、または画像ファイルにしてください。" };
     const parent = String(fields && fields.parent || "").trim();
     const quest = String(fields && fields.quest || "").trim();
     const section = String(fields && fields.section || "").trim();
-    const items = flag === "item" ? itemLinks(fields && fields.items) : [];
+    const items = itemLinks(fields && fields.items);
+    const enemies = enemyLinks(fields && fields.enemies);
+    const enemyNote = String(fields && fields.enemyNote || "").slice(0, 400);
+    const enemyImage = String(fields && fields.enemyImage || "").trim();
+    if (enemyImage && !validImageValue(enemyImage)) return { error: "戦闘用の画像は https:// か、画像ファイルにしてください。" };
     const blocks = normalizeBlocks(fields && fields.blocks);
     const plain = blocks.length ? plainFromBlocks(blocks) : "";
-    return { value: { title, detail: plain || detail, flag, source, deadline, trophy: flag === "trophy" ? trophy : "", map, parent, quest, section, template, items, blocks } };
+    return { value: { title, detail: plain || detail, flag, flags, source, deadline, trophy, map, parent, quest, section, template, items, blocks, enemies, enemyNote, enemyImage } };
   }
 
   function validateCatalogFields(fields) {
@@ -1143,6 +1212,10 @@
           if (!copy.template) delete copy.template;
           if (!copy.items || !copy.items.length) delete copy.items;
           if (!copy.blocks || !copy.blocks.length) delete copy.blocks;
+          if (!copy.flags || copy.flags.length < 2) delete copy.flags;
+          if (!copy.enemies || !copy.enemies.length) delete copy.enemies;
+          if (!copy.enemyNote) delete copy.enemyNote;
+          if (!copy.enemyImage) delete copy.enemyImage;
           return copy;
         })
       }));
@@ -1176,6 +1249,8 @@
     mergeTrack,
     mergeCatalog,
     mergedRoute,
+    cardFlags,
+    enemyLinks,
     numberCards,
     numberChapter,
     circledNumber,

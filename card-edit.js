@@ -534,7 +534,62 @@
     });
   }
 
+  function paintFlags() {
+    const host = document.getElementById("flag-chips");
+    if (!host || !editing) return;
+    const selected = new Set(editing.flags || []);
+    host.innerHTML = GAME.flags.map(flag => `<button type="button" class="chip${selected.has(flag.id) ? " on" : ""}" data-flag-toggle="${flag.id}">${escapeText(flag.label)}</button>`).join("");
+    if (form.elements.flag) form.elements.flag.value = (editing.flags || ["story"])[0] || "story";
+    const trophy = document.getElementById("trophy-field");
+    if (trophy) trophy.hidden = !selected.has("trophy");
+    const battle = document.getElementById("battle-field");
+    if (battle) battle.hidden = !selected.has("battle");
+    paintItemPicker();
+    if (selected.has("battle")) paintBattle();
+  }
+
+  function paintBattle() {
+    const host = document.getElementById("battle-field");
+    if (!host) return;
+    const enemies = globalThis.ENEMIES || [];
+    const chosen = (editing.enemies || []).map(id => {
+      const enemy = enemies.find(item => item.id === id);
+      return `<li>${escapeText(enemy ? enemy.name : id)} <button type="button" data-enemy-remove="${escapeAttr(id)}">外す</button></li>`;
+    }).join("");
+    host.innerHTML = `<p>戦闘タグのカードだけ、敵の情報を結びます。タグを外しても、選んだ敵は残ります。</p><input id="enemy-pick-q" placeholder="敵の名前や番号" value="${escapeAttr(editing.enemyQuery || "")}"><div id="enemy-pick-results"></div><ul>${chosen}</ul><label>メモ<textarea id="enemy-note">${escapeText(editing.enemyNote || "")}</textarea></label><label>戦闘用の画像<input id="enemy-image" value="${escapeAttr(editing.enemyImage || "")}" placeholder="https:// または空"></label>`;
+    const query = document.getElementById("enemy-pick-q");
+    const results = document.getElementById("enemy-pick-results");
+    const needle = (query && query.value || "").trim().toLowerCase();
+    results.innerHTML = enemies.filter(enemy => !needle || (enemy.no + enemy.name).toLowerCase().includes(needle)).slice(0, 8).map(enemy => `<button type="button" data-enemy-pick="${escapeAttr(enemy.id)}">${escapeText((enemy.no ? enemy.no + " " : "") + enemy.name)}</button>`).join("") || "<p>一致する敵がいません。</p>";
+    if (query) query.addEventListener("input", () => { editing.enemyQuery = query.value; paintBattle(); });
+  }
+
   function onBlockClick(event) {
+    const flagToggle = event.target.closest("[data-flag-toggle]");
+    if (flagToggle && editing) {
+      const id = flagToggle.getAttribute("data-flag-toggle");
+      const set = new Set(editing.flags || []);
+      if (set.has(id)) set.delete(id);
+      else set.add(id);
+      if (!set.size) set.add("story");
+      editing.flags = [...set];
+      paintFlags();
+      return;
+    }
+    const enemyRemove = event.target.closest("[data-enemy-remove]");
+    if (enemyRemove && editing) {
+      editing.enemies = (editing.enemies || []).filter(id => id !== enemyRemove.getAttribute("data-enemy-remove"));
+      paintBattle();
+      return;
+    }
+    const enemyPick = event.target.closest("[data-enemy-pick]");
+    if (enemyPick && editing) {
+      const id = enemyPick.getAttribute("data-enemy-pick");
+      editing.enemies = editing.enemies || [];
+      if (editing.enemies.indexOf(id) < 0) editing.enemies.push(id);
+      paintBattle();
+      return;
+    }
     const rt = event.target.closest("[data-rt]");
     if (rt && rt.tagName === "BUTTON") {
       event.preventDefault();
@@ -670,16 +725,23 @@
       '<div id="block-editor"></div>',
       `<textarea name="detail" hidden>${escapeText(seed.detail || "")}</textarea>`,
       '<input type="hidden" id="block-json" name="blocks" value="">',
-      field("タグ", `<select name="flag">${flags}</select>`),
+      '<div id="flag-chips"></div><input type="hidden" name="flag" value="">',
       field("期限", `<input name="deadline" value="${escapeAttr(seed.deadline || "")}" placeholder="期限・取り逃しのとき">`),
-      field("トロフィー", `<select name="trophy">${trophies}</select>`),
+      `<div id="trophy-field">${field("トロフィー", `<select name="trophy">${trophies}</select>`)}</div>`,
+      '<div id="battle-field"></div>',
       mapFields(seed.map || ""),
       field("子チャプター", `<select name="section">${sectionOptions}</select>`),
       field("親カード", `<select name="parent">${parentOptions}</select>`),
       '<div id="item-picker"></div>'
     ].join("");
     editing.blocks = freshBlocks(seed);
+    editing.flags = GuideProgress.cardFlags(seed);
+    if (!editing.flags.length) editing.flags = ["story"];
+    editing.enemies = GuideProgress.enemyLinks(seed.enemies);
+    editing.enemyNote = seed.enemyNote || "";
+    editing.enemyImage = seed.enemyImage || "";
     paintBlocks();
+    paintFlags();
     paintItemPicker();
     form.elements.flag.addEventListener("change", paintItemPicker);
     bindMapField();
@@ -693,7 +755,7 @@
   function paintItemPicker() {
     const host = document.getElementById("item-picker");
     if (!host || !form.elements.flag) return;
-    if (form.elements.flag.value !== "item") {
+    if (!(editing && editing.flags && editing.flags.indexOf("item") >= 0)) {
       host.hidden = true;
       host.innerHTML = "";
       return;
@@ -788,10 +850,15 @@
       map: section && rawMap === section.map ? "" : rawMap,
       parent: data.get("parent"),
       section: data.get("section") || editing.section || "",
+      flag: (editing.flags || ["story"])[0],
+      flags: editing.flags,
       template: data.get("template") || "",
       quest: editing.quest || "",
       items: editing.links || [],
-      blocks: editing.blocks
+      blocks: editing.blocks,
+      enemies: editing.enemies || [],
+      enemyNote: document.getElementById("enemy-note") ? document.getElementById("enemy-note").value : editing.enemyNote || "",
+      enemyImage: document.getElementById("enemy-image") ? document.getElementById("enemy-image").value : editing.enemyImage || ""
     }, flagIds, GuideApp.trophyChoices().map(item => item.id));
     if (checked.error) {
       error.textContent = checked.error;
@@ -1042,6 +1109,7 @@
     const move = event.target.closest("[data-card-move]");
     if (move) { askMove(move.getAttribute("data-card-move")); return; }
     const bodyOpen = event.target.closest(".blocks");
+    if (bodyOpen && event.target.closest("[data-bpath], .blk-resize, .blk-split")) return;
     if (bodyOpen && !event.target.closest("button, a, input, label")) {
       const card = bodyOpen.closest("article.it[data-id]");
       const opener = card && card.querySelector("[data-card-edit]");
@@ -1194,7 +1262,7 @@
     const id = chapterId + "-sec-" + Date.now().toString(36);
     sections.push({
       id: id,
-      title: "新しい区分",
+      title: "",
       map: "",
       note: ""
     });
@@ -1273,7 +1341,7 @@
     document.getElementById("card-edit-title").textContent = "子チャプター";
     document.getElementById("card-edit-id").textContent = section.id;
     fields.innerHTML = [
-      field("名前", `<input name="title" required value="${escapeAttr(GuideProgress.sectionName(section.title))}">`),
+      field("名前", `<input name="title" value="${escapeAttr(GuideProgress.sectionName(section.title))}" placeholder="区分名を入力">`),
       field("共通のメモ", `<textarea name="note">${escapeText(section.note || "")}</textarea>`),
       mapFields(section.map || "")
     ].join("");
@@ -1539,7 +1607,11 @@
     return {
       title: item.title || "",
       detail: item.detail || "",
-      flag: item.flag,
+      flag: (GuideProgress.cardFlags(item)[0]) || item.flag,
+      flags: GuideProgress.cardFlags(item),
+      enemies: item.enemies || [],
+      enemyNote: item.enemyNote || "",
+      enemyImage: item.enemyImage || "",
       deadline: item.deadline || "",
       source: item.source || "",
       trophy: item.trophy || "",
@@ -2076,6 +2148,201 @@
     captureBaseline();
   }
   function closeOnly() { dialog.hidden = true; }
+
+  let layoutDrag = null;
+
+  function blocksOf(item) {
+    const stored = item && item.blocks && item.blocks.length ? item.blocks : GuideProgress.blocksFromDetail(item && item.detail);
+    return JSON.parse(JSON.stringify(GuideProgress.normalizeBlocks(stored)));
+  }
+
+  function saveLayout(id, blocks) {
+    const place = locate(id);
+    const item = place && routeRecord(place.trackId, place.chapterId, id);
+    if (!place || !item) return;
+    const fields = cardFields(item, item.parent || "");
+    fields.blocks = blocks;
+    const base = GuideApp.findBaseRoute(id);
+    GuideApp.setCardBook(GuideProgress.upsertRouteCard(
+      book(), base && base.item, id, fields, place.trackId, place.chapterId,
+      GuideApp.currentIds(place.trackId, place.chapterId),
+      GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id)
+    ));
+  }
+
+  function takeBlock(blocks, path) {
+    const parts = String(path || "").split(".").map(Number);
+    if (parts.length === 1) return { list: blocks, index: parts[0], block: blocks[parts[0]] };
+    const parent = blocks[parts[0]];
+    if (!parent || parent.type !== "columns" || !parent.columns[parts[1]]) return null;
+    return { list: parent.columns[parts[1]], index: parts[2], block: parent.columns[parts[1]][parts[2]], parent, parentIndex: parts[0] };
+  }
+
+  function tidyColumns(blocks) {
+    for (let i = blocks.length - 1; i >= 0; i -= 1) {
+      const block = blocks[i];
+      if (!block || block.type !== "columns") continue;
+      block.columns = (block.columns || []).filter(col => col && col.length);
+      if (block.columns.length < 2) {
+        blocks.splice(i, 1, ...((block.columns[0]) || []));
+        continue;
+      }
+      block.count = block.columns.length > 2 ? 3 : 2;
+      block.arrow = block.arrow === true && block.count === 2;
+      const share = Math.round(100 / block.columns.length);
+      block.widths = block.columns.map(() => share);
+      block.widths[block.widths.length - 1] = 100 - share * (block.columns.length - 1);
+    }
+  }
+
+  function detachBlock(blocks, path) {
+    const spot = takeBlock(blocks, path);
+    if (!spot || !spot.block) return null;
+    const block = spot.list.splice(spot.index, 1)[0];
+    tidyColumns(blocks);
+    return block;
+  }
+
+  function findHolder(blocks, target) {
+    for (let i = 0; i < blocks.length; i += 1) {
+      if (blocks[i] === target) return { list: blocks, index: i };
+      if (blocks[i] && blocks[i].type === "columns") {
+        for (let c = 0; c < blocks[i].columns.length; c += 1) {
+          const col = blocks[i].columns[c];
+          for (let k = 0; k < col.length; k += 1) {
+            if (col[k] === target) return { list: col, index: k, parent: blocks[i] };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  function placeBlock(blocks, moving, target, side) {
+    if (!moving) return;
+    if (!target) {
+      blocks.push(moving);
+      return;
+    }
+    const spot = findHolder(blocks, target);
+    if (!spot) {
+      blocks.push(moving);
+      return;
+    }
+    if (side === "before" || side === "after") {
+      spot.list.splice(spot.index + (side === "after" ? 1 : 0), 0, moving);
+      return;
+    }
+    if (spot.parent && spot.parent.columns.length < 3) {
+      const at = spot.parent.columns.indexOf(spot.list);
+      spot.parent.columns.splice(side === "left" ? at : at + 1, 0, [moving]);
+      tidyColumns([spot.parent]);
+      return;
+    }
+    if (!spot.parent && target.type !== "columns") {
+      const row = {
+        type: "columns",
+        count: 2,
+        arrow: false,
+        widths: [50, 50],
+        columns: side === "left" ? [[moving], [target]] : [[target], [moving]]
+      };
+      spot.list.splice(spot.index, 1, row);
+      return;
+    }
+    spot.list.splice(spot.index + (side === "right" ? 1 : 0), 0, moving);
+  }
+
+  document.addEventListener("pointerdown", event => {
+    if (!document.body.classList.contains("is-card-edit") || dialog.hidden === false) return;
+    if (event.target.closest(".card-drag-handle, a, input, label, #card-edit-root")) return;
+    if (event.target.closest("button") && !event.target.closest(".blk-zoom, .blk-resize")) return;
+    const resize = event.target.closest(".blk-resize");
+    const split = event.target.closest(".blk-split");
+    const block = resize || split ? null : event.target.closest("[data-bpath]");
+    const handle = resize || split || block;
+    if (!handle) return;
+    const card = handle.closest("article.it[data-id]");
+    if (!card) return;
+    layoutDrag = {
+      id: card.getAttribute("data-id"),
+      path: handle.getAttribute("data-bpath"),
+      selected: handle.getAttribute("data-bpath"),
+      mode: resize ? "resize" : split ? "split" : "move",
+      splitIndex: split ? Number(split.getAttribute("data-split")) : 0,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false
+    };
+    document.querySelectorAll(".is-layout-selected").forEach(node => node.classList.remove("is-layout-selected"));
+    const selected = card.querySelector('[data-bpath="' + (window.CSS && CSS.escape ? CSS.escape(layoutDrag.path) : layoutDrag.path) + '"]');
+    if (selected) selected.classList.add("is-layout-selected");
+    event.preventDefault();
+  }, true);
+
+  document.addEventListener("pointermove", event => {
+    if (!layoutDrag) return;
+    if (Math.hypot(event.clientX - layoutDrag.x, event.clientY - layoutDrag.y) > 6) layoutDrag.moved = true;
+    if (!layoutDrag.moved) return;
+    const card = document.querySelector('article.it[data-id="' + (window.CSS && CSS.escape ? CSS.escape(layoutDrag.id) : layoutDrag.id) + '"]');
+    if (!card) return;
+    if (layoutDrag.mode === "resize") {
+      const figure = card.querySelector('[data-bpath="' + layoutDrag.path + '"]');
+      const host = card.querySelector(".blocks");
+      if (!figure || !host) return;
+      const width = Math.max(20, Math.min(100, Math.round(((event.clientX - host.getBoundingClientRect().left) / host.getBoundingClientRect().width) * 20) * 5));
+      figure.style.width = width + "%";
+      layoutDrag.pct = width;
+    }
+    if (layoutDrag.mode === "split") {
+      const row = card.querySelector('.blk-cols[data-bpath="' + layoutDrag.path + '"]');
+      if (!row) return;
+      const rect = row.getBoundingClientRect();
+      const ratio = Math.max(20, Math.min(80, Math.round(((event.clientX - rect.left) / rect.width) * 20) * 5));
+      row.style.gridTemplateColumns = ratio + "% " + (100 - ratio) + "%";
+      layoutDrag.widths = [ratio, 100 - ratio];
+    }
+  });
+
+  document.addEventListener("pointerup", event => {
+    const current = layoutDrag;
+    layoutDrag = null;
+    if (!current) return;
+    const place = locate(current.id);
+    const item = place && routeRecord(place.trackId, place.chapterId, current.id);
+    if (!item) return;
+    const blocks = blocksOf(item);
+    if (current.mode === "resize" && current.pct) {
+      const spot = takeBlock(blocks, current.path);
+      if (spot && spot.block && spot.block.type === "image") spot.block.pct = current.pct;
+      saveLayout(current.id, blocks);
+      return;
+    }
+    if (current.mode === "split" && current.widths) {
+      const spot = takeBlock(blocks, current.path);
+      if (spot && spot.block && spot.block.type === "columns") spot.block.widths = current.widths;
+      saveLayout(current.id, blocks);
+      return;
+    }
+    if (!current.moved) return;
+    const moving = detachBlock(blocks, current.path);
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    const targetNode = hit && hit.closest && hit.closest("article.it[data-id='" + current.id + "'] [data-bpath]");
+    const targetPath = targetNode && targetNode.getAttribute("data-bpath");
+    const target = targetPath && targetPath !== current.path ? takeBlock(blocks, targetPath) : null;
+    let side = "after";
+    if (targetNode) {
+      const rect = targetNode.getBoundingClientRect();
+      const rx = rect.width ? (event.clientX - rect.left) / rect.width : 0.5;
+      const ry = rect.height ? (event.clientY - rect.top) / rect.height : 0.5;
+      if (rx < 0.28) side = "left";
+      else if (rx > 0.72) side = "right";
+      else side = ry < 0.5 ? "before" : "after";
+    }
+    placeBlock(blocks, moving, target && target.block, side);
+    tidyColumns(blocks);
+    saveLayout(current.id, blocks);
+  });
 
   document.getElementById("card-edit-export").addEventListener("click", () => {
     openChooser("書き出す", [

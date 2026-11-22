@@ -13,7 +13,9 @@
     itemSection: "keyItems",
     itemSort: { key: "name", dir: 1 },
     collapsed: Object.create(null),
-    hub: "route"
+    hub: "route",
+    enemyId: "",
+    enemyKind: "normal"
   };
   globalThis.GuideSelect = globalThis.GuideSelect || new Set();
   let chapterFilter = {};
@@ -200,9 +202,10 @@
   }
 
   function itemVisible(item) {
+    const flags = GuideProgress.cardFlags(item);
     if (ui.flag === "todo" && checked(item.id)) return false;
-    if (ui.flag === "band" && !bandFlags.has(item.flag)) return false;
-    if (ui.flag !== "all" && ui.flag !== "todo" && ui.flag !== "band" && item.flag !== ui.flag) return false;
+    if (ui.flag === "band" && !flags.some(flag => bandFlags.has(flag))) return false;
+    if (ui.flag !== "all" && ui.flag !== "todo" && ui.flag !== "band" && flags.indexOf(ui.flag) < 0) return false;
     return matchesQuery(item, ui.query);
   }
 
@@ -218,6 +221,14 @@
     const flag = flagById[flagId];
     if (!flag) return "";
     return `<span class="tag tone-${esc(flag.tone || flag.id)}">${esc(flag.label)}</span>`;
+  }
+
+  function flagTags(item) {
+    return GuideProgress.cardFlags(item).map(flagTag).join("");
+  }
+
+  function hasFlag(item, id) {
+    return GuideProgress.cardFlags(item).indexOf(id) >= 0;
   }
 
   function exampleMark(item) {
@@ -322,13 +333,34 @@
   }
 
   function itemLine(item) {
-    if (!item.items || !item.items.length) return "";
+    if (!hasFlag(item, "item") || !item.items || !item.items.length) return "";
     const links = item.items.map(link => {
       const found = catalogRecordById(link.id);
       const name = found ? found.name : link.id;
       return `<button type="button" class="linkish" data-open-item="${esc(link.id)}">${esc(name)} ×${esc(String(link.qty || 1))}</button>`;
     }).join("");
     return `<p class="item-links">${links}</p>`;
+  }
+
+  function enemyById(id) {
+    return (globalThis.ENEMIES || []).find(enemy => enemy && enemy.id === id) || null;
+  }
+
+  function enemyLine(item) {
+    if (!hasFlag(item, "battle")) return "";
+    const ids = GuideProgress.enemyLinks(item.enemies);
+    if (!ids.length && !item.enemyNote && !item.enemyImage) return "";
+    const cards = ids.map(id => {
+      const enemy = enemyById(id);
+      if (!enemy) return `<p class="enemy-mini"><button type="button" data-open-enemy="${esc(id)}">${esc(id)}</button></p>`;
+      const hp = enemy.hp && (enemy.hp.normal || enemy.hp.easy || enemy.hp.hard) || "";
+      const weak = (enemy.elements || []).filter(row => row.damage && (/×\s*[2-9]/.test(row.damage) || row.damage === "弱点")).map(row => row.name).slice(0, 3).join("・");
+      const drop = enemy.items && (enemy.items.drop || enemy.items.steal) || "";
+      return `<button type="button" class="enemy-mini" data-open-enemy="${esc(enemy.id)}"><strong>${esc(enemy.name)}</strong><span>${hp ? "HP " + esc(hp) : ""}${weak ? " 弱点 " + esc(weak) : ""}</span><span>${esc(drop || enemy.tactic || "")}</span></button>`;
+    }).join("");
+    const own = item.enemyImage ? `<img class="enemy-own" alt="" src="${esc(item.enemyImage)}" loading="lazy">` : "";
+    const note = item.enemyNote ? `<p class="enemy-note">${esc(item.enemyNote)}</p>` : "";
+    return `<div class="enemy-card">${own}${cards}${note}</div>`;
   }
 
   function mapParts(map, id, label) {
@@ -359,15 +391,16 @@
     const kids = children || [];
     const kidsOpen = ui.collapsed["kids:" + item.id] !== true;
     const questLink = item.quest ? `<button type="button" class="linkish" data-open-quest="${esc(item.quest)}">依頼の詳細</button>` : "";
-    return `<article class="it flag-${esc(item.flag)}${item.example ? " is-example" : ""}${on ? " done" : ""}${collapsed ? " is-collapsed" : ""}" data-id="${esc(item.id)}">
+    const flags = GuideProgress.cardFlags(item);
+    return `<article class="it ${flags.map(flag => "flag-" + esc(flag)).join(" ")}${item.example ? " is-example" : ""}${on ? " done" : ""}${collapsed ? " is-collapsed" : ""}" data-id="${esc(item.id)}">
       <span class="ord">${esc(ord || "")}</span>
       ${dragHandle(item.id)}
       <input type="checkbox" id="check-${esc(item.id)}" data-check="${esc(item.id)}"${on ? " checked" : ""}>
       <div class="ibody">
         <div class="ihead">
-          <label for="check-${esc(item.id)}">${item.flag === "tips" ? `<span class="hint-mark">${esc(GuideProgress.labelText(cardBook, "hint"))}</span>` : ""}${flagTag(item.flag)}${exampleMark(item)}<span class="it-title" data-edit-text>${esc((headings && headings[item.id]) || item.title || item.id)}</span></label>
+          <label for="check-${esc(item.id)}">${hasFlag(item, "tips") ? `<span class="hint-mark">${esc(GuideProgress.labelText(cardBook, "hint"))}</span>` : ""}${flagTags(item)}${exampleMark(item)}<span class="it-title" data-edit-text>${esc((headings && headings[item.id]) || item.title || item.id)}</span></label>
           <div class="imeta">
-            ${item.trophy && trophyById(item.trophy) ? `<span class="tag tone-trophy">${esc(trophyById(item.trophy).name)}</span>` : ""}
+            ${hasFlag(item, "trophy") && item.trophy && trophyById(item.trophy) ? `<span class="tag tone-trophy">${esc(trophyById(item.trophy).name)}</span>` : ""}
             ${item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
             ${questLink}
             <button type="button" class="route-item-toggle" data-toggle-item="${esc(item.id)}" aria-expanded="${collapsed ? "false" : "true"}">${esc(GuideProgress.labelText(cardBook, "detail"))}</button>
@@ -377,6 +410,7 @@
         <div class="route-item-content"${collapsed ? " hidden" : ""}>
           ${cardBody(item)}
           ${itemLine(item)}
+          ${enemyLine(item)}
           ${sourceLine(item.source)}
           ${cardTools(item)}
         </div>
@@ -397,7 +431,7 @@
       const built = blockCards(mine, headings, section, numbers);
       visible += built.visible;
       const closed = ui.collapsed["section:" + ui.trackId + ":" + section.id] === true;
-      const name = GuideProgress.sectionName(section.title) || "区分";
+      const name = GuideProgress.sectionName(section.title);
       const tools = cardEditing() ? `<span class="subch-tools">
         <button type="button" data-section-edit="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "rename"))}</button>
         <button type="button" data-section-up="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "up"))}</button>
@@ -408,7 +442,7 @@
       return `<section class="subch${closed ? " closed" : ""}" data-section="${esc(section.id)}">
         <div class="subch-bar">
           <button type="button" class="subch-toggle" data-toggle-section="${esc(section.id)}" aria-expanded="${closed ? "false" : "true"}"><span class="caret">▼</span><span class="subch-num">(${index + 1})</span></button>
-          <span class="subch-name" data-edit-text>${esc(name)}</span>
+          ${name ? `<span class="subch-name" data-edit-text>${esc(name)}</span>` : ""}
           ${mapButton({ id: section.id, map: section.map }, "section")}
           ${tools}
         </div>
@@ -920,6 +954,15 @@
       </section>
       ${itemsPanel}
       ${catalogs}
+      <section class="panel" id="p-enemies" role="tabpanel" aria-labelledby="tab-enemies" hidden>
+        <h2>エネミー</h2>
+        <p class="lead">通常の敵とボス。数値は掲載元の表に合わせ、攻略の文章は短くまとめ直してある。画像は掲載元へのリンクで、このリポジトリには置いていない。</p>
+        <div class="subtabs" id="enemy-subtabs" role="tablist"></div>
+        <div class="toolbar catalog-tools">
+          <input type="search" id="enemy-q" aria-label="エネミーを検索" placeholder="名前か番号で検索">
+        </div>
+        <div id="enemy-list"></div>
+      </section>
       <section class="panel" id="p-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
         <h2>設定</h2>
         <p class="lead">ボタンの名前、タブの名前、見出しの定型文をここで変える。変更はこのブラウザに残り、「書き出す」から取り出せる。</p>
@@ -948,6 +991,11 @@
     document.getElementById("import-file").addEventListener("change", importProgress);
     document.getElementById("restore").addEventListener("click", restoreProgress);
     document.getElementById("reset").addEventListener("click", resetProgress);
+    const enemyQuery = document.getElementById("enemy-q");
+    if (enemyQuery) enemyQuery.addEventListener("input", () => {
+      ui.enemyQuery = enemyQuery.value;
+      if (ui.hub === "enemies") renderEnemies();
+    });
     document.querySelectorAll("[data-catalog-search]").forEach(input => {
       input.addEventListener("input", () => {
         ui.catalogQuery[input.dataset.catalogSearch] = input.value.trim();
@@ -966,6 +1014,7 @@
 
   function showHub(id) {
     const hub = GAME.hubs.some(item => item.id === id) ? id : "route";
+    if (!ui.keepEnemy) ui.enemyId = "";
     ui.hub = hub;
     document.querySelectorAll("#tabs [data-hub]").forEach(button => {
       const on = button.dataset.hub === hub;
@@ -978,9 +1027,80 @@
       panel.classList.toggle("on", on);
       panel.hidden = !on;
     });
-    const next = "#/" + hub;
+    const next = hub === "enemies" && ui.enemyId ? "#/enemies/" + ui.enemyId : "#/" + hub;
     if (location.hash !== next) history.replaceState(null, "", next);
     if (hub === "settings") renderSettings();
+    if (hub === "enemies") renderEnemies();
+  }
+
+  function enemyRecords() {
+    return globalThis.ENEMIES || [];
+  }
+
+  function renderEnemies() {
+    const root = document.getElementById("enemy-list");
+    const tabs = document.getElementById("enemy-subtabs");
+    if (!root || !tabs) return;
+    const current = ui.enemyId && enemyById(ui.enemyId);
+    if (current) {
+      tabs.innerHTML = `<button type="button" id="enemy-back">一覧へ戻る</button>`;
+      root.innerHTML = enemyPage(current);
+      document.getElementById("enemy-back").addEventListener("click", () => showHub("enemies"));
+      return;
+    }
+    const kinds = [["normal", "通常"], ["boss", "ボス"], ["summon", "召喚"]];
+    tabs.innerHTML = kinds.map(([id, label]) => `<button type="button" class="chip${ui.enemyKind === id ? " on" : ""}" data-enemy-kind="${id}">${label}</button>`).join("");
+    const query = (document.getElementById("enemy-q") && document.getElementById("enemy-q").value || ui.enemyQuery || "").trim().toLowerCase();
+    const rows = enemyRecords().filter(enemy => enemy.kind === ui.enemyKind && (!query || (enemy.no + " " + enemy.name).toLowerCase().includes(query)));
+    root.innerHTML = rows.map(enemy => `<button type="button" class="enemy-row" data-open-enemy="${esc(enemy.id)}"><span>${esc(enemy.no ? "No." + enemy.no : "ボス")}</span><strong>${esc(enemy.name)}</strong><span>${esc((enemy.places && enemy.places[0] && enemy.places[0].where) || "")}</span></button>`).join("") || "<p>一致する敵がいません。</p>";
+    tabs.querySelectorAll("[data-enemy-kind]").forEach(button => {
+      button.addEventListener("click", () => {
+        ui.enemyKind = button.getAttribute("data-enemy-kind");
+        renderEnemies();
+      });
+    });
+  }
+
+  function enemyPage(enemy) {
+    const places = (enemy.places || []).map(place => `<tr><td>${esc(place.when || "")}</td><td>${esc(place.where || "")}</td><td>${esc(place.level || "")}</td></tr>`).join("");
+    const hp = ["easy", "normal", "hard"].filter(key => enemy.hp && enemy.hp[key]).map(key => `<tr><th>${key.toUpperCase()}</th><td>${esc(enemy.hp[key])}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].atk || "")}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].matk || "")}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].def || "")}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].mdef || "")}</td></tr>`).join("");
+    const elements = (enemy.elements || []).map(row => `<tr><th>${esc(row.name)}</th><td>${esc(row.damage || "")}</td><td>${esc(row.stagger || "")}</td></tr>`).join("");
+    const ailments = (enemy.ailments || []).map(row => `<tr><th>${esc(row.name)}</th><td>${esc(row.value)}</td></tr>`).join("");
+    const rewards = ["easy", "normal", "hard"].filter(key => enemy.rewards && enemy.rewards[key]).map(key => `<tr><th>${key.toUpperCase()}</th><td>${esc(enemy.rewards[key].exp || "")}</td><td>${esc(enemy.rewards[key].ap || "")}</td><td>${esc(enemy.rewards[key].gil || "")}</td></tr>`).join("");
+    const loot = enemy.items ? [["通常", enemy.items.drop], ["レア", enemy.items.rare], ["盗む", enemy.items.steal]].filter(row => row[1]).map(row => `<tr><th>${row[0]}</th><td>${lootCell(row[1])}</td></tr>`).join("") : "";
+    const actions = (enemy.actions || []).map(row => `<tr><th>${esc(row.name)}</th><td>${esc(row.type || "")}</td><td>${esc(row.element || "")}</td><td>${esc(row.range || "")}</td><td>${esc(row.guard || "")}</td><td>${esc(row.down || "")}</td></tr>`).join("");
+    const phases = (enemy.phases || []).map(phase => `<section class="enemy-phase"><h3>${esc(phase.title)}</h3><p>${(phase.actions || []).map(name => esc(name)).join("、") || "技名は表のとおり。"}</p></section>`).join("");
+    const image = enemy.image ? `<p><img class="enemy-hero" alt="" src="${esc(enemy.image)}" loading="lazy"></p>` : "";
+    return `<article class="enemy-page"><p><a href="${esc(enemy.source)}" target="_blank" rel="noopener noreferrer">掲載元の表</a></p>${image}<h2>${esc(enemy.no ? "No." + enemy.no + " " : "")}${esc(enemy.name)}</h2>
+      ${places ? `<h3>出現</h3><table class="enemy-table"><thead><tr><th>時期</th><th>場所</th><th>レベル</th></tr></thead><tbody>${places}</tbody></table>` : ""}
+      ${hp ? `<h3>ステータス</h3><table class="enemy-table"><thead><tr><th>モード</th><th>HP</th><th>物攻</th><th>魔攻</th><th>物防</th><th>魔防</th></tr></thead><tbody>${hp}</tbody></table>` : ""}
+      ${elements ? `<h3>ダメージ倍率</h3><table class="enemy-table"><thead><tr><th></th><th>ダメージ</th><th>バースト</th></tr></thead><tbody>${elements}</tbody></table>` : ""}
+      ${ailments ? `<h3>状態異常</h3><table class="enemy-table"><tbody>${ailments}</tbody></table>` : ""}
+      ${rewards ? `<h3>経験値・AP・ギル</h3><table class="enemy-table"><thead><tr><th>モード</th><th>経験値</th><th>AP</th><th>ギル</th></tr></thead><tbody>${rewards}</tbody></table>` : ""}
+      ${loot ? `<h3>入手</h3><table class="enemy-table"><tbody>${loot}</tbody></table>` : ""}
+      ${actions ? `<h3>アクション</h3><table class="enemy-table"><thead><tr><th>名前</th><th>タイプ</th><th>属性</th><th>範囲</th><th>ガード</th><th>ダウン</th></tr></thead><tbody>${actions}</tbody></table>` : ""}
+      ${phases ? `<h3>段階</h3>${phases}` : ""}
+      <h3>攻略</h3><p>${esc(enemy.tactic || "")}</p></article>`;
+  }
+
+  function lootCell(text) {
+    const name = String(text || "").replace(/（[^）]*）/g, "").replace(/\([^)]*\)/g, "").trim();
+    const found = name && catalogRecordById && findItemByName(name);
+    if (!found) return esc(text);
+    return `<button type="button" class="linkish" data-open-item="${esc(found.id)}">${esc(text)}</button>`;
+  }
+
+  function findItemByName(name) {
+    for (const section of itemSections()) {
+      const found = catalogItems(section.catalog).find(item => item && item.name === name);
+      if (found) return found;
+    }
+    for (const id of ["summons", "skills"]) {
+      if (!CATALOGS[id]) continue;
+      const found = (CATALOGS[id].items || []).find(item => item && item.name === name);
+      if (found) return found;
+    }
+    return null;
   }
 
   function paintChecks() {
@@ -1283,6 +1403,15 @@
       if (hub) renderCatalog(hub);
       return;
     }
+    const enemyOpen = event.target.closest("[data-open-enemy]");
+    if (enemyOpen) {
+      event.preventDefault();
+      ui.enemyId = enemyOpen.getAttribute("data-open-enemy");
+      ui.keepEnemy = true;
+      showHub("enemies");
+      ui.keepEnemy = false;
+      return;
+    }
     const itemLink = event.target.closest("[data-open-item]");
     if (itemLink) {
       const record = catalogRecordById(itemLink.getAttribute("data-open-item"));
@@ -1350,6 +1479,7 @@
       return;
     }
     const zoom = event.target.closest("[data-zoom-src]");
+    if (zoom && document.body.classList.contains("is-card-edit") && zoom.classList.contains("blk-zoom")) return;
     if (zoom) {
       event.preventDefault();
       openZoom(zoom.getAttribute("data-zoom-src"), "", zoom.getAttribute("data-zoom-label") || "");
@@ -1476,7 +1606,11 @@
   document.getElementById("theme-select").addEventListener("change", event => setTheme(event.target.value, true));
 
   const initial = location.hash.replace(/^#\//, "");
-  if (GAME.hubs.some(hub => hub.id === initial)) ui.hub = initial;
+  const enemyHash = initial.match(/^enemies\/(.+)$/);
+  if (enemyHash) {
+    ui.hub = "enemies";
+    ui.enemyId = decodeURIComponent(enemyHash[1]);
+  } else if (GAME.hubs.some(hub => hub.id === initial)) ui.hub = initial;
   renderTabs();
   shell();
   showHub(ui.hub);
