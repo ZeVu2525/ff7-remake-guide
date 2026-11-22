@@ -109,7 +109,7 @@
   const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable", "map"];
 
   function emptyCardBook() {
-    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, templates: [], labels: {} };
+    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, templates: [], labels: {}, difficulty: "normal" };
   }
 
   function asObject(value) {
@@ -119,6 +119,24 @@
   function stringList(value) {
     if (!Array.isArray(value)) return [];
     return value.filter(item => typeof item === "string" && item);
+  }
+
+  function suggestMatches(items, query, limit) {
+    const needle = String(query || "").trim().toLowerCase();
+    const cap = limit || 8;
+    const list = (items || []).filter(item => item && (item.name || item.id));
+    if (!needle) return list.slice(0, cap);
+    return list.filter(item => ((item.no || "") + " " + (item.name || item.id)).toLowerCase().includes(needle)).slice(0, cap);
+  }
+
+  function statForMode(group, mode) {
+    const key = mode === "easy" || mode === "hard" ? mode : "normal";
+    if (!group || typeof group !== "object") return { value: "", note: "" };
+    if (group[key]) return { value: String(group[key]), note: "" };
+    for (const fallback of ["normal", "easy", "hard"]) {
+      if (group[fallback]) return { value: String(group[fallback]), note: fallback.toUpperCase() + "の値" };
+    }
+    return { value: "", note: "" };
   }
 
   function cardFlags(item) {
@@ -227,6 +245,7 @@
     Object.keys(labels).forEach(key => {
       if (typeof labels[key] === "string" && labels[key].trim()) book.labels[key] = labels[key].trim();
     });
+    book.difficulty = src.difficulty === "easy" || src.difficulty === "hard" ? src.difficulty : "normal";
     return book;
   }
 
@@ -792,8 +811,6 @@
     "tab-quests": "依頼",
     "tab-trophies": "トロフィー",
     "tab-items": "アイテム",
-    "tab-summons": "召喚獣",
-    "tab-skills": "敵の技",
     "tab-settings": "設定",
     "tab-enemies": "エネミー"
   };
@@ -1250,6 +1267,8 @@
     mergeCatalog,
     mergedRoute,
     cardFlags,
+    suggestMatches,
+    statForMode,
     enemyLinks,
     numberCards,
     numberChapter,

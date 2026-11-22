@@ -346,21 +346,37 @@
     return (globalThis.ENEMIES || []).find(enemy => enemy && enemy.id === id) || null;
   }
 
+  function playDifficulty() {
+    return cardBook && (cardBook.difficulty === "easy" || cardBook.difficulty === "hard") ? cardBook.difficulty : "normal";
+  }
+
+  function linkedLoot(text) {
+    const raw = String(text || "").trim();
+    if (!raw || raw === "-") return "—";
+    const name = raw.replace(/（[^）]*）/g, "").replace(/\([^)]*\)/g, "").trim();
+    const found = findItemByName(name);
+    if (!found) return esc(raw);
+    return `<button type="button" class="linkish" data-open-item="${esc(found.id)}">${esc(raw)}</button>`;
+  }
+
+  function weakNames(enemy) {
+    return (enemy.elements || []).filter(row => row.damage && (/×\s*[2-9]/.test(row.damage) || /×\s*1\.[1-9]/.test(row.damage) || row.damage === "弱点")).map(row => row.name.replace(/属性/, "")).join("・") || "—";
+  }
+
   function enemyLine(item) {
     if (!hasFlag(item, "battle")) return "";
     const ids = GuideProgress.enemyLinks(item.enemies);
-    if (!ids.length && !item.enemyNote && !item.enemyImage) return "";
+    if (!ids.length && !item.enemyNote) return "";
+    const mode = playDifficulty();
     const cards = ids.map(id => {
       const enemy = enemyById(id);
       if (!enemy) return `<p class="enemy-mini"><button type="button" data-open-enemy="${esc(id)}">${esc(id)}</button></p>`;
-      const hp = enemy.hp && (enemy.hp.normal || enemy.hp.easy || enemy.hp.hard) || "";
-      const weak = (enemy.elements || []).filter(row => row.damage && (/×\s*[2-9]/.test(row.damage) || row.damage === "弱点")).map(row => row.name).slice(0, 3).join("・");
-      const drop = enemy.items && (enemy.items.drop || enemy.items.steal) || "";
-      return `<button type="button" class="enemy-mini" data-open-enemy="${esc(enemy.id)}"><strong>${esc(enemy.name)}</strong><span>${hp ? "HP " + esc(hp) : ""}${weak ? " 弱点 " + esc(weak) : ""}</span><span>${esc(drop || enemy.tactic || "")}</span></button>`;
+      const hp = GuideProgress.statForMode(enemy.hp, mode);
+      const loot = enemy.items || {};
+      return `<div class="enemy-mini"><p><button type="button" class="linkish" data-open-enemy="${esc(enemy.id)}">${esc(enemy.name)}</button></p><p>HP ${esc(hp.value || "—")}${hp.note ? " <small>(" + esc(hp.note) + ")</small>" : ""}</p><p>弱点 ${esc(weakNames(enemy))}</p><p>ドロップ（通常） ${linkedLoot(loot.drop)}</p><p>ドロップ（レア） ${linkedLoot(loot.rare)}</p><p>盗む ${linkedLoot(loot.steal)}</p><p class="enemy-tactic">解説 ${esc(enemy.tactic || item.enemyNote || "")}</p></div>`;
     }).join("");
-    const own = item.enemyImage ? `<img class="enemy-own" alt="" src="${esc(item.enemyImage)}" loading="lazy">` : "";
     const note = item.enemyNote ? `<p class="enemy-note">${esc(item.enemyNote)}</p>` : "";
-    return `<div class="enemy-card">${own}${cards}${note}</div>`;
+    return `<div class="enemy-card">${cards}${note}</div>`;
   }
 
   function mapParts(map, id, label) {
@@ -683,6 +699,14 @@
       const on = section.catalog === ui.itemSection;
       return `<button type="button" class="chip${on ? " on" : ""}" data-item-section="${esc(section.catalog)}" aria-pressed="${on ? "true" : "false"}">${esc(section.label)}</button>`;
     }).join("");
+    if (ui.itemSection === "summons") {
+      const rows = catalogItems("summons").filter(item => !item.example);
+      const query = (ui.catalogQuery.items || "").toLowerCase();
+      const shown = rows.filter(item => !query || itemHay(item).toLowerCase().includes(query));
+      if (count) count.textContent = shown.length + " / " + rows.length;
+      host.innerHTML = renderSummonTable(shown);
+      return;
+    }
     if (ui.itemSection === "weapons" && ui.weaponId) {
       host.innerHTML = renderWeaponDetail(ui.weaponId);
       if (count) count.textContent = "";
@@ -982,7 +1006,7 @@
       const section = ui.chapterId && document.getElementById("chapter-" + ui.trackId + "-" + ui.chapterId);
       if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-    document.getElementById("q").addEventListener("input", event => {
+    bindSearch(document.getElementById("q"), event => {
       ui.query = event.target.value.trim();
       renderRoute();
     });
@@ -992,12 +1016,12 @@
     document.getElementById("restore").addEventListener("click", restoreProgress);
     document.getElementById("reset").addEventListener("click", resetProgress);
     const enemyQuery = document.getElementById("enemy-q");
-    if (enemyQuery) enemyQuery.addEventListener("input", () => {
+    if (enemyQuery) bindSearch(enemyQuery, () => {
       ui.enemyQuery = enemyQuery.value;
       if (ui.hub === "enemies") renderEnemies();
     });
     document.querySelectorAll("[data-catalog-search]").forEach(input => {
-      input.addEventListener("input", () => {
+      bindSearch(input, () => {
         ui.catalogQuery[input.dataset.catalogSearch] = input.value.trim();
         if (input.dataset.catalogSearch === "items") {
           renderItems();
@@ -1063,10 +1087,11 @@
 
   function enemyPage(enemy) {
     const places = (enemy.places || []).map(place => `<tr><td>${esc(place.when || "")}</td><td>${esc(place.where || "")}</td><td>${esc(place.level || "")}</td></tr>`).join("");
-    const hp = ["easy", "normal", "hard"].filter(key => enemy.hp && enemy.hp[key]).map(key => `<tr><th>${key.toUpperCase()}</th><td>${esc(enemy.hp[key])}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].atk || "")}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].matk || "")}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].def || "")}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].mdef || "")}</td></tr>`).join("");
+    const mode = playDifficulty();
+    const hp = ["easy", "normal", "hard"].filter(key => enemy.hp && enemy.hp[key]).map(key => `<tr class="${key === mode ? "is-diff-on" : ""}"><th>${key.toUpperCase()}</th><td>${esc(enemy.hp[key])}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].atk || "")}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].matk || "")}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].def || "")}</td><td>${esc(enemy.atk && enemy.atk[key] && enemy.atk[key].mdef || "")}</td></tr>`).join("");
     const elements = (enemy.elements || []).map(row => `<tr><th>${esc(row.name)}</th><td>${esc(row.damage || "")}</td><td>${esc(row.stagger || "")}</td></tr>`).join("");
     const ailments = (enemy.ailments || []).map(row => `<tr><th>${esc(row.name)}</th><td>${esc(row.value)}</td></tr>`).join("");
-    const rewards = ["easy", "normal", "hard"].filter(key => enemy.rewards && enemy.rewards[key]).map(key => `<tr><th>${key.toUpperCase()}</th><td>${esc(enemy.rewards[key].exp || "")}</td><td>${esc(enemy.rewards[key].ap || "")}</td><td>${esc(enemy.rewards[key].gil || "")}</td></tr>`).join("");
+    const rewards = ["easy", "normal", "hard"].filter(key => enemy.rewards && enemy.rewards[key]).map(key => `<tr class="${key === mode ? "is-diff-on" : ""}"><th>${key.toUpperCase()}</th><td>${esc(enemy.rewards[key].exp || "")}</td><td>${esc(enemy.rewards[key].ap || "")}</td><td>${esc(enemy.rewards[key].gil || "")}</td></tr>`).join("");
     const loot = enemy.items ? [["通常", enemy.items.drop], ["レア", enemy.items.rare], ["盗む", enemy.items.steal]].filter(row => row[1]).map(row => `<tr><th>${row[0]}</th><td>${lootCell(row[1])}</td></tr>`).join("") : "";
     const actions = (enemy.actions || []).map(row => `<tr><th>${esc(row.name)}</th><td>${esc(row.type || "")}</td><td>${esc(row.element || "")}</td><td>${esc(row.range || "")}</td><td>${esc(row.guard || "")}</td><td>${esc(row.down || "")}</td></tr>`).join("");
     const phases = (enemy.phases || []).map(phase => `<section class="enemy-phase"><h3>${esc(phase.title)}</h3><p>${(phase.actions || []).map(name => esc(name)).join("、") || "技名は表のとおり。"}</p></section>`).join("");
@@ -1095,7 +1120,7 @@
       const found = catalogItems(section.catalog).find(item => item && item.name === name);
       if (found) return found;
     }
-    for (const id of ["summons", "skills"]) {
+    for (const id of ["summons"]) {
       if (!CATALOGS[id]) continue;
       const found = (CATALOGS[id].items || []).find(item => item && item.name === name);
       if (found) return found;
@@ -1145,13 +1170,20 @@
       return `<label class="setting-row"><span>${esc(labels[key])}</span><input data-label-key="${esc(key)}" value="${esc(value)}"><button type="button" data-label-reset="${esc(key)}">初期値</button></label>`;
     }).join("");
     const templates = GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES || []);
-    root.innerHTML = `<h3>ボタンとタブの名前</h3><div class="setting-list">${rows}</div>
+    const difficulty = playDifficulty();
+    root.innerHTML = `<h3>難易度</h3><p class="lead">今進めているチャートの難易度です。カードとエネミー頁のHP、経験値、AP、ギルは、この難易度の列を使います。CLASSICは操作の種類で、数値の表はありません。</p><label class="setting-row"><span>難易度</span><select id="settings-difficulty"><option value="easy"${difficulty === "easy" ? " selected" : ""}>EASY</option><option value="normal"${difficulty === "normal" ? " selected" : ""}>NORMAL</option><option value="hard"${difficulty === "hard" ? " selected" : ""}>HARD</option></select></label><h3>ボタンとタブの名前</h3><div class="setting-list">${rows}</div>
       <h3>見出しの定型文</h3>
       <p class="lead">1行が1つの定型文です。カードの見出しで選ぶと、章の中で 宝箱① のように番号が付きます。</p>
       <textarea id="settings-templates" rows="6">${esc(templates.map(item => item.label).join("\n"))}</textarea>
       <p><button type="button" id="settings-templates-save">定型文を保存</button></p>
       <h3>今後の設定</h3>
       <p class="lead">表示や操作で、あとから設定が必要になったものはこの画面に足します。</p>`;
+    const difficultySelect = document.getElementById("settings-difficulty");
+    if (difficultySelect) difficultySelect.addEventListener("change", () => {
+      const next = JSON.parse(JSON.stringify(cardBook));
+      next.difficulty = difficultySelect.value === "easy" || difficultySelect.value === "hard" ? difficultySelect.value : "normal";
+      setCardBook(next);
+    });
     root.querySelectorAll("[data-label-key]").forEach(input => {
       input.addEventListener("change", () => {
         const key = input.getAttribute("data-label-key");
@@ -1556,7 +1588,15 @@
       : '<p class="search-empty">一致する項目がありません。</p>';
   }
 
-  searchInput.addEventListener("input", renderSearch);
+  bindSearch(searchInput, renderSearch);
+
+  function bindSearch(input, apply) {
+    if (!input) return;
+    let composing = false;
+    input.addEventListener("compositionstart", () => { composing = true; });
+    input.addEventListener("compositionend", event => { composing = false; apply(event); });
+    input.addEventListener("input", event => { if (!composing) apply(event); });
+  }
   window.addEventListener("resize", () => { if (!searchResults.hidden) placeSearch(); });
   document.addEventListener("click", event => {
     if (event.target.closest("#guide-search, #guide-search-results, .global-search")) return;

@@ -21,7 +21,7 @@ const GAME = {
     theme: "ff7r-guide-theme",
     backup: "ff7r-guide-state-v1-last-backup"
   },
-  cache: "ff7r-guide-v13",
+  cache: "ff7r-guide-v14",
   cacheFiles: [
     "./",
     "./index.html",
@@ -78,10 +78,9 @@ const GAME = {
       { catalog: "accessories", label: "アクセサリー" },
       { catalog: "weapons", label: "武器" },
       { catalog: "armor", label: "防具" },
-      { catalog: "materia", label: "マテリア" }
+      { catalog: "materia", label: "マテリア" },
+      { catalog: "summons", label: "召喚獣" }
     ] },
-    { id: "summons", label: "召喚獣", kind: "catalog", catalog: "summons" },
-    { id: "skills", label: "敵の技", kind: "catalog", catalog: "skills" },
     { id: "enemies", label: "エネミー", kind: "enemies" },
     { id: "settings", label: "設定", kind: "settings" }
   ],
