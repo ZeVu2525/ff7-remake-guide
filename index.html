@@ -209,7 +209,24 @@ tr.is-target td{background:rgba(57,201,255,.18)}
 .quest-steps li{display:flex;gap:8px;align-items:flex-start;margin:6px 0}
 .step-no{display:inline-flex;align-items:center;justify-content:center;min-width:1.7em;height:1.7em;border-radius:99px;background:#14324a;color:#fff;font-size:12px;font-weight:800}
 .map-open,.route-item-toggle{position:static;box-sizing:border-box;min-width:36px;min-height:32px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font-size:12px;font-weight:700;line-height:1;cursor:pointer}
-@media (max-width:720px){.map-open,.route-item-toggle{min-width:44px;min-height:44px}.kids-disclosure{min-height:44px}}
+@media (max-width:720px){
+  main{padding:8px 4px 80px}
+  section.ch{margin:0 0 8px;border-radius:6px}
+  .chh{min-height:44px;padding:8px;gap:6px}
+  .cht{font-size:16px}
+  .it{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:4px 6px;padding:8px 4px}
+  .ibody{grid-column:1 / -1;min-width:0}
+  .ihead{flex-direction:column;align-items:stretch;gap:4px}
+  .imeta{width:100%;justify-content:flex-start}
+  .ord{min-width:1.5em}
+  .kids{margin:0;padding-left:4px;border-left-width:2px}
+  .subch-bar,.subch-note{padding-left:4px;padding-right:4px}
+  .enemy-stats{width:100%}
+  .enemy-stat{white-space:normal}
+  .map-open,.route-item-toggle{min-width:0;min-height:36px;padding:4px 8px}
+  .kids-disclosure{min-height:36px}
+  #map-pop,.progress-toast{box-shadow:none}
+}
 .imeta .map-open{margin-left:8px}
 .slot-row{display:inline-flex;align-items:center;gap:3px;margin:1px 4px;padding:2px 4px;background:linear-gradient(#39c9ff,#39c9ff) center/calc(100% - 10px) 2px no-repeat}
 .slot-dot{width:9px;height:9px;border-radius:50%;background:#14324a;box-shadow:0 0 0 1px #fff}
@@ -399,17 +416,17 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <footer>
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v22"></script>
-<script src="data/route.js?v=ff7r-guide-v22"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v22"></script>
-<script src="data/maps.js?v=ff7r-guide-v22"></script>
-<script src="data/templates.js?v=ff7r-guide-v22"></script>
-<script src="data/settings.js?v=ff7r-guide-v22"></script>
-<script src="data/images.js?v=ff7r-guide-v22"></script>
-<script src="data/enemies.js?v=ff7r-guide-v22"></script>
-<script src="progress.js?v=ff7r-guide-v22"></script>
-<script src="app.js?v=ff7r-guide-v22"></script>
-<script src="edit-mode.js?v=ff7r-guide-v22"></script>
-<script src="card-edit.js?v=ff7r-guide-v22"></script>
+<script src="data/game.js?v=ff7r-guide-v23"></script>
+<script src="data/route.js?v=ff7r-guide-v23"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v23"></script>
+<script src="data/maps.js?v=ff7r-guide-v23"></script>
+<script src="data/templates.js?v=ff7r-guide-v23"></script>
+<script src="data/settings.js?v=ff7r-guide-v23"></script>
+<script src="data/images.js?v=ff7r-guide-v23"></script>
+<script src="data/enemies.js?v=ff7r-guide-v23"></script>
+<script src="progress.js?v=ff7r-guide-v23"></script>
+<script src="app.js?v=ff7r-guide-v23"></script>
+<script src="edit-mode.js?v=ff7r-guide-v23"></script>
+<script src="card-edit.js?v=ff7r-guide-v23"></script>
 </body>
 </html>

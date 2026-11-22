@@ -1,6 +1,6 @@
 /* 版は data/game.js の GAME.cache と同じ文字列にする。importScripts は使わない。
    古いサービスワーカーが data/game.js を横取りすると、新しい戦略まで古い版に戻る。 */
-const CACHE = "ff7r-guide-v22";
+const CACHE = "ff7r-guide-v23";
 const CORE = [
   "./",
   "./index.html",
@@ -21,23 +21,25 @@ const CORE = [
 ];
 
 self.addEventListener("install", event => {
+  self.skipWaiting();
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     await Promise.all(CORE.map(async path => {
       try {
-        const response = await fetch(path, { cache: "reload", credentials: "same-origin" });
+        const response = await fetch(path, { credentials: "same-origin" });
         if (response && response.ok) await cache.put(path, response.clone());
       } catch (error) {}
     }));
-    await self.skipWaiting();
   })());
 });
 
 self.addEventListener("activate", event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(key => key.startsWith("ff7r-") && key !== CACHE).map(key => caches.delete(key)));
+    const old = keys.filter(key => key.startsWith("ff7r-") && key !== CACHE);
+    await Promise.all(old.map(key => caches.delete(key)));
     await self.clients.claim();
+    if (!old.length) return;
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     await Promise.all(windows.map(async client => {
       if (typeof client.navigate === "function") {

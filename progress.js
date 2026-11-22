@@ -1233,7 +1233,7 @@
     const width = block.width || "m";
     const align = block.align || "center";
     const pct = block.pct ? ' style="width:' + block.pct + '%"' : "";
-    const image = '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img src="' + src + '" alt="' + (caption || escapeRichText(block.label || "")) + '" loading="lazy"></button>';
+    const image = '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img src="' + src + '" alt="' + (caption || escapeRichText(block.label || "")) + '" loading="lazy" decoding="async"></button>';
     if (bare) return image;
     return '<figure class="blk-img w-' + width + " align-" + align + '" data-bpath="' + path + '"' + pct + ">" + image + '<i class="blk-resize" data-bpath="' + path + '"></i>' + (caption ? "<figcaption>" + caption + "</figcaption>" : "") + "</figure>";
   }

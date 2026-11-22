@@ -604,21 +604,77 @@
     </div>`;
   }
 
+  function narrowScreen() {
+    return window.matchMedia("(max-width: 720px)").matches;
+  }
+
+  function chapterBodyHtml(chapter) {
+    const built = chapterBlocks(chapter.items, chapter.sections);
+    const tools = cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">${esc(L("addCard"))}</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">${esc(L("addSection"))}</button><button type="button" data-move-selected="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}"${GuideSelect.size ? "" : " disabled"}>${esc(L("moveSelected"))}</button></p>` : "";
+    return { html: tools + (built.html || '<p class="empty-chapter">項目はまだありません。</p>'), visible: built.visible };
+  }
+
+  let lazyObserver = null;
+
+  function fillLazyChapter(section) {
+    if (!section || section.dataset.ready === "1") return;
+    const chapter = chaptersFor(ui.trackId).find(item => item.id === section.dataset.chapter);
+    if (!chapter) return;
+    const body = section.querySelector(".chb");
+    if (body) body.innerHTML = chapterBodyHtml(chapter).html;
+    section.style.minHeight = "";
+    section.dataset.ready = "1";
+    delete section.dataset.lazy;
+  }
+
+  function releaseLazyChapter(section) {
+    if (!section || section.dataset.ready !== "1" || cardEditing()) return;
+    const height = Math.round(section.getBoundingClientRect().height);
+    if (height > 0) section.style.minHeight = height + "px";
+    const body = section.querySelector(".chb");
+    if (body) body.innerHTML = "";
+    delete section.dataset.ready;
+    section.dataset.lazy = "1";
+  }
+
+  function bindLazyChapters() {
+    if (lazyObserver) lazyObserver.disconnect();
+    if (!narrowScreen()) return;
+    lazyObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) fillLazyChapter(entry.target);
+        else releaseLazyChapter(entry.target);
+      });
+    }, { rootMargin: "700px 0px" });
+    document.querySelectorAll("#route section.ch").forEach(section => {
+      if (section.dataset.lazy === "1" || section.dataset.ready === "1") lazyObserver.observe(section);
+    });
+  }
+
+  function fillLazyUntil(y) {
+    const sections = [...document.querySelectorAll("#route section.ch[data-lazy]")];
+    for (const section of sections) {
+      fillLazyChapter(section);
+      if (document.documentElement.scrollHeight >= y + window.innerHeight) break;
+    }
+  }
+
   function renderRoute() {
     const chapters = chaptersFor(ui.trackId);
     if (ui.chapterId && !chapters.some(chapter => chapter.id === ui.chapterId)) ui.chapterId = "";
     const shown = ui.chapterId ? chapters.filter(chapter => chapter.id === ui.chapterId) : chapters;
     const filtering = ui.flag !== "all" || !!ui.query;
+    const lazy = narrowScreen() && !cardEditing() && !filtering && !ui.chapterId;
     let visible = 0;
     let total = 0;
     const host = document.getElementById("route");
     host.innerHTML = shown.map(chapter => {
       total += chapter.items.length;
-      const built = chapterBlocks(chapter.items, chapter.sections);
-      visible += built.visible;
+      const matched = chapter.items.filter(itemVisible).length;
+      visible += matched;
       const done = chapter.items.filter(item => checked(item.id)).length;
       const closed = ui.chapterId ? false : ui.collapsed[chapterKey(chapter.id)] === true;
-      const hide = filtering && built.visible === 0;
+      const hide = filtering && matched === 0;
       const chapterTools = cardEditing() ? `<span class="chapter-tools">
           <button type="button" data-chapter-rename="${esc(chapter.id)}">名前</button>
           <button type="button" data-chapter-up="${esc(chapter.id)}">上へ</button>
@@ -626,15 +682,23 @@
           <button type="button" data-chapter-add="${esc(chapter.id)}">チャプターを追加</button>
           <button type="button" data-chapter-delete="${esc(chapter.id)}">削除</button>
         </span>` : "";
-      return `<section class="ch${closed ? " closed" : ""}${hide ? " hide" : ""}" id="chapter-${esc(ui.trackId)}-${esc(chapter.id)}" data-chapter="${esc(chapter.id)}">
+      const body = lazy ? "" : chapterBodyHtml(chapter).html;
+      const estimate = Math.max(64, 56 + chapter.items.length * 84);
+      return `<section class="ch${closed ? " closed" : ""}${hide ? " hide" : ""}" id="chapter-${esc(ui.trackId)}-${esc(chapter.id)}" data-chapter="${esc(chapter.id)}"${lazy ? ` data-lazy="1" style="min-height:${estimate}px"` : ""}>
         <h2 class="chapter-heading"><button type="button" class="chh" data-toggle-chapter="${esc(chapter.id)}" aria-expanded="${closed ? "false" : "true"}">
           <span class="caret" aria-hidden="true">▼</span>
           <span class="cht">${esc(chapter.title)}</span>
           <span class="chl"><span class="cnt${chapter.items.length && done === chapter.items.length ? " done" : ""}">${done}/${chapter.items.length}</span></span>
         </button>${chapterTools}</h2>
-        <div class="chb" data-card-track="${esc(ui.trackId)}">${cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">${esc(L("addCard"))}</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">${esc(L("addSection"))}</button><button type="button" data-move-selected="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}"${GuideSelect.size ? "" : " disabled"}>${esc(L("moveSelected"))}</button></p>` : ""}${built.html || '<p class="empty-chapter">項目はまだありません。</p>'}</div>
+        <div class="chb" data-card-track="${esc(ui.trackId)}">${body}</div>
       </section>`;
     }).join("") + (cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-chapter-add="" data-card-track="${esc(ui.trackId)}">チャプターを追加</button></p>` : "");
+    if (lazy) {
+      [...host.querySelectorAll("section.ch[data-lazy]")].slice(0, 1).forEach(fillLazyChapter);
+      bindLazyChapters();
+    } else if (lazyObserver) {
+      lazyObserver.disconnect();
+    }
     document.getElementById("route-count").textContent = visible + " / " + total + " 件を表示";
     const jump = document.getElementById("chapter-jump");
     const previous = jump.value;
@@ -734,9 +798,15 @@
     return `<p class="area">進行: ${links}</p>`;
   }
 
+  const builtHubs = new Set();
+
   function renderCatalogs() {
-    GAME.hubs.filter(hub => hub.kind === "catalog").forEach(renderCatalog);
-    renderItems();
+    GAME.hubs.forEach(hub => {
+      if (hub.kind !== "catalog" && hub.kind !== "items") return;
+      if (hub.id !== ui.hub && !builtHubs.has(hub.id)) return;
+      if (hub.kind === "items") renderItems();
+      else renderCatalog(hub);
+    });
   }
 
   const SLOT_COUNT = {
@@ -1096,7 +1166,6 @@
       });
     });
     renderRoute();
-    renderCatalogs();
     updateRestore();
   }
 
@@ -1113,8 +1182,18 @@
 
   function restoreTabScroll(hub) {
     const y = Number(tabScroll[hub]) || 0;
+    if (hub === "route") fillLazyUntil(y);
     requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
   }
+
+  let scrollFrame = 0;
+  window.addEventListener("scroll", () => {
+    if (scrollFrame) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = 0;
+      tabScroll[ui.hub] = window.scrollY || document.documentElement.scrollTop || 0;
+    });
+  }, { passive: true });
 
   function showHub(id) {
     const hub = GAME.hubs.some(item => item.id === id) ? id : "route";
@@ -1124,6 +1203,7 @@
     }
     if (!ui.keepEnemy) ui.enemyId = "";
     ui.hub = hub;
+    builtHubs.add(hub);
     document.querySelectorAll("#tabs [data-hub]").forEach(button => {
       const on = button.dataset.hub === hub;
       button.classList.toggle("on", on);
@@ -1138,7 +1218,12 @@
     const next = hub === "enemies" && ui.enemyId ? "#/enemies/" + ui.enemyId : "#/" + hub;
     if (location.hash !== next) history.replaceState(null, "", next);
     if (hub === "settings") renderSettings();
-    if (hub === "enemies") renderEnemies();
+    else if (hub === "enemies") renderEnemies();
+    else if (hub === "items") renderItems();
+    else if (hub !== "route") {
+      const found = GAME.hubs.find(item => item.id === hub);
+      if (found && found.kind === "catalog") renderCatalog(found);
+    }
     restoreTabScroll(hub);
   }
 
@@ -1471,6 +1556,7 @@
       if (hub) renderCatalog(hub);
     }
     showHub(entry.hub);
+    if (entry.hub === "route" && entry.chapterId) fillLazyChapter(document.getElementById("chapter-" + entry.trackId + "-" + entry.chapterId));
     document.getElementById("guide-search-results").hidden = true;
     const card = cardElement(id);
     if (!card) return;
@@ -1959,7 +2045,7 @@
   const mapPop = document.createElement("div");
   mapPop.id = "map-pop";
   mapPop.hidden = true;
-  mapPop.innerHTML = '<div class="map-pop-bar" id="map-pop-handle"><span id="map-pop-title">地図</span><button type="button" id="map-pop-close" aria-label="閉じる">×</button></div><div class="map-pop-body"><img alt=""><p class="map-fallback" hidden>画像を表示できないので、下のリンクから開いてください。</p><p class="map-actions"><button type="button" id="map-enlarge">拡大</button> <a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p></div><button type="button" class="map-pop-resize" aria-label="大きさを変える"></button>';
+  mapPop.innerHTML = '<div class="map-pop-bar" id="map-pop-handle"><span id="map-pop-title">地図</span><button type="button" id="map-pop-close" aria-label="閉じる">×</button></div><div class="map-pop-body"><img alt="" loading="lazy" decoding="async"><p class="map-fallback" hidden>画像を表示できないので、下のリンクから開いてください。</p><p class="map-actions"><button type="button" id="map-enlarge">拡大</button> <a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p></div><button type="button" class="map-pop-resize" aria-label="大きさを変える"></button>';
   document.body.appendChild(mapPop);
   function mapViewport() {
     return { width: window.innerWidth, height: window.innerHeight };
