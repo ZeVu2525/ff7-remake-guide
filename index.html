@@ -158,7 +158,15 @@ html[data-theme="dark"] .it.flag-tips,html[data-theme="accent"] .it.flag-tips{ba
 .pick-label{display:inline-flex;align-items:center;gap:4px;min-height:36px;font-weight:700}
 .ord{flex:0 0 auto;min-width:2.4em;margin-top:2px;color:var(--fg3);font-variant-numeric:tabular-nums;font-weight:800}
 .kids{margin:8px 0 0 8px;padding-left:8px;border-left:3px solid var(--line)}
-.kids-toggle{min-height:40px;margin-top:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:inherit;font:inherit}
+.kids-chevron{display:inline-flex;align-items:center;justify-content:center;width:36px;min-height:36px;margin-top:8px;padding:0;border:1px solid var(--line);border-radius:8px;background:var(--bg3);color:inherit;font-size:22px;line-height:1;cursor:pointer}
+.kids-chevron .chev{display:inline-block;transition:transform .15s ease}
+.kids-chevron[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.progress-actions{display:grid;gap:12px;max-width:640px;margin:0 0 18px}
+.progress-action p{margin:4px 0 0;color:var(--fg2)}
+.progress-toast{position:fixed;z-index:360;left:50%;bottom:16px;transform:translateX(-50%);display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:min(560px,calc(100% - 24px));padding:12px;border-radius:12px;background:#10202c;color:#fff;box-shadow:0 12px 32px rgba(0,0,0,.28)}
+.progress-toast[hidden]{display:none}
+.progress-toast.is-error{background:#6d2430}
+.progress-toast button{min-height:40px;padding:6px 10px;border:0;border-radius:8px;background:#f6e7c1;color:#10202c;font:inherit;font-weight:700;cursor:pointer}
 article.it.is-nest-drop{box-shadow:inset 0 0 0 3px #39c9ff}
 article.it.is-nest-blocked{box-shadow:inset 0 0 0 3px #c44949}
 .subtabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
@@ -185,7 +193,8 @@ tr.is-target td{background:rgba(57,201,255,.18)}
 .quest-steps{margin:0;padding:0;list-style:none}
 .quest-steps li{display:flex;gap:8px;align-items:flex-start;margin:6px 0}
 .step-no{display:inline-flex;align-items:center;justify-content:center;min-width:1.7em;height:1.7em;border-radius:99px;background:#14324a;color:#fff;font-size:12px;font-weight:800}
-.map-open,.route-item-toggle{position:static;box-sizing:border-box;min-width:44px;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:700 14px/1 inherit;cursor:pointer}
+.map-open,.route-item-toggle{position:static;box-sizing:border-box;min-width:36px;min-height:32px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font-size:12px;font-weight:700;line-height:1;cursor:pointer}
+@media (max-width:720px){.map-open,.route-item-toggle,.kids-chevron{min-width:44px;min-height:44px}}
 .imeta .map-open{margin-left:8px}
 .slot-row{display:inline-flex;align-items:center;gap:3px;margin:1px 4px;padding:2px 4px;background:linear-gradient(#39c9ff,#39c9ff) center/calc(100% - 10px) 2px no-repeat}
 .slot-dot{width:9px;height:9px;border-radius:50%;background:#14324a;box-shadow:0 0 0 1px #fff}
@@ -348,7 +357,7 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
     <h3>期限と取り逃し</h3>
     <p>赤い帯は、今開いている進行の中で、まだ終えていない期限と取り逃しの数。帯を押すと、そのカードだけになる。</p>
     <h3>保存</h3>
-    <p>チェックはブラウザの中に残る。別の端末へ移すときは「進行を書き出す」で JSON を保存し、向こうで「進行を読み込む」。GitHub には送られない。</p>
+    <p>チェックはブラウザの中に残る。別の端末へ移すときは、設定タブの「進行を書き出す」で JSON を保存し、向こうで「進行を読み込む」。GitHub には送られない。</p>
     <h3>編集モード</h3>
     <p>アドレスの末尾に <code>?edit=1</code> を付けるか、ページ下の「編集モード」を押す。表示されている文をクリックして直せる。直しは進行とは別の場所に残る。「編集モードを終了」で戻る。</p>
     <h3>カード編集</h3>
@@ -358,21 +367,27 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
   </div>
 </div>
 <main id="main" tabindex="-1"></main>
+<input class="sr-only" type="file" id="import-file" accept="application/json,.json">
+<div id="progress-toast" class="progress-toast" hidden role="status">
+  <span id="progress-toast-text"></span>
+  <button type="button" id="toast-undo" hidden>直前のリセットを戻す</button>
+  <button type="button" id="progress-toast-close" aria-label="閉じる">×</button>
+</div>
 <footer>
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
   <button type="button" id="edit-toggle" aria-pressed="false">編集：オフ</button>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v17"></script>
-<script src="data/route.js?v=ff7r-guide-v17"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v17"></script>
-<script src="data/maps.js?v=ff7r-guide-v17"></script>
-<script src="data/templates.js?v=ff7r-guide-v17"></script>
-<script src="data/settings.js?v=ff7r-guide-v17"></script>
-<script src="data/images.js?v=ff7r-guide-v17"></script>
-<script src="data/enemies.js?v=ff7r-guide-v17"></script>
-<script src="progress.js?v=ff7r-guide-v17"></script>
-<script src="app.js?v=ff7r-guide-v17"></script>
-<script src="edit-mode.js?v=ff7r-guide-v17"></script>
-<script src="card-edit.js?v=ff7r-guide-v17"></script>
+<script src="data/game.js?v=ff7r-guide-v18"></script>
+<script src="data/route.js?v=ff7r-guide-v18"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v18"></script>
+<script src="data/maps.js?v=ff7r-guide-v18"></script>
+<script src="data/templates.js?v=ff7r-guide-v18"></script>
+<script src="data/settings.js?v=ff7r-guide-v18"></script>
+<script src="data/images.js?v=ff7r-guide-v18"></script>
+<script src="data/enemies.js?v=ff7r-guide-v18"></script>
+<script src="progress.js?v=ff7r-guide-v18"></script>
+<script src="app.js?v=ff7r-guide-v18"></script>
+<script src="edit-mode.js?v=ff7r-guide-v18"></script>
+<script src="card-edit.js?v=ff7r-guide-v18"></script>
 </body>
 </html>

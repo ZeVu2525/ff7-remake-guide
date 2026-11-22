@@ -626,31 +626,49 @@
   function numberCards(items) {
     const list = Array.isArray(items) ? items.filter(item => item && item.id) : [];
     const ids = new Set(list.map(item => item.id));
-    const childOf = {};
-    for (const item of list) {
-      if (item.parent && ids.has(item.parent) && item.parent !== item.id) childOf[item.id] = item.parent;
-    }
-    for (const id of Object.keys(childOf)) {
-      if (childOf[childOf[id]]) delete childOf[id];
-    }
     const kids = {};
-    const tops = [];
     for (const item of list) {
-      const parent = childOf[item.id];
-      if (parent) {
-        if (!kids[parent]) kids[parent] = [];
-        kids[parent].push(item);
-      } else tops.push(item);
+      if (!item.parent || !ids.has(item.parent) || item.parent === item.id) continue;
+      const chain = new Set([item.id]);
+      let cursor = item.parent;
+      let loop = false;
+      while (cursor && ids.has(cursor)) {
+        if (chain.has(cursor)) { loop = true; break; }
+        chain.add(cursor);
+        const parent = list.find(entry => entry.id === cursor);
+        cursor = parent && parent.parent;
+      }
+      if (loop) continue;
+      if (!kids[item.parent]) kids[item.parent] = [];
+      kids[item.parent].push(item);
     }
+    const childIds = new Set();
+    Object.keys(kids).forEach(id => kids[id].forEach(child => childIds.add(child.id)));
     const numbers = {};
-    tops.forEach((item, index) => {
-      const label = String(index + 1);
+    const seen = new Set();
+    const assign = (item, label) => {
+      if (!item || seen.has(item.id)) return;
+      seen.add(item.id);
       numbers[item.id] = label;
-      (kids[item.id] || []).forEach((child, childIndex) => {
-        numbers[child.id] = label + "-" + (childIndex + 1);
-      });
-    });
+      (kids[item.id] || []).forEach((child, index) => assign(child, label + "-" + (index + 1)));
+    };
+    list.filter(item => !childIds.has(item.id)).forEach((item, index) => assign(item, String(index + 1)));
     return numbers;
+  }
+
+  function foldCards(flags, id, childrenOf, closed) {
+    const next = Object.assign(Object.create(null), flags || {});
+    const seen = new Set();
+    const visit = current => {
+      if (!current || seen.has(current)) return;
+      seen.add(current);
+      next[current] = closed === true;
+      next["kids:" + current] = closed === true;
+      const children = childrenOf && childrenOf[current];
+      if (children) children.forEach(visit);
+    };
+    visit(id);
+    return next;
   }
 
   function numberChapter(items, sections) {
@@ -1355,6 +1373,7 @@
     GITHUB_STORE,
     enemyLinks,
     numberCards,
+    foldCards,
     numberChapter,
     circledNumber,
     templateHeadings,
