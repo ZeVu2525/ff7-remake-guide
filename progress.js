@@ -107,10 +107,29 @@
     { id: "tpl-shinra", label: "神羅ボックス" },
     { id: "tpl-get", label: "入手" }
   ];
-  const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable", "map"];
+  const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable", "map", "obtain", "buy", "sell", "use", "ability", "client", "place", "when", "condition", "clear", "level"];
+  const ENEMY_FIELDS = ["name", "no", "kind", "tactic", "source", "image"];
+  const CALLOUT_DEFAULT = { bg: "#e8f4ff", border: "#5b9bd5" };
+
+  function emptyEnemyEdits() {
+    return { deleted: {}, patches: {}, custom: {}, order: [] };
+  }
 
   function emptyCardBook() {
-    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, chapterLists: {}, templates: [], labels: {}, difficulty: "normal" };
+    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, chapterLists: {}, templates: [], labels: {}, difficulty: "normal", enemyEdits: emptyEnemyEdits(), callout: {} };
+  }
+
+  function toHalfWidth(value) {
+    return String(value == null ? "" : value).replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+  }
+
+  function halfWalk(value) {
+    if (typeof value === "string") return toHalfWidth(value);
+    if (Array.isArray(value)) return value.map(halfWalk);
+    if (!value || typeof value !== "object") return value;
+    const out = {};
+    Object.keys(value).forEach(key => { out[key] = halfWalk(value[key]); });
+    return out;
   }
 
   function asObject(value) {
@@ -231,6 +250,10 @@
         card.source = raw.source == null ? "" : String(raw.source);
         card.map = typeof raw.map === "string" ? raw.map : "";
         card.missable = raw.missable === true;
+        CATALOG_FIELDS.forEach(key => {
+          if (key === "missable" || key === "name" || key === "detail" || key === "area" || key === "source" || key === "map") return;
+          if (typeof raw[key] === "string") card[key] = raw[key];
+        });
         if (raw.auto === "rest") card.auto = "rest";
       }
       book.custom[id] = card;
@@ -239,12 +262,7 @@
       const raw = asObject(src.chapters[key]);
       const chapter = { order: stringList(raw.order), known: stringList(raw.known) };
       if (Array.isArray(raw.sections)) {
-        chapter.sections = raw.sections.filter(item => item && item.id).map(item => ({
-          id: String(item.id),
-          title: item.title == null ? "" : String(item.title),
-          map: item.map == null ? "" : String(item.map),
-          note: item.note == null ? "" : String(item.note)
-        }));
+        chapter.sections = raw.sections.filter(item => item && item.id).map(item => sectionRecord(item));
       }
       book.chapters[key] = chapter;
     }
@@ -270,7 +288,65 @@
         title: chapter.title == null ? "" : String(chapter.title)
       }));
     });
-    return book;
+    book.enemyEdits = normalizeEnemyEdits(src.enemyEdits);
+    const callout = asObject(src.callout);
+    book.callout = {};
+    const calloutBg = colorValue(callout.bg);
+    const calloutBorder = colorValue(callout.border);
+    if (calloutBg) book.callout.bg = calloutBg;
+    if (calloutBorder) book.callout.border = calloutBorder;
+    return halfWalk(book);
+  }
+
+  function sectionRecord(item) {
+    const section = {
+      id: String(item.id),
+      title: item.title == null ? "" : String(item.title),
+      map: item.map == null ? "" : String(item.map),
+      note: item.note == null ? "" : String(item.note)
+    };
+    const bg = colorValue(item.bg);
+    const border = colorValue(item.border);
+    if (bg) section.bg = bg;
+    if (border) section.border = border;
+    return section;
+  }
+
+  function normalizeEnemyEdits(value) {
+    const src = asObject(value);
+    const edits = emptyEnemyEdits();
+    Object.keys(asObject(src.deleted)).forEach(id => { if (src.deleted[id] === true) edits.deleted[id] = true; });
+    Object.keys(asObject(src.patches)).forEach(id => {
+      const patch = enemyFields(src.patches[id]);
+      if (Object.keys(patch).length) edits.patches[id] = patch;
+    });
+    Object.keys(asObject(src.custom)).forEach(id => {
+      const card = enemyFields(src.custom[id]);
+      if (!card.name) return;
+      card.id = id;
+      edits.custom[id] = card;
+    });
+    edits.order = stringList(src.order);
+    return edits;
+  }
+
+  function enemyFields(raw) {
+    const src = asObject(raw);
+    const card = {};
+    ENEMY_FIELDS.forEach(key => {
+      if (typeof src[key] !== "string") return;
+      if (key === "kind" && src[key] !== "normal" && src[key] !== "boss" && src[key] !== "summon") return;
+      card[key] = src[key];
+    });
+    return card;
+  }
+
+  function calloutColors(book, section) {
+    const global = book && book.callout || {};
+    return {
+      bg: colorValue(section && section.bg) || colorValue(global.bg) || CALLOUT_DEFAULT.bg,
+      border: colorValue(section && section.border) || colorValue(global.border) || CALLOUT_DEFAULT.border
+    };
   }
 
   function resolveSections(row, book, trackId, chapterId) {
@@ -278,12 +354,11 @@
     const base = row && Array.isArray(row.sections) ? row.sections : [];
     const list = saved && saved.sections && saved.sections.length ? saved.sections : base;
     if (list.length) {
-      return list.map(item => ({
-        id: String(item.id),
-        title: sectionName(item.title || ""),
-        map: item.map || "",
-        note: item.note || ""
-      }));
+      return list.map(item => {
+        const section = sectionRecord(item);
+        section.title = sectionName(section.title || "");
+        return section;
+      });
     }
     return [{ id: chapterId + "-sec-1", title: "本章", map: "", note: "" }];
   }
@@ -646,12 +721,11 @@
   function saveSections(book, key, sections) {
     const prev = book.chapters[key] || { order: [], known: [] };
     book.chapters[key] = Object.assign({}, prev, {
-      sections: (sections || []).map(item => ({
-        id: String(item.id),
-        title: sectionName(item.title || ""),
-        map: item.map || "",
-        note: item.note || ""
-      }))
+      sections: (sections || []).map(item => {
+        const section = sectionRecord(item);
+        section.title = sectionName(section.title || "");
+        return section;
+      })
     });
     return book;
   }
@@ -733,7 +807,7 @@
   function upsertCatalogCard(book, baseItem, id, fields, catalogId, order, baseIds) {
     const next = cloneBook(book);
     if (!baseItem || (next.custom[id] && next.custom[id].kind === "catalog")) {
-      next.custom[id] = {
+      const custom = {
         kind: "catalog",
         id,
         catalogId,
@@ -744,8 +818,13 @@
         map: fields.map || "",
         missable: fields.missable === true
       };
+      CATALOG_FIELDS.forEach(key => {
+        if (custom[key] != null || fields[key] == null || key === "missable") return;
+        custom[key] = fields[key];
+      });
+      next.custom[id] = custom;
     } else {
-      const patch = diffFields(baseItem, fields, CATALOG_FIELDS);
+      const patch = diffFields(baseItem, fields, CATALOG_FIELDS.filter(key => key === "missable" || fields[key] != null));
       if (Object.keys(patch).length) next.patches[id] = patch;
       else delete next.patches[id];
     }
@@ -1298,7 +1377,7 @@
     if (JSON.stringify(left.text || {}) !== JSON.stringify(right.text || {}) && JSON.stringify(left.book || {}) === JSON.stringify(right.book || {})) return "表示文";
     const a = left.book || {};
     const b = right.book || {};
-    const filled = book => ["deleted", "patches", "custom", "chapters", "chapterLists", "labels"].some(key => book[key] && Object.keys(book[key]).length) || (book.templates && book.templates.length) || (book.difficulty && book.difficulty !== "normal");
+    const filled = book => ["deleted", "patches", "custom", "chapters", "chapterLists", "labels"].some(key => book[key] && Object.keys(book[key]).length) || (book.templates && book.templates.length) || (book.difficulty && book.difficulty !== "normal") || enemyEditsFilled(book.enemyEdits) || !!(book.callout && (book.callout.bg || book.callout.border));
     if (!filled(b) && filled(a)) return "編集をすべて戻す";
     if (Object.keys(b.deleted || {}).some(id => !(a.deleted || {})[id])) return "カード削除";
     if (Object.keys(a.deleted || {}).some(id => !(b.deleted || {})[id])) return "カードの復帰";
@@ -1308,12 +1387,14 @@
     if (JSON.stringify(a.labels || {}) !== JSON.stringify(b.labels || {})) return "ボタン名";
     if (JSON.stringify(a.achieveTags || null) !== JSON.stringify(b.achieveTags || null)) return "達成表示するタグ";
     if ((a.difficulty || "normal") !== (b.difficulty || "normal")) return "難易度";
+    if (JSON.stringify(a.callout || {}) !== JSON.stringify(b.callout || {})) return "小見出しの色";
+    if (JSON.stringify(a.enemyEdits || {}) !== JSON.stringify(b.enemyEdits || {})) return "エネミー";
     const sectionChanged = JSON.stringify(a.chapters || {}) !== JSON.stringify(b.chapters || {});
     if (sectionChanged) {
       const orderOnly = JSON.stringify(Object.keys(a.chapters || {}).sort().map(key => ({ key, order: (a.chapters[key] || {}).order }))) !== JSON.stringify(Object.keys(b.chapters || {}).sort().map(key => ({ key, order: (b.chapters[key] || {}).order })))
         && JSON.stringify(Object.keys(a.chapters || {}).sort().map(key => (a.chapters[key] || {}).sections || null)) === JSON.stringify(Object.keys(b.chapters || {}).sort().map(key => (b.chapters[key] || {}).sections || null));
       if (orderOnly) return "並べ替え";
-      return "子チャプター";
+      return "小見出し";
     }
     const kinds = new Set();
     const ids = new Set(Object.keys(a.patches || {}).concat(Object.keys(b.patches || {})));
@@ -1659,8 +1740,8 @@
   }
 
   function validateRouteFields(fields, flagIds, trophyIds) {
-    const title = String(fields && fields.title || "").trim();
-    const detail = String(fields && fields.detail || "").trim();
+    const title = toHalfWidth(fields && fields.title).trim();
+    const detail = toHalfWidth(fields && fields.detail).trim();
     const flags = cardFlags(fields).filter(id => !flagIds || flagIds.indexOf(id) >= 0);
     const flag = flags[0] || "";
     const source = String(fields && fields.source || "").trim();
@@ -1688,16 +1769,120 @@
   }
 
   function validateCatalogFields(fields) {
-    const name = String(fields && fields.name || "").trim();
-    const detail = String(fields && fields.detail || "").trim();
-    const area = String(fields && fields.area || "").trim();
+    const name = toHalfWidth(fields && fields.name).trim();
+    const detail = toHalfWidth(fields && fields.detail).trim();
+    const area = toHalfWidth(fields && fields.area).trim();
     const source = String(fields && fields.source || "").trim();
     if (!name) return { error: "名前が空です。" };
     if (!detail) return { error: "説明が空です。" };
     if (source && !/^https:\/\//i.test(source)) return { error: "出典は https:// から始めるか、空にします。" };
     const map = String(fields && fields.map || "").trim();
     if (map && !validMapValue(map)) return { error: "地図は章のID、https:// の画像、または画像ファイルにしてください。" };
-    return { value: { name, detail, area, source, map, missable: !!(fields && fields.missable) } };
+    const value = { name, detail, area, source, map, missable: !!(fields && fields.missable) };
+    CATALOG_FIELDS.forEach(key => {
+      if (value[key] != null || fields[key] == null || key === "missable") return;
+      value[key] = toHalfWidth(fields[key]).trim();
+    });
+    return { value: value };
+  }
+
+  function mergeEnemies(base, book) {
+    const safe = normalizeCardBook(book);
+    const edits = safe.enemyEdits;
+    const baseList = (Array.isArray(base) ? base : []).filter(item => item && item.id);
+    const baseById = new Map(baseList.map(item => [item.id, item]));
+    let ids = edits.order.length ? edits.order.slice() : baseList.map(item => item.id);
+    baseList.forEach(item => {
+      if (!edits.deleted[item.id] && ids.indexOf(item.id) < 0) ids.push(item.id);
+    });
+    Object.keys(edits.custom).forEach(id => {
+      if (!edits.deleted[id] && ids.indexOf(id) < 0) ids.push(id);
+    });
+    ids = ids.filter(id => !edits.deleted[id]);
+    return ids.map(id => {
+      if (edits.custom[id]) return Object.assign({ kind: "normal", no: "", tactic: "", source: "", image: "" }, edits.custom[id]);
+      const baseItem = baseById.get(id);
+      if (!baseItem) return null;
+      return Object.assign({}, baseItem, edits.patches[id] || {});
+    }).filter(Boolean);
+  }
+
+  function exportEnemies(base, book) {
+    return mergeEnemies(base, book).map(item => {
+      const copy = Object.assign({}, item);
+      delete copy.custom;
+      return copy;
+    });
+  }
+
+  function upsertEnemy(book, baseItem, id, fields, order) {
+    const next = cloneBook(book);
+    const value = enemyFields(fields);
+    value.name = toHalfWidth(fields && fields.name).trim();
+    if (fields && fields.kind) value.kind = fields.kind;
+    if (!baseItem || next.enemyEdits.custom[id]) {
+      value.id = id;
+      next.enemyEdits.custom[id] = value;
+      delete next.enemyEdits.patches[id];
+    } else {
+      const patch = {};
+      ENEMY_FIELDS.forEach(key => {
+        const before = baseItem[key] == null ? "" : String(baseItem[key]);
+        const after = value[key] == null ? before : String(value[key]);
+        if (before !== after) patch[key] = after;
+      });
+      if (Object.keys(patch).length) next.enemyEdits.patches[id] = patch;
+      else delete next.enemyEdits.patches[id];
+    }
+    delete next.enemyEdits.deleted[id];
+    const existing = (order || next.enemyEdits.order || []).filter(item => item);
+    if (fields && fields.insertAfter) {
+      const ids = existing.filter(item => item !== id);
+      const at = ids.indexOf(fields.insertAfter);
+      ids.splice(at < 0 ? ids.length : at + 1, 0, id);
+      next.enemyEdits.order = ids;
+    } else if (existing.indexOf(id) >= 0) {
+      next.enemyEdits.order = existing;
+    } else {
+      next.enemyEdits.order = existing.concat(id);
+    }
+    return next;
+  }
+
+  function removeEnemy(book, id) {
+    const next = cloneBook(book);
+    next.enemyEdits.deleted[id] = true;
+    delete next.enemyEdits.custom[id];
+    delete next.enemyEdits.patches[id];
+    next.enemyEdits.order = (next.enemyEdits.order || []).filter(item => item !== id);
+    return next;
+  }
+
+  function saveEnemyOrder(book, order) {
+    const next = cloneBook(book);
+    next.enemyEdits.order = (order || []).slice();
+    return next;
+  }
+
+  function enemyEditsFilled(edits) {
+    if (!edits) return false;
+    return Object.keys(edits.deleted || {}).length > 0 || Object.keys(edits.patches || {}).length > 0 || Object.keys(edits.custom || {}).length > 0 || (edits.order && edits.order.length > 0);
+  }
+
+  function validateEnemies(list) {
+    const errors = [];
+    if (!Array.isArray(list) || !list.length) errors.push("エネミーの台帳が空です");
+    const seen = new Set();
+    (list || []).forEach(item => {
+      if (!item || !item.id || !item.name) errors.push("エネミーに名前のない行があります");
+      else if (seen.has(item.id)) errors.push("エネミー " + item.id + " が重複しています");
+      else seen.add(item.id);
+    });
+    return errors;
+  }
+
+  function enemiesModuleSource(list) {
+    return "const ENEMIES = " + sourceValue(list || [], 0) + ";\n\nglobalThis.ENEMIES = ENEMIES;\n";
   }
 
   function validMapValue(map) {
@@ -1822,12 +2007,17 @@
       clean[trackId] = (route[trackId] || []).map(row => ({
         chapterId: row.chapterId,
         title: row.title || "",
-        sections: (row.sections || []).map(section => ({
-          id: section.id,
-          title: section.title || "",
-          map: section.map || "",
-          note: section.note || ""
-        })),
+        sections: (row.sections || []).map(section => {
+          const copy = {
+            id: section.id,
+            title: section.title || "",
+            map: section.map || "",
+            note: section.note || ""
+          };
+          if (section.bg) copy.bg = section.bg;
+          if (section.border) copy.border = section.border;
+          return copy;
+        }),
         items: (row.items || []).map(item => {
           const copy = Object.assign({}, item);
           delete copy.custom;
@@ -2010,6 +2200,16 @@
     UI_LABELS,
     labelText,
     sectionName,
+    toHalfWidth,
+    calloutColors,
+    CALLOUT_DEFAULT,
+    mergeEnemies,
+    exportEnemies,
+    upsertEnemy,
+    removeEnemy,
+    saveEnemyOrder,
+    validateEnemies,
+    enemiesModuleSource,
     resolveSections,
     orderInsertGroup,
     numbersFromTitle,

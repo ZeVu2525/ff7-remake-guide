@@ -15,7 +15,8 @@
     collapsed: Object.create(null),
     hub: "route",
     enemyId: "",
-    enemyKind: "normal"
+    enemyKind: "normal",
+    settingsTab: "view"
   };
   globalThis.GuideSelect = globalThis.GuideSelect || new Set();
   let chapterFilter = {};
@@ -495,9 +496,11 @@
       visible += built.visible;
       const closed = ui.collapsed["section:" + ui.trackId + ":" + section.id] === true;
       const name = GuideProgress.sectionName(section.title);
+      const colors = GuideProgress.calloutColors(cardBook, section);
+      const callout = section.note ? `<p class="subhead-callout" style="background:${colors.bg};border-color:${colors.border}">${esc(section.note)}</p>` : "";
       const tools = cardEditing() ? `<span class="subch-tools">
+        <button type="button" class="icon-edit" data-section-edit="${esc(section.id)}" title="${esc(L("edit"))}" aria-label="${esc(L("edit"))}">✎</button>
         <button type="button" data-section-insert="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "addSection"))}</button>
-        <button type="button" data-section-edit="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "rename"))}</button>
         <button type="button" data-section-up="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "up"))}</button>
         <button type="button" data-section-down="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "down"))}</button>
         <button type="button" data-move-here="${esc(section.id)}"${GuideSelect.size ? "" : " disabled"}>${esc(GuideProgress.labelText(cardBook, "moveSelected"))}</button>
@@ -506,11 +509,11 @@
       return `<section class="subch${closed ? " closed" : ""}" data-section="${esc(section.id)}">
         <div class="subch-bar">
           <button type="button" class="subch-toggle" data-toggle-section="${esc(section.id)}" aria-expanded="${closed ? "false" : "true"}"><span class="caret">▼</span><span class="subch-num">(${index + 1})</span></button>
-          ${name ? `<span class="subch-name" data-edit-text>${esc(name)}</span>` : ""}
+          ${name ? `<span class="subch-name">${esc(name)}</span>` : ""}
           ${mapButton({ id: section.id, map: section.map }, "section")}
           ${tools}
         </div>
-        ${section.note ? `<p class="subch-note" data-edit-text>${esc(section.note)}</p>` : ""}
+        ${callout}
         <div class="subch-body"${closed ? " hidden" : ""}>${built.html || '<p class="empty-chapter">この区分にはカードがありません。</p>'}</div>
       </section>`;
     }).join("");
@@ -613,6 +616,11 @@
     return GuideProgress.labelText(cardBook, key);
   }
 
+  function catalogAdder(catalogId) {
+    if (!cardEditing() || !catalogId) return "";
+    return `<p class="card-edit-chapter"><button type="button" data-catalog-add="${esc(catalogId)}">項目を追加</button></p>`;
+  }
+
   function cardTools(item) {
     if (!cardEditing()) return "";
     return `<div class="card-edit-tools">
@@ -712,7 +720,7 @@
       const closed = ui.chapterId ? false : ui.collapsed[chapterKey(chapter.id)] === true;
       const hide = filtering && matched === 0;
       const chapterTools = cardEditing() ? `<span class="chapter-tools">
-          <button type="button" data-chapter-rename="${esc(chapter.id)}">名前</button>
+          <button type="button" class="icon-edit" data-chapter-edit="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}" title="${esc(L("edit"))}" aria-label="${esc(L("edit"))}">✎</button>
           <button type="button" data-chapter-up="${esc(chapter.id)}">上へ</button>
           <button type="button" data-chapter-down="${esc(chapter.id)}">下へ</button>
           <button type="button" data-chapter-add="${esc(chapter.id)}">チャプターを追加</button>
@@ -720,7 +728,7 @@
         </span>` : "";
       const body = lazy ? "" : chapterBodyHtml(chapter).html;
       const estimate = !closed && lazy ? Math.max(64, 56 + chapter.items.length * 84) : 0;
-      return `<section class="ch${closed ? " closed" : ""}${hide ? " hide" : ""}" id="chapter-${esc(ui.trackId)}-${esc(chapter.id)}" data-chapter="${esc(chapter.id)}"${lazy ? ` data-lazy="1"${estimate ? ` style="min-height:${estimate}px"` : ""}` : ""}>
+      return `<section class="ch${closed ? " closed" : ""}${hide ? " hide" : ""}" id="chapter-${esc(ui.trackId)}-${esc(chapter.id)}" data-chapter="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}"${lazy ? ` data-lazy="1"${estimate ? ` style="min-height:${estimate}px"` : ""}` : ""}>
         <h2 class="chapter-heading"><button type="button" class="chh" data-toggle-chapter="${esc(chapter.id)}" aria-expanded="${closed ? "false" : "true"}">
           <span class="caret" aria-hidden="true">▼</span>
           <span class="cht">${esc(chapter.title)}</span>
@@ -788,7 +796,7 @@
       const label = area || "すべて";
       return `<button type="button" class="chip${on ? " on" : ""}" data-facet="${esc(area)}" data-facet-hub="${esc(hub.id)}" aria-pressed="${on ? "true" : "false"}">${esc(label)}</button>`;
     }).join("")}</div>` : "";
-    const adder = cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-catalog-add="${esc(hub.catalog)}">項目を追加</button></p>` : "";
+    const adder = catalogAdder(hub.catalog);
     host.innerHTML = facetButtons + adder + (visible.map(item => {
       const on = checked(item.id);
       return `<article class="it${item.example ? " is-example" : ""}${on ? " done" : ""}" data-id="${esc(item.id)}" data-catalog="${esc(hub.catalog)}">
@@ -921,8 +929,8 @@
     if (catalogId === "armor") return renderArmorTable(rows);
     if (catalogId === "accessories") return renderAccessoryTable(rows);
     const head = "<th>名前</th><th>概要</th><th>入手方法</th>" + (catalogId === "keyItems" ? "<th>用途</th>" : "<th>買値</th><th>売値</th>") + "<th>入手カード</th>";
-    const body = rows.map(item => `<tr data-id="${esc(item.id)}"><td>${esc(item.name)}</td><td>${esc(item.detail || "")}</td><td>${esc(item.obtain || "")}</td>${catalogId === "keyItems" ? `<td>${esc(item.use || "")}</td>` : `<td>${esc(item.buy || "")}</td><td>${esc(item.sell || "")}</td>`}${cardLinksCell(item)}</tr>`).join("");
-    return `<div class="table-scroll"><table class="sheet"><thead><tr>${head}</tr></thead><tbody>${body || "<tr><td>一致する項目がありません。</td></tr>"}</tbody></table></div>`;
+    const body = rows.map(item => `<tr data-id="${esc(item.id)}" data-catalog="${esc(catalogId)}"><td>${esc(item.name)}${cardTools(item)}</td><td>${esc(item.detail || "")}</td><td>${esc(item.obtain || "")}</td>${catalogId === "keyItems" ? `<td>${esc(item.use || "")}</td>` : `<td>${esc(item.buy || "")}</td><td>${esc(item.sell || "")}</td>`}${cardLinksCell(item)}</tr>`).join("");
+    return catalogAdder(catalogId) + `<div class="table-scroll"><table class="sheet"><thead><tr>${head}</tr></thead><tbody>${body || "<tr><td>一致する項目がありません。</td></tr>"}</tbody></table></div>`;
   }
 
   function renderWeaponTable(rows) {
@@ -932,7 +940,7 @@
       if (!list.length) return "";
       const source = list[0].source || "";
       const body = list.map(item => `<tr data-id="${esc(item.id)}">
-        <td><button type="button" class="linkish" data-open-weapon="${esc(item.id)}">${esc(item.name)}</button></td>
+        <td><button type="button" class="linkish" data-open-weapon="${esc(item.id)}">${esc(item.name)}</button>${cardTools(item)}</td>
         <td>${statPair(item.initial, item.maximum)}</td>
         <td>${slotGlyph(item.initialSlots)}</td>
         <td>${esc(item.ability || "")}</td>
@@ -941,7 +949,7 @@
         <td>${esc(item.sell || "")}</td>
         ${cardLinksCell(item)}
       </tr>`).join("");
-      return `<section class="equip-section"><h3>${esc(character)}</h3>${sourceNote(source)}
+      return `<section class="equip-section"><h3>${esc(character)}</h3>${catalogAdder("weapons")}${sourceNote(source)}
         <div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>ステータスの上昇量<br>物攻 / 魔攻 / 物防 / 魔防</th><th>マテリア穴</th><th>武器アビリティ</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
     }).join("");
   }
@@ -965,6 +973,7 @@
     const total = item.total ? `<tr><td>合計</td><td></td><td>${esc(item.total.atk)}</td><td>${esc(item.total.matk)}</td><td>${esc(item.total.defn)}</td><td>${esc(item.total.mdef)}</td><td>${esc(item.total.hp)}</td><td>${esc(item.total.mp)}</td><td>${esc(otherStat(item.total))}</td><td>-</td><td>${esc(item.total.sp)}</td></tr>` : "";
     return `<p><button type="button" class="linkish" data-weapon-back="1">武器一覧へ戻る</button></p>
       <h3>${esc(item.name)}</h3>
+      ${cardTools(item)}
       ${summary}
       <div class="table-scroll"><table class="sheet equip-grid"><thead><tr><th>武器Lv.</th><th>コア名</th><th>物攻</th><th>魔攻</th><th>物防</th><th>魔防</th><th>最大HP</th><th>最大MP</th><th>その他</th><th>マテリア穴拡張</th><th>必要SP</th></tr></thead><tbody>${body}${total}</tbody></table></div>
       ${sourceNote(item.reinforceSource || item.source)}`;
@@ -979,7 +988,7 @@
         const body = list.map(item => {
           const levels = item.levels && item.levels.length ? item.levels : [{ spell: "", effect: item.detail, buy: item.buy, sell: item.sell }];
           return levels.map((level, index) => `<tr data-id="${esc(item.id)}">
-            ${index === 0 ? `<td rowspan="${levels.length}">${esc(item.name)}</td>` : ""}
+            ${index === 0 ? `<td rowspan="${levels.length}">${esc(item.name)}${cardTools(item)}</td>` : ""}
             <td>${index + 1}</td>
             <td>${esc(level.spell || "")}</td>
             <td>${esc(level.effect || "")}</td>
@@ -989,16 +998,17 @@
             ${index === 0 ? cardLinksCell(item).replace("<td>", `<td rowspan="${levels.length}">`) : ""}
           </tr>`).join("");
         }).join("");
-        return `<section class="equip-section"><h3>魔法</h3>${sourceNote(list[0].source)}<div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>Lv</th><th>魔法名</th><th>効果</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+        return `<section class="equip-section"><h3>魔法</h3>${catalogAdder("materia")}${sourceNote(list[0].source)}<div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>Lv</th><th>魔法名</th><th>効果</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
       }
       const body = list.map(item => `<article class="materia-block" data-id="${esc(item.id)}">
         <h4>${esc(item.name)}</h4>
+        ${cardTools(item)}
         <p>${esc(item.detail || "")}</p>
         ${item.showObtain && item.obtain ? `<p>入手: ${esc(item.obtain)}</p>` : ""}
         ${(item.tables || []).map(renderSheet).join("")}
         ${cardLinksLine(item)}
       </article>`).join("");
-      return `<section class="equip-section"><h3>${esc(kind)}</h3>${sourceNote(list[0].source)}${body}</section>`;
+      return `<section class="equip-section"><h3>${esc(kind)}</h3>${catalogAdder("materia")}${sourceNote(list[0].source)}${body}</section>`;
     }).join("");
   }
 
@@ -1021,21 +1031,21 @@
   }
 
   function renderArmorTable(rows) {
-    const body = rows.map(item => `<tr data-id="${esc(item.id)}"><td>${esc(item.name)}</td><td>${esc(item.pdef || "")}</td><td>${esc(item.mdef || "")}</td><td>${esc(item.slots || "")}</td><td>${esc(item.obtain || "")}</td><td>${esc(item.buy || "")}</td><td>${esc(item.sell || "")}</td>${cardLinksCell(item)}</tr>`).join("");
-    return `<section class="equip-section"><h3>防具</h3>${sourceNote("https://finalfantasy-jun-site.com/ff7_remake/item/protector.html")}<div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>物理防御力</th><th>魔法防御力</th><th>マテリア穴</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+    const body = rows.map(item => `<tr data-id="${esc(item.id)}"><td>${esc(item.name)}${cardTools(item)}</td><td>${esc(item.pdef || "")}</td><td>${esc(item.mdef || "")}</td><td>${esc(item.slots || "")}</td><td>${esc(item.obtain || "")}</td><td>${esc(item.buy || "")}</td><td>${esc(item.sell || "")}</td>${cardLinksCell(item)}</tr>`).join("");
+    return `<section class="equip-section"><h3>防具</h3>${catalogAdder("armor")}${sourceNote("https://finalfantasy-jun-site.com/ff7_remake/item/protector.html")}<div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>物理防御力</th><th>魔法防御力</th><th>マテリア穴</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
   }
 
   function renderAccessoryTable(rows) {
-    const body = rows.map(item => `<tr data-id="${esc(item.id)}"><td>${esc(item.name)}</td><td>${esc(item.detail || "")}</td><td>${esc(item.obtain || "")}</td><td>${esc(item.buy || "")}</td><td>${esc(item.sell || "")}</td>${cardLinksCell(item)}</tr>`).join("");
-    return `<section class="equip-section"><h3>アクセサリー</h3>${sourceNote("https://finalfantasy-jun-site.com/ff7_remake/item/accessory.html")}<div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>概要</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
+    const body = rows.map(item => `<tr data-id="${esc(item.id)}"><td>${esc(item.name)}${cardTools(item)}</td><td>${esc(item.detail || "")}</td><td>${esc(item.obtain || "")}</td><td>${esc(item.buy || "")}</td><td>${esc(item.sell || "")}</td>${cardLinksCell(item)}</tr>`).join("");
+    return `<section class="equip-section"><h3>アクセサリー</h3>${catalogAdder("accessories")}${sourceNote("https://finalfantasy-jun-site.com/ff7_remake/item/accessory.html")}<div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>概要</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
   }
 
   function renderSummonTable(items) {
     const body = items.map(item => {
       const growth = item.growth || [];
-      return `<tr data-id="${esc(item.id)}"><td>${esc(item.name)}</td><td>${esc(item.detail || "")}</td><td>${esc(item.obtain || "")}</td>${growth.map(value => `<td>${esc(value || "-")}</td>`).join("")}${cardLinksCell(item)}</tr>`;
+      return `<tr data-id="${esc(item.id)}"><td>${esc(item.name)}${cardTools(item)}</td><td>${esc(item.detail || "")}</td><td>${esc(item.obtain || "")}</td>${growth.map(value => `<td>${esc(value || "-")}</td>`).join("")}${cardLinksCell(item)}</tr>`;
     }).join("");
-    return `<div class="table-scroll"><table class="sheet"><thead><tr><th rowspan="2">マテリア名</th><th rowspan="2">概要</th><th rowspan="2">入手方法</th><th colspan="7">ステータスの上昇率</th><th rowspan="2">入手カード</th></tr><tr><th>最大HP</th><th>最大MP</th><th>力</th><th>魔力</th><th>体力</th><th>精神</th><th>運</th></tr></thead><tbody>${body}</tbody></table></div>${sourceNote("https://finalfantasy-jun-site.com/ff7_remake/materia/summon.html")}`;
+    return catalogAdder("summons") + `<div class="table-scroll"><table class="sheet"><thead><tr><th rowspan="2">マテリア名</th><th rowspan="2">概要</th><th rowspan="2">入手方法</th><th colspan="7">ステータスの上昇率</th><th rowspan="2">入手カード</th></tr><tr><th>最大HP</th><th>最大MP</th><th>力</th><th>魔力</th><th>体力</th><th>精神</th><th>運</th></tr></thead><tbody>${body}</tbody></table></div>${sourceNote("https://finalfantasy-jun-site.com/ff7_remake/materia/summon.html")}`;
   }
 
   function renderQuestArticle(item) {
@@ -1050,7 +1060,7 @@
     const card = item.card ? `<button type="button" class="linkish" data-open-hit="${esc(item.card)}">進行カードを開く</button>` : "";
     const parts = item.map ? mapParts(item.map, item.id, item.name) : null;
     const map = parts ? `<button type="button" class="map-open" data-map="${esc(parts.key)}" data-map-src="${esc(parts.src)}"${parts.href ? ` data-map-href="${esc(parts.href)}"` : ""} data-map-label="${esc(parts.label)}">MAP</button>` : "";
-    const edit = cardEditing() ? `<p class="card-edit-tools"><button type="button" data-card-edit="${esc(item.id)}" title="編集" aria-label="編集">✎</button></p>` : "";
+    const edit = cardTools(item);
     const mark = achievementMark(item, "quests");
     return `<article class="quest${checked(item.id) ? " done" : ""}" id="quest-${esc(item.id)}" data-id="${esc(item.id)}">
       <button type="button" class="quest-toggle" data-toggle-quest="${esc(item.id)}" aria-expanded="${open ? "true" : "false"}"><span class="caret" aria-hidden="true">▼</span>${esc(item.name)}</button>${mark}
@@ -1085,7 +1095,7 @@
     const visible = items.filter(item => !query || [item.name, item.place, item.client, item.clear, item.detail].join("\n").toLowerCase().includes(query.toLowerCase()));
     const achieveOn = GuideProgress.hasAchievementTag(null, currentAchieveTags(), "quests");
     if (count) count.textContent = achieveOn ? (items.filter(item => checked(item.id)).length + " / " + items.length) : (visible.length + " / " + items.length);
-    if (host) host.innerHTML = visible.map(renderQuestArticle).join("") || '<p class="empty-chapter">一致する依頼がありません。</p>';
+    if (host) host.innerHTML = catalogAdder("quests") + (visible.map(renderQuestArticle).join("") || '<p class="empty-chapter">一致する依頼がありません。</p>');
   }
 
   function paintTracks() {
@@ -1270,7 +1280,7 @@
   }
 
   function enemyRecords() {
-    return globalThis.ENEMIES || [];
+    return GuideProgress.mergeEnemies(globalThis.ENEMIES || [], cardBook);
   }
 
   function renderEnemies() {
@@ -1289,7 +1299,8 @@
     tabs.innerHTML = kinds.map(([id, label]) => `<button type="button" class="chip${ui.enemyKind === id ? " on" : ""}" data-enemy-kind="${id}">${label}</button>`).join("");
     const query = (document.getElementById("enemy-q") && document.getElementById("enemy-q").value || ui.enemyQuery || "").trim().toLowerCase();
     const rows = enemyRecords().filter(enemy => enemy.kind === ui.enemyKind && (!query || (enemy.no + " " + enemy.name).toLowerCase().includes(query)));
-    root.innerHTML = rows.map(enemy => `<button type="button" class="enemy-row" data-open-enemy="${esc(enemy.id)}"><span>${esc(enemy.no ? "No." + enemy.no : "ボス")}</span><strong>${esc(enemy.name)}</strong><span>${esc((enemy.places && enemy.places[0] && enemy.places[0].where) || "")}</span></button>`).join("") || "<p>一致する敵がいません。</p>";
+    const adder = cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-enemy-add="${esc(ui.enemyKind)}">敵を追加</button></p>` : "";
+    root.innerHTML = adder + (rows.map(enemy => `<div class="enemy-row" data-id="${esc(enemy.id)}"><button type="button" class="enemy-open" data-open-enemy="${esc(enemy.id)}"><span>${esc(enemy.no ? "No." + enemy.no : "ボス")}</span><strong>${esc(enemy.name)}</strong><span>${esc((enemy.places && enemy.places[0] && enemy.places[0].where) || "")}</span></button>${cardTools(enemy)}</div>`).join("") || "<p>一致する敵がいません。</p>");
     tabs.querySelectorAll("[data-enemy-kind]").forEach(button => {
       button.addEventListener("click", () => {
         ui.enemyKind = button.getAttribute("data-enemy-kind");
@@ -1314,7 +1325,7 @@
         ? `<p><img class="enemy-hero" alt="" data-lib="${esc(enemySrc)}" decoding="async"></p>`
         : `<p><img class="enemy-hero" alt="" src="${esc(enemy.image)}" loading="lazy"></p>`)
       : "";
-    return `<article class="enemy-page"><p><a href="${esc(enemy.source)}" target="_blank" rel="noopener noreferrer">掲載元の表</a></p>${image}<h2>${esc(enemy.no ? "No." + enemy.no + " " : "")}${esc(enemy.name)}</h2>
+    return `<article class="enemy-page" data-id="${esc(enemy.id)}"><p><a href="${esc(enemy.source)}" target="_blank" rel="noopener noreferrer">掲載元の表</a></p>${cardTools(enemy)}${image}<h2>${esc(enemy.no ? "No." + enemy.no + " " : "")}${esc(enemy.name)}</h2>
       ${places ? `<h3>出現</h3><table class="enemy-table"><thead><tr><th>時期</th><th>場所</th><th>レベル</th></tr></thead><tbody>${places}</tbody></table>` : ""}
       ${hp ? `<h3>ステータス</h3><table class="enemy-table"><thead><tr><th>モード</th><th>HP</th><th>物攻</th><th>魔攻</th><th>物防</th><th>魔防</th></tr></thead><tbody>${hp}</tbody></table>` : ""}
       ${elements ? `<h3>ダメージ倍率</h3><table class="enemy-table"><thead><tr><th></th><th>ダメージ</th><th>バースト</th></tr></thead><tbody>${elements}</tbody></table>` : ""}
@@ -1503,22 +1514,43 @@
     }).join("");
     const templates = GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES || []);
     const difficulty = playDifficulty();
-    root.innerHTML = `<h3>進行データ（チェックの保存）</h3>
+    const settingsTab = ui.settingsTab || "view";
+    const settingsOn = id => settingsTab === id ? " on" : "";
+    const settingsHidden = id => settingsTab === id ? "" : " hidden";
+    const callout = GuideProgress.calloutColors(cardBook, null);
+    root.innerHTML = `<div class="subtabs" id="settings-tabs" role="tablist">
+        <button type="button" class="chip${settingsOn("view")}" data-settings-tab="view">表示</button>
+        <button type="button" class="chip${settingsOn("achieve")}" data-settings-tab="achieve">達成タグ</button>
+        <button type="button" class="chip${settingsOn("progress")}" data-settings-tab="progress">進行データ</button>
+        <button type="button" class="chip${settingsOn("images")}" data-settings-tab="images">画像ライブラリ</button>
+        <button type="button" class="chip${settingsOn("github")}" data-settings-tab="github">GitHub管理</button>
+        <button type="button" class="chip${settingsOn("other")}" data-settings-tab="other">その他</button>
+      </div>
+      <div data-settings-pane="progress"${settingsHidden("progress")}><h3>進行データ（チェックの保存）</h3>
       <div class="progress-actions">
         <div class="progress-action"><button type="button" class="ghost safe" id="export">進行を書き出す</button><p>機種変更やブラウザのデータ削除に備えて、チェック状況をファイルに保存します。</p></div>
         <div class="progress-action"><button type="button" class="ghost safe" id="import">進行を読み込む</button><p>保存したファイルから、このブラウザのチェックを戻します。</p></div>
         <div class="progress-action" id="progress-undo-row"${undoAvailable() ? "" : " hidden"}><button type="button" class="ghost safe" id="restore">直前のリセットを戻す</button><p>直前に消したチェックを、このブラウザに戻します。</p></div>
         <div class="progress-action"><button type="button" class="ghost" id="reset">進行をすべて消す</button><p>このブラウザのチェックを消します。消す前に確認します。</p></div>
-      </div>
+      </div></div>
+      <div data-settings-pane="view"${settingsHidden("view")}>
       <h3>難易度</h3><p class="lead">今進めているチャートの難易度です。カードとエネミー頁のHP、経験値、AP、ギルは、この難易度の列を使います。CLASSICは操作の種類で、数値の表はありません。</p><label class="setting-row"><span>難易度</span><select id="settings-difficulty"><option value="easy"${difficulty === "easy" ? " selected" : ""}>EASY</option><option value="normal"${difficulty === "normal" ? " selected" : ""}>NORMAL</option><option value="hard"${difficulty === "hard" ? " selected" : ""}>HARD</option></select></label>
-      <h3>達成表示するタグ</h3>
-      <p class="lead">選んだタグのカードだけ、見出しの右に「達成」「未達成」を出します。進行の数も、このタグが付いたカードだけを数えます。初期値はトロフィー、期限、取り逃し、依頼、アイテム入手です。</p>
-      <div class="achieve-tags">${(GAME.flags || []).map(flag => `<label class="pick-label"><input type="checkbox" data-achieve-tag value="${esc(flag.id)}"${currentAchieveTags().indexOf(flag.id) >= 0 ? " checked" : ""}>${esc(flag.label)}</label>`).join("")}</div>
       <h3>ボタンとタブの名前</h3><div class="setting-list">${rows}</div>
       <h3>見出しの定型文</h3>
       <p class="lead">1行が1つの定型文です。カードの見出しで選ぶと、章の中で 宝箱① のように番号が付きます。</p>
       <textarea id="settings-templates" rows="6">${esc(templates.map(item => item.label).join("\n"))}</textarea>
       <p><button type="button" id="settings-templates-save">定型文を保存</button></p>
+      <h3>小見出し</h3>
+      <p class="lead">子チャプターの小見出しの、背景と枠の初期色です。チャプターの編集で、区分ごとに変えられます。</p>
+      <label class="setting-row"><span>背景</span><input id="callout-bg" type="color" value="${esc(callout.bg)}"></label>
+      <label class="setting-row"><span>枠</span><input id="callout-border" type="color" value="${esc(callout.border)}"></label>
+      </div>
+      <div data-settings-pane="achieve"${settingsHidden("achieve")}>
+      <h3>達成表示するタグ</h3>
+      <p class="lead">選んだタグのカードだけ、見出しの右に「達成」「未達成」を出します。進行の数も、このタグが付いたカードだけを数えます。初期値はトロフィー、期限、取り逃し、依頼、アイテム入手です。</p>
+      <div class="achieve-tags">${(GAME.flags || []).map(flag => `<label class="pick-label"><input type="checkbox" data-achieve-tag value="${esc(flag.id)}"${currentAchieveTags().indexOf(flag.id) >= 0 ? " checked" : ""}>${esc(flag.label)}</label>`).join("")}</div>
+      </div>
+      <div data-settings-pane="images"${settingsHidden("images")}>
       <h3>画像ライブラリ</h3>
       <p class="lead">地図とカードの画像は、このブラウザの中だけに保存します。書き出しや GitHub には画像そのものは入りません。キーは maps/jun-ch01-01.png のように、フォルダとファイル名です。最初のフォルダは MAP、エネミー、その他です。</p>
       <p id="image-library-usage" class="lead"></p>
@@ -1538,6 +1570,8 @@
       <input id="image-library-bundle" type="file" accept=".zip,image/png,image/jpeg,image/gif,image/webp,application/zip" multiple hidden>
       <input id="image-library-folder" type="file" webkitdirectory multiple hidden>
       <div id="image-library-list"></div>
+      </div>
+      <div data-settings-pane="github"${settingsHidden("github")}>
       <h3>GitHub連携（管理者）</h3>
       <p class="lead">Fine-grained の Personal Access Token を、このリポジトリだけに、Contents は Read and write だけにして作ってください。トークンはこのブラウザの中だけに残り、書き出すファイルには入りません。</p>
       <label class="setting-row"><span>トークン</span><input id="github-token" type="password" autocomplete="off" placeholder="github_pat_..."></label>
@@ -1546,8 +1580,26 @@
       <label class="setting-row"><span>ブランチ</span><input id="github-branch" value="main" autocomplete="off"></label>
       <p><button type="button" id="github-save">保存</button> <button type="button" id="github-forget">削除</button> <button type="button" id="github-test">接続テスト</button></p>
       <p id="github-status" class="lead"></p>
+      </div>
+      <div data-settings-pane="other"${settingsHidden("other")}>
       <h3>今後の設定</h3>
-      <p class="lead">表示や操作で、あとから設定が必要になったものはこの画面に足します。</p>`;
+      <p class="lead">表示や操作で、あとから設定が必要になったものはこの画面に足します。</p>
+      </div>`;
+    root.querySelectorAll("[data-settings-tab]").forEach(button => {
+      button.addEventListener("click", () => {
+        ui.settingsTab = button.getAttribute("data-settings-tab");
+        renderSettings();
+      });
+    });
+    const calloutBg = document.getElementById("callout-bg");
+    const calloutBorder = document.getElementById("callout-border");
+    const saveCallout = () => {
+      const next = JSON.parse(JSON.stringify(cardBook));
+      next.callout = { bg: calloutBg.value, border: calloutBorder.value };
+      setCardBook(next, "小見出しの色");
+    };
+    if (calloutBg) calloutBg.addEventListener("change", saveCallout);
+    if (calloutBorder) calloutBorder.addEventListener("change", saveCallout);
     paintImageLibrary();
     const libraryDrop = document.getElementById("image-library-drop");
     document.getElementById("image-library-add").addEventListener("click", () => document.getElementById("image-library-file").click());
@@ -2008,15 +2060,7 @@
       return;
     }
     const chapterRename = event.target.closest("[data-chapter-rename]");
-    if (chapterRename) {
-      const id = chapterRename.getAttribute("data-chapter-rename");
-      const current = GuideProgress.resolveChapterList(GAME.chapters[ui.trackId] || [], ROUTE[ui.trackId] || [], cardBook, ui.trackId);
-      const chapter = current.find(item => item.id === id);
-      const title = window.prompt("チャプター名", chapter ? chapter.title : "");
-      if (title == null) return;
-      storeChapterList(ui.trackId, GuideProgress.renameChapter(current, id, title.trim()));
-      return;
-    }
+    if (chapterRename) return;
     const chapterUp = event.target.closest("[data-chapter-up]");
     if (chapterUp) {
       const current = GuideProgress.resolveChapterList(GAME.chapters[ui.trackId] || [], ROUTE[ui.trackId] || [], cardBook, ui.trackId);
@@ -2609,6 +2653,12 @@
       }
       return null;
     },
+    chapterList(trackId) {
+      return GuideProgress.resolveChapterList(GAME.chapters[trackId] || [], ROUTE[trackId] || [], cardBook, trackId);
+    },
+    currentEnemyIds() {
+      return enemyRecords().map(item => item.id);
+    },
     findBaseCatalog(id) {
       for (const catalogId of Object.keys(CATALOGS)) {
         for (const item of CATALOGS[catalogId].items || []) {
@@ -2642,7 +2692,7 @@
   const mapPop = document.createElement("div");
   mapPop.id = "map-pop";
   mapPop.hidden = true;
-  mapPop.innerHTML = '<div class="map-pop-bar" id="map-pop-handle"><span id="map-pop-title">地図</span><button type="button" id="map-pop-close" aria-label="閉じる">×</button></div><div class="map-pop-body"><div class="map-pop-stage"><img alt="" decoding="async"><p class="map-missing" hidden>地図画像が未登録 <button type="button" id="map-missing-add">この地図を追加</button></p><p class="map-fallback" hidden>画像を表示できないので、ファイルを選び直してください。</p></div><p class="map-actions"><button type="button" id="map-enlarge">拡大</button> <a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p></div><button type="button" class="map-pop-resize" data-resize="n" aria-label="上の辺"></button><button type="button" class="map-pop-resize" data-resize="e" aria-label="右の辺"></button><button type="button" class="map-pop-resize" data-resize="s" aria-label="下の辺"></button><button type="button" class="map-pop-resize" data-resize="w" aria-label="左の辺"></button><button type="button" class="map-pop-resize" data-resize="nw" aria-label="左上"></button><button type="button" class="map-pop-resize" data-resize="ne" aria-label="右上"></button><button type="button" class="map-pop-resize" data-resize="sw" aria-label="左下"></button><button type="button" class="map-pop-resize" data-resize="se" aria-label="右下"></button><input id="map-missing-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>';
+  mapPop.innerHTML = '<div class="map-pop-bar" id="map-pop-handle"><span id="map-pop-title">地図</span><button type="button" id="map-pop-close" aria-label="閉じる">×</button></div><div class="map-pop-body"><div class="map-pop-stage"><img alt="" decoding="async"><span id="map-zoom-pct" class="map-zoom-pct">100%</span><p class="map-missing" hidden>地図画像が未登録 <button type="button" id="map-missing-add">この地図を追加</button></p><p class="map-fallback" hidden>画像を表示できないので、ファイルを選び直してください。</p></div><p class="map-actions"><a target="_blank" rel="noopener noreferrer">地図のページを開く</a></p></div><button type="button" class="map-pop-resize" data-resize="n" aria-label="上の辺"></button><button type="button" class="map-pop-resize" data-resize="e" aria-label="右の辺"></button><button type="button" class="map-pop-resize" data-resize="s" aria-label="下の辺"></button><button type="button" class="map-pop-resize" data-resize="w" aria-label="左の辺"></button><button type="button" class="map-pop-resize" data-resize="nw" aria-label="左上"></button><button type="button" class="map-pop-resize" data-resize="ne" aria-label="右上"></button><button type="button" class="map-pop-resize" data-resize="sw" aria-label="左下"></button><button type="button" class="map-pop-resize" data-resize="se" aria-label="右下"></button><input id="map-missing-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>';
   document.body.appendChild(mapPop);
   function mapViewport() {
     return { width: window.innerWidth, height: window.innerHeight };
@@ -2771,6 +2821,7 @@
   function toggleMap(button, fromHover) {
     if (fromHover && mapPinned) return;
     const id = button.getAttribute("data-map") || button.getAttribute("data-map-src") || "";
+    const previousMap = mapPop.dataset.map || "";
     if (!fromHover && !mapPop.hidden && mapPop.dataset.map === id && mapPinned) {
       hideMap(true);
       return;
@@ -2780,6 +2831,7 @@
     const link = mapPop.querySelector("a");
     const src = button.getAttribute("data-map-src") || "";
     const href = button.getAttribute("data-map-href") || "";
+    if (previousMap !== id) resetMapView();
     mapPop.dataset.map = id;
     mapPop.dataset.src = src;
     mapPop.dataset.href = href;
@@ -2859,13 +2911,108 @@
     image.hidden = false;
     showPinnedMap(image, key);
   });
-  mapPop.querySelector("#map-enlarge").addEventListener("click", event => {
+  const mapImage = mapPop.querySelector("img");
+  const mapView = { scale: 1, x: 0, y: 0, drag: null, pointers: new Map() };
+  function resetMapView() {
+    mapView.scale = 1;
+    mapView.x = 0;
+    mapView.y = 0;
+    mapView.drag = null;
+    applyMapView();
+  }
+  function clampMapView() {
+    const stage = mapPop.querySelector(".map-pop-stage");
+    if (!stage) return;
+    if (mapView.scale <= 1.001) {
+      mapView.scale = 1;
+      mapView.x = 0;
+      mapView.y = 0;
+      return;
+    }
+    const width = stage.clientWidth;
+    const height = stage.clientHeight;
+    mapView.x = Math.min(0, Math.max(width * (1 - mapView.scale), mapView.x));
+    mapView.y = Math.min(0, Math.max(height * (1 - mapView.scale), mapView.y));
+  }
+  function applyMapView() {
+    const pct = mapPop.querySelector("#map-zoom-pct");
+    mapImage.style.transform = "translate(" + mapView.x + "px," + mapView.y + "px) scale(" + mapView.scale + ")";
+    mapImage.classList.toggle("is-pan", mapView.scale > 1.001);
+    if (pct) pct.textContent = Math.round(mapView.scale * 100) + "%";
+  }
+  function zoomMapAt(clientX, clientY, nextScale) {
+    const stage = mapPop.querySelector(".map-pop-stage");
+    const rect = stage.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    const next = Math.min(6, Math.max(1, nextScale));
+    const ratio = next / (mapView.scale || 1);
+    mapView.x = px - (px - mapView.x) * ratio;
+    mapView.y = py - (py - mapView.y) * ratio;
+    mapView.scale = next;
+    clampMapView();
+    applyMapView();
+  }
+  mapPop.addEventListener("wheel", event => {
+    if (mapPop.hidden) return;
+    event.preventDefault();
+    const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+    zoomMapAt(event.clientX, event.clientY, mapView.scale * factor);
+  }, { passive: false });
+  mapImage.addEventListener("dblclick", event => {
+    event.preventDefault();
     event.stopPropagation();
-    openZoom(mapPop.dataset.src, mapPop.dataset.href, mapPop.querySelector("img").alt.replace(/の地図$/, ""));
+    openZoom(mapPop.dataset.src, mapPop.dataset.href, mapImage.alt.replace(/の地図$/, ""));
   });
-  mapPop.querySelector("img").addEventListener("click", () => {
-    openZoom(mapPop.dataset.src, mapPop.dataset.href, mapPop.querySelector("img").alt.replace(/の地図$/, ""));
+  mapImage.addEventListener("pointerdown", event => {
+    if (mapView.scale <= 1.001 || event.button !== 0) return;
+    event.stopPropagation();
+    event.preventDefault();
+    try { mapImage.setPointerCapture(event.pointerId); } catch (error) {}
+    mapView.drag = { id: event.pointerId, x: event.clientX - mapView.x, y: event.clientY - mapView.y, moved: false, sx: event.clientX, sy: event.clientY };
   });
+  mapImage.addEventListener("pointermove", event => {
+    if (!mapView.drag || mapView.drag.id !== event.pointerId) return;
+    if (Math.hypot(event.clientX - mapView.drag.sx, event.clientY - mapView.drag.sy) > 4) mapView.drag.moved = true;
+    mapView.x = event.clientX - mapView.drag.x;
+    mapView.y = event.clientY - mapView.drag.y;
+    clampMapView();
+    applyMapView();
+  });
+  function endMapImagePan(event) {
+    if (!mapView.drag || mapView.drag.id !== event.pointerId) return;
+    if (mapView.drag.moved) {
+      mapIgnoreClick = true;
+      setTimeout(() => { mapIgnoreClick = false; }, 0);
+    }
+    mapView.drag = null;
+  }
+  mapImage.addEventListener("pointerup", endMapImagePan);
+  mapImage.addEventListener("pointercancel", endMapImagePan);
+  const mapStage = mapPop.querySelector(".map-pop-stage");
+  mapStage.addEventListener("pointerdown", event => {
+    if (event.target.closest("button")) return;
+    mapView.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (mapView.pointers.size === 2) {
+      const pts = [...mapView.pointers.values()];
+      mapView.pinch = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+      mapView.pinchScale = mapView.scale;
+    }
+  });
+  mapStage.addEventListener("pointermove", event => {
+    if (!mapView.pointers.has(event.pointerId) || mapView.pointers.size < 2) return;
+    mapView.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const pts = [...mapView.pointers.values()];
+    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+    const midX = (pts[0].x + pts[1].x) / 2;
+    const midY = (pts[0].y + pts[1].y) / 2;
+    zoomMapAt(midX, midY, mapView.pinchScale * (dist / mapView.pinch));
+  });
+  function endMapPinch(event) {
+    mapView.pointers.delete(event.pointerId);
+  }
+  mapStage.addEventListener("pointerup", endMapPinch);
+  mapStage.addEventListener("pointercancel", endMapPinch);
   mapPop.querySelector("#map-pop-close").addEventListener("click", event => {
     event.stopPropagation();
     hideMap(true);

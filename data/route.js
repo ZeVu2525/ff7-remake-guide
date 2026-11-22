@@ -1659,7 +1659,7 @@ const ROUTE = {
           flag: "trophy",
           trophy: "trophy-ch05",
           title: "この章を終える",
-          detail: "エレベーターに乗ると、プランＥ展開が付く。",
+          detail: "エレベーターに乗ると、プランE展開が付く。",
           source: "https://blog.rebosoku.com/archives/ff7remake_chapter5.html",
           parent: "ch05-s16",
           section: "ch05-sec-1"
@@ -1808,7 +1808,7 @@ const ROUTE = {
           id: "ch06-03",
           flag: "deadline",
           title: "メインリフトの前に二つの寄り道",
-          detail: "3つ目のライトへ行けるようになったら、モーグリメダルの箱の横から下へ降りる。クイーンシュトライクを倒し、リフトを一番下まで動かすとMPアップ、渡った先にぞくせいがある。戻って、メインリフトの西の小さいリフトで換気設備へ行く。自販機でエレキ・デ・チョコボ。端末を起動し、1分以内に隣室の端末を押すと奥でチョコボ＆モーグリが拾える。時間切れでもやり直せる。",
+          detail: "3つ目のライトへ行けるようになったら、モーグリメダルの箱の横から下へ降りる。クイーンシュトライクを倒し、リフトを一番下まで動かすとMPアップ、渡った先にぞくせいがある。戻って、メインリフトの西の小さいリフトで換気設備へ行く。自販機でエレキ・デ・チョコボ。端末を起動し、1分以内に隣室の端末を押すと奥でチョコボ&モーグリが拾える。時間切れでもやり直せる。",
           deadline: "メインリフトの端末を調べる前",
           source: "https://blog.rebosoku.com/archives/ff7remake_chapter6ex2.html",
           section: "ch06-sec-1"
@@ -1826,7 +1826,7 @@ const ROUTE = {
           id: "ch06-05",
           flag: "trophy",
           trophy: "trophy-moogle",
-          title: "チョコボ＆モーグリを拾う",
+          title: "チョコボ&モーグリを拾う",
           detail: "換気口の奥のマテリアを拾うと、凄腕の整備士が付く。",
           source: "https://blog.rebosoku.com/archives/ff7remake_chapter6ex2.html",
           parent: "ch06-s07",

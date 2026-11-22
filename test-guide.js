@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v32");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v33");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -64,7 +64,7 @@ assert.strictEqual(trophyNames[0], "運命の覇者");
 assert.strictEqual(guide.CATALOGS.trophies.items[0].detail, "すべてのトロフィーを獲得した");
 assert.strictEqual(guide.CATALOGS.trophies.items[0].auto, "rest");
 assert.ok(guide.CATALOGS.trophies.items.every(item => item.example !== true));
-assert.strictEqual(guide.CATALOGS.trophies.items[5].name, "プランＥ展開");
+assert.strictEqual(guide.CATALOGS.trophies.items[5].name, "プランE展開");
 assert.strictEqual(guide.CATALOGS.trophies.items[11].name, "亡霊の墓場");
 
 const meta = {
@@ -616,6 +616,19 @@ const counted = [{ id: "a", flags: ["trophy"] }, { id: "b", flag: "story" }].fil
 assert.deepStrictEqual(progress.summarize(counted, { a: true }, []), { total: 1, done: 1, openBand: 0 });
 const tagsBefore = JSON.stringify({ book: progress.emptyCardBook() });
 const tagsAfter = JSON.stringify({ book: Object.assign(progress.emptyCardBook(), { achieveTags: ["trophy"] }) });
+assert.strictEqual(progress.toHalfWidth("Ａ１！　、。「」・"), "A1!　、。「」・");
+assert.strictEqual(progress.toHalfWidth("カタカナ"), "カタカナ");
+const enemyBase = [{ id: "e001", name: "警備兵", kind: "normal", tactic: "近い" }];
+const enemyMerged = progress.mergeEnemies(enemyBase, { enemyEdits: { patches: { e001: { name: "兵" } }, deleted: {}, custom: { e9: { id: "e9", name: "追加", kind: "boss" } }, order: ["e9", "e001"] } });
+assert.strictEqual(enemyMerged[0].name, "追加");
+assert.strictEqual(enemyMerged[1].name, "兵");
+assert.strictEqual(enemyMerged[1].tactic, "近い");
+assert.strictEqual(progress.mergeEnemies(enemyBase, { enemyEdits: { deleted: { e001: true }, patches: {}, custom: {}, order: [] } }).length, 0);
+assert.ok(progress.validateEnemies([]).some(line => line.includes("空")));
+const colored = progress.saveSections(progress.emptyCardBook(), "main:ch01", [{ id: "s", title: "見出し", note: "小", map: "", bg: "#abc", border: "rgb(1, 2, 3)" }]);
+assert.strictEqual(colored.chapters["main:ch01"].sections[0].bg, "#aabbcc");
+assert.strictEqual(colored.chapters["main:ch01"].sections[0].border, "#010203");
+assert.strictEqual(colored.chapters["main:ch01"].sections[0].note, "小");
 assert.strictEqual(progress.describeEdit(tagsBefore, tagsAfter), "達成表示するタグ");
 assert.ok(progress.plainFromBlocks(listed).includes("第一段階で使用するアクション"));
 const historyBefore = JSON.stringify({ book: progress.emptyCardBook() });
