@@ -109,7 +109,7 @@
   const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable", "map"];
 
   function emptyCardBook() {
-    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, templates: [] };
+    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, templates: [], labels: {} };
   }
 
   function asObject(value) {
@@ -193,6 +193,11 @@
         label: String(item.label)
       }));
     }
+    const labels = asObject(src.labels);
+    book.labels = {};
+    Object.keys(labels).forEach(key => {
+      if (typeof labels[key] === "string" && labels[key].trim()) book.labels[key] = labels[key].trim();
+    });
     return book;
   }
 
@@ -203,12 +208,12 @@
     if (list.length) {
       return list.map(item => ({
         id: String(item.id),
-        title: item.title || "",
+        title: sectionName(item.title || ""),
         map: item.map || "",
         note: item.note || ""
       }));
     }
-    return [{ id: chapterId + "-sec-1", title: "(1) 本章", map: "", note: "" }];
+    return [{ id: chapterId + "-sec-1", title: "本章", map: "", note: "" }];
   }
 
   function cloneBook(book) {
@@ -428,7 +433,7 @@
     book.chapters[key] = Object.assign({}, prev, {
       sections: (sections || []).map(item => ({
         id: String(item.id),
-        title: item.title || "",
+        title: sectionName(item.title || ""),
         map: item.map || "",
         note: item.note || ""
       }))
@@ -685,6 +690,61 @@
     return kept.slice(0, at).concat(moved, kept.slice(at));
   }
 
+  function orderInsertGroup(order, movingIds, beforeId, after) {
+    const moving = new Set(movingIds || []);
+    const rest = (order || []).filter(id => !moving.has(id));
+    const block = (order || []).filter(id => moving.has(id));
+    let at = beforeId ? rest.indexOf(beforeId) : rest.length;
+    if (at < 0) at = rest.length;
+    else if (after) at += 1;
+    return rest.slice(0, at).concat(block, rest.slice(at));
+  }
+
+  const UI_LABELS = {
+    "delete": "削除",
+    "add": "＋追加",
+    "copy": "コピー",
+    "pick": "選択",
+    "moveSelected": "選択を移動",
+    "export": "書き出す",
+    "up": "上へ",
+    "down": "下へ",
+    "edit": "編集",
+    "move": "移動",
+    "detail": "詳細",
+    "map": "MAP",
+    "kids": "中のカード",
+    "addCard": "カードを追加",
+    "addSection": "子チャプターを追加",
+    "rename": "名前",
+    "hint": "ヒント",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "templates": "定型文",
+    "import": "読み込む",
+    "resetEdits": "編集をすべて戻す",
+    "endEdit": "編集を終了",
+    "openSettings": "設定",
+    "tab-route": "ルート",
+    "tab-quests": "依頼",
+    "tab-trophies": "トロフィー",
+    "tab-items": "アイテム",
+    "tab-summons": "召喚獣",
+    "tab-skills": "敵の技",
+    "tab-settings": "設定"
+  };
+
+  function labelText(book, key, fallback) {
+    const custom = book && book.labels && typeof book.labels[key] === "string" ? book.labels[key].trim() : "";
+    if (custom) return custom;
+    if (UI_LABELS[key]) return UI_LABELS[key];
+    return fallback || key;
+  }
+
+  function sectionName(title) {
+    return String(title || "").replace(/^\s*(?:[（(]\s*\d+\s*[)）]|[0-9０-９]+\s*[.．、])\s*/, "").trim();
+  }
+
   function activeTemplates(book, defaults) {
     const custom = book && Array.isArray(book.templates) ? book.templates : [];
     return custom.length ? custom : (defaults || DEFAULT_TEMPLATES);
@@ -864,6 +924,11 @@
     numberCards,
     circledNumber,
     templateHeadings,
+    UI_LABELS,
+    labelText,
+    sectionName,
+    resolveSections,
+    orderInsertGroup,
     numbersFromTitle,
     visibleMap,
     displayItems,
