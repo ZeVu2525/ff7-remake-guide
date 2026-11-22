@@ -396,13 +396,16 @@
       }
       return;
     }
-    if (!editOn || !editableText(el)) return;
+    if (event.type !== "dblclick" || !editOn || !editableText(el)) return;
     event.preventDefault();
     event.stopPropagation();
-    if (event.type === "click") beginEdit(event);
+    beginEdit(event);
   }
-  document.addEventListener("click", onInteract, true);
-  document.addEventListener("change", onInteract, true);
+  document.addEventListener("click", event => {
+    if (!dialogOpen) return;
+    onInteract(event);
+  }, true);
+  document.addEventListener("dblclick", onInteract, true);
 
   function homeScreen() {
     try {

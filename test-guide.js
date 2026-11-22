@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v31");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v32");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -267,6 +267,12 @@ const appMap = require("fs").readFileSync(require("path").join(__dirname, "app.j
 assert.ok(appMap.includes("ff7r-map-panel-v1"));
 assert.ok(appMap.includes("map-pop-resize"));
 assert.ok(appMap.includes("pointerdown"));
+assert.ok(appMap.includes("mapIgnoreClick"));
+assert.ok(appMap.includes('map.id !== "map-pop"'));
+assert.ok(appMap.includes("if (!next) hideMap();"));
+const editMode = require("fs").readFileSync(require("path").join(__dirname, "edit-mode.js"), "utf8");
+assert.ok(editMode.includes('addEventListener("dblclick", onInteract, true)'));
+assert.ok(!editMode.includes('if (event.type === "click") beginEdit(event)'));
 const appSource = require("fs").readFileSync(require("path").join(__dirname, "app.js"), "utf8");
 const pageSource = require("fs").readFileSync(require("path").join(__dirname, "index.html"), "utf8");
 assert.ok(appSource.includes("kids-disclosure"));
