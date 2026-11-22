@@ -1198,6 +1198,102 @@
     return libraryKey(folder, file);
   }
 
+  function emptyEditHistory(limit) {
+    return { undo: [], redo: [], limit: limit || 100 };
+  }
+
+  function editBook(snapshot) {
+    if (!snapshot) return {};
+    const parsed = typeof snapshot === "string" ? JSON.parse(snapshot) : snapshot;
+    return parsed && parsed.book ? parsed : { book: parsed, text: {} };
+  }
+
+  function describeEdit(before, after) {
+    const left = editBook(before);
+    const right = editBook(after);
+    if (JSON.stringify(left.text || {}) !== JSON.stringify(right.text || {}) && JSON.stringify(left.book || {}) === JSON.stringify(right.book || {})) return "表示文";
+    const a = left.book || {};
+    const b = right.book || {};
+    const filled = book => ["deleted", "patches", "custom", "chapters", "chapterLists", "labels"].some(key => book[key] && Object.keys(book[key]).length) || (book.templates && book.templates.length) || (book.difficulty && book.difficulty !== "normal");
+    if (!filled(b) && filled(a)) return "編集をすべて戻す";
+    if (Object.keys(b.deleted || {}).some(id => !(a.deleted || {})[id])) return "カード削除";
+    if (Object.keys(a.deleted || {}).some(id => !(b.deleted || {})[id])) return "カードの復帰";
+    if (Object.keys(b.custom || {}).some(id => !(a.custom || {})[id])) return "カード追加";
+    if (JSON.stringify(a.chapterLists || {}) !== JSON.stringify(b.chapterLists || {})) return "チャプター";
+    if (JSON.stringify(a.templates || []) !== JSON.stringify(b.templates || [])) return "定型文";
+    if (JSON.stringify(a.labels || {}) !== JSON.stringify(b.labels || {})) return "ボタン名";
+    if ((a.difficulty || "normal") !== (b.difficulty || "normal")) return "難易度";
+    const sectionChanged = JSON.stringify(a.chapters || {}) !== JSON.stringify(b.chapters || {});
+    if (sectionChanged) {
+      const orderOnly = JSON.stringify(Object.keys(a.chapters || {}).sort().map(key => ({ key, order: (a.chapters[key] || {}).order }))) !== JSON.stringify(Object.keys(b.chapters || {}).sort().map(key => ({ key, order: (b.chapters[key] || {}).order })))
+        && JSON.stringify(Object.keys(a.chapters || {}).sort().map(key => (a.chapters[key] || {}).sections || null)) === JSON.stringify(Object.keys(b.chapters || {}).sort().map(key => (b.chapters[key] || {}).sections || null));
+      if (orderOnly) return "並べ替え";
+      return "子チャプター";
+    }
+    const kinds = new Set();
+    const ids = new Set(Object.keys(a.patches || {}).concat(Object.keys(b.patches || {})));
+    ids.forEach(id => {
+      const prev = (a.patches || {})[id] || {};
+      const next = (b.patches || {})[id] || {};
+      Object.keys(prev).concat(Object.keys(next)).forEach(key => {
+        if (JSON.stringify(prev[key]) === JSON.stringify(next[key])) return;
+        if (key === "map") kinds.add("地図");
+        else if (key === "blocks" || key === "detail") kinds.add("本文");
+        else if (key === "flags" || key === "flag") kinds.add("タグ");
+        else if (key === "parent") kinds.add("入れ子");
+        else if (key === "title") kinds.add("見出し");
+        else kinds.add("カードの編集");
+      });
+    });
+    if (kinds.size === 1) return [...kinds][0];
+    if (kinds.size > 1) return "カードの編集";
+    return "編集";
+  }
+
+  function pushEditHistory(history, entry, now) {
+    const source = history || emptyEditHistory();
+    const limit = source.limit || 100;
+    const at = now || Date.now();
+    if ((entry.kind || "book") !== "image" && entry.before === entry.after) return source;
+    const undo = source.undo.slice();
+    const last = undo[undo.length - 1];
+    if (entry.coalesce && last && last.label === entry.label && at - (last.at || 0) < 800) {
+      last.after = entry.after;
+      last.at = at;
+      return { undo, redo: [], limit };
+    }
+    undo.push({
+      kind: entry.kind || "book",
+      before: entry.before,
+      after: entry.after,
+      label: entry.label || "編集",
+      image: entry.image || null,
+      at: at
+    });
+    if (undo.length > limit) undo.splice(0, undo.length - limit);
+    return { undo, redo: [], limit };
+  }
+
+  function undoEditHistory(history) {
+    const source = history || emptyEditHistory();
+    if (!source.undo.length) return { history: source, entry: null };
+    const entry = source.undo[source.undo.length - 1];
+    return {
+      history: { undo: source.undo.slice(0, -1), redo: source.redo.concat([entry]), limit: source.limit || 100 },
+      entry: entry
+    };
+  }
+
+  function redoEditHistory(history) {
+    const source = history || emptyEditHistory();
+    if (!source.redo.length) return { history: source, entry: null };
+    const entry = source.redo[source.redo.length - 1];
+    return {
+      history: { undo: source.undo.concat([entry]), redo: source.redo.slice(0, -1), limit: source.limit || 100 },
+      entry: entry
+    };
+  }
+
   function hideMapAfterError(dragging, failedSrc, currentSrc) {
     if (dragging) return false;
     if (!currentSrc || !failedSrc || failedSrc !== currentSrc) return false;
@@ -1732,6 +1828,11 @@
     isLibraryKey,
     normalizeLibraryKey,
     moveLibraryKey,
+    emptyEditHistory,
+    describeEdit,
+    pushEditHistory,
+    undoEditHistory,
+    redoEditHistory,
     hideMapAfterError,
     excludeLibraryExports,
     libraryExportPlan,

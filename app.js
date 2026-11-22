@@ -1400,6 +1400,7 @@
   }
 
   function rememberLibraryMoves(pairs) {
+    beginEdit("画像の移動");
     (pairs || []).forEach(pair => {
       const from = pair[0];
       const to = pair[1];
@@ -1424,7 +1425,7 @@
         });
       });
     });
-    saveBook();
+    setCardBook(cardBook);
   }
 
   async function storeImageFiles(fileList, fallback) {
@@ -1617,7 +1618,21 @@
           if (next && next !== rename.dataset.libRename) rememberLibraryMoves([[rename.dataset.libRename, next]]);
         }
       }
-      if (remove) await GuideImages.remove(remove.dataset.libDelete);
+      if (remove) {
+        const record = await GuideImages.getRecord(remove.dataset.libDelete);
+        await GuideImages.remove(remove.dataset.libDelete);
+        if (record && record.blob) {
+          editHistory = GuideProgress.pushEditHistory(editHistory, {
+            kind: "image",
+            label: "画像削除",
+            before: editSnapshot(),
+            after: editSnapshot(),
+            image: { id: record.id, name: record.name, type: record.type, blob: record.blob, folder: record.folder }
+          });
+          persistEditHistory();
+          paintUndo();
+        }
+      }
       if (rename || remove) paintImageLibrary();
     });
     libraryList.addEventListener("dragstart", event => {
@@ -2282,7 +2297,71 @@
     rememberTabScroll();
   });
 
-  function setCardBook(book) {
+  let editHistory = GuideProgress.emptyEditHistory(100);
+  let historyLock = false;
+  let pendingEdit = null;
+  let editToastTimer = 0;
+
+  function textSnapshot() {
+    return globalThis.GuideText && GuideText.snapshot ? GuideText.snapshot() : {};
+  }
+
+  function editSnapshot() {
+    return JSON.stringify({ book: cardBook, text: textSnapshot() });
+  }
+
+  function persistEditHistory() {
+    try {
+      const slim = {
+        limit: editHistory.limit,
+        undo: editHistory.undo.filter(entry => entry.kind !== "image").map(entry => ({ kind: entry.kind, before: entry.before, after: entry.after, label: entry.label, at: entry.at })),
+        redo: editHistory.redo.filter(entry => entry.kind !== "image").map(entry => ({ kind: entry.kind, before: entry.before, after: entry.after, label: entry.label, at: entry.at }))
+      };
+      const text = JSON.stringify(slim);
+      if (text.length < 1800000) sessionStorage.setItem("ff7r-edit-history-v1", text);
+    } catch (error) {}
+  }
+
+  function loadEditHistory() {
+    try {
+      const parsed = JSON.parse(sessionStorage.getItem("ff7r-edit-history-v1") || "null");
+      if (parsed && Array.isArray(parsed.undo) && Array.isArray(parsed.redo)) editHistory = { undo: parsed.undo, redo: parsed.redo, limit: parsed.limit || 100 };
+    } catch (error) {}
+  }
+
+  function paintUndo() {
+    const editing = cardEditing();
+    const undo = document.getElementById("edit-undo");
+    const redo = document.getElementById("edit-redo");
+    if (undo) {
+      undo.hidden = !editing;
+      undo.disabled = !editHistory.undo.length;
+    }
+    if (redo) {
+      redo.hidden = !editing;
+      redo.disabled = !editHistory.redo.length;
+    }
+  }
+
+  function editToast(text) {
+    let node = document.getElementById("edit-toast");
+    if (!node) {
+      node = document.createElement("div");
+      node.id = "edit-toast";
+      node.className = "edit-toast";
+      node.setAttribute("role", "status");
+      document.body.appendChild(node);
+    }
+    node.textContent = text;
+    node.hidden = false;
+    clearTimeout(editToastTimer);
+    editToastTimer = setTimeout(() => { node.hidden = true; }, 2200);
+  }
+
+  function applySnapshot(raw) {
+    const parsed = JSON.parse(raw);
+    const book = parsed && parsed.book ? parsed.book : parsed;
+    if (globalThis.GuideText && GuideText.restore) GuideText.restore(parsed && parsed.text ? parsed.text : {});
     cardBook = GuideProgress.normalizeCardBook(book);
     for (const id of Object.keys(state.checks)) {
       if (cardBook.deleted[id]) delete state.checks[id];
@@ -2293,21 +2372,107 @@
     renderRoute();
     renderCatalogs();
     if (ui.hub === "settings") renderSettings();
+    if (ui.hub === "enemies") renderEnemies();
+    if (globalThis.GuideCardEdit && GuideCardEdit.paintGithub) GuideCardEdit.paintGithub();
   }
 
-  function dropCard(id) {
-    if (state.checks[id]) state.checks = GuideProgress.applyToggle(state.checks, id, false, trophyMeta());
-    else delete state.checks[id];
-    cardBook = GuideProgress.removeCard(cardBook, id);
+  function recordEdit(before, after, label, extra) {
+    if (historyLock || before === after && !(extra && extra.kind === "image")) return;
+    const name = label || GuideProgress.describeEdit(before, after);
+    editHistory = GuideProgress.pushEditHistory(editHistory, Object.assign({
+      before: before,
+      after: after,
+      label: name,
+      coalesce: name === "ボタン名" || name === "表示文"
+    }, extra || {}));
+    persistEditHistory();
+    paintUndo();
+  }
+
+  function beginEdit(label) {
+    pendingEdit = { before: editSnapshot(), label: label || "" };
+  }
+
+  async function undoEdit() {
+    const step = GuideProgress.undoEditHistory(editHistory);
+    if (!step.entry) return;
+    editHistory = step.history;
+    historyLock = true;
+    if (step.entry.kind === "image" && step.entry.image && globalThis.GuideImages) {
+      await GuideImages.putFile(step.entry.image.id, step.entry.image.blob, step.entry.image.name, step.entry.image.folder);
+      if (ui.hub === "settings") renderSettings();
+    } else if (step.entry.before) applySnapshot(step.entry.before);
+    historyLock = false;
+    persistEditHistory();
+    paintUndo();
+    editToast("元に戻しました：" + step.entry.label);
+  }
+
+  async function redoEdit() {
+    const step = GuideProgress.redoEditHistory(editHistory);
+    if (!step.entry) return;
+    editHistory = step.history;
+    historyLock = true;
+    if (step.entry.kind === "image" && step.entry.image && globalThis.GuideImages) {
+      await GuideImages.remove(step.entry.image.id);
+      if (ui.hub === "settings") renderSettings();
+    } else if (step.entry.after) applySnapshot(step.entry.after);
+    historyLock = false;
+    persistEditHistory();
+    paintUndo();
+    editToast("やり直しました：" + step.entry.label);
+  }
+
+  function setCardBook(book, label) {
+    const before = pendingEdit ? pendingEdit.before : editSnapshot();
+    const named = (typeof label === "string" && label) || (pendingEdit && pendingEdit.label) || "";
+    pendingEdit = null;
+    cardBook = GuideProgress.normalizeCardBook(book);
+    for (const id of Object.keys(state.checks)) {
+      if (cardBook.deleted[id]) delete state.checks[id];
+    }
     state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
     save();
     saveBook();
     renderRoute();
     renderCatalogs();
+    if (ui.hub === "settings") renderSettings();
+    if (ui.hub === "enemies") renderEnemies();
+    recordEdit(before, editSnapshot(), named);
   }
+
+  function dropCard(id) {
+    setCardBook(GuideProgress.removeCard(cardBook, id), "カード削除");
+  }
+
+  loadEditHistory();
+  paintUndo();
+  document.getElementById("edit-undo").addEventListener("click", () => undoEdit());
+  document.getElementById("edit-redo").addEventListener("click", () => redoEdit());
+  document.addEventListener("keydown", event => {
+    if (!cardEditing()) return;
+    const key = event.key.toLowerCase();
+    const mod = event.metaKey || event.ctrlKey;
+    if (!mod) return;
+    const undo = key === "z" && !event.shiftKey;
+    const redo = key === "y" || (key === "z" && event.shiftKey);
+    if (!undo && !redo) return;
+    const field = document.activeElement;
+    const typing = field && (field.isContentEditable || (field.closest && field.closest("textarea, [contenteditable='true']")) || (field.tagName === "INPUT" && ["text", "search", "url", "password", "email", "number", ""].indexOf((field.getAttribute("type") || "text").toLowerCase()) >= 0));
+    if (typing) return;
+    event.preventDefault();
+    if (undo) undoEdit();
+    else redoEdit();
+  });
 
   globalThis.GuideApp = {
     setCardBook,
+    beginEdit,
+    editSnapshot,
+    paintUndo,
+    undoEdit,
+    redoEdit,
+    recordEdit,
     showHub,
     dropCard,
     getBook: () => cardBook,

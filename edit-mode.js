@@ -261,9 +261,11 @@
   function saveEdit(next) {
     const from = activeFrom;
     if (!from) return closeDialog();
+    const before = globalThis.GuideApp && GuideApp.editSnapshot ? GuideApp.editSnapshot() : "";
     if (!next.trim() || next === from) delete edits[from];
     else edits[from] = { to: next, sources: sourcesFor(from, activeNode && activeNode.parentElement) };
     persist();
+    if (before && globalThis.GuideApp && GuideApp.recordEdit) GuideApp.recordEdit(before, GuideApp.editSnapshot(), "表示文");
     if (activeNode && activeNode.isConnected) activeNode.nodeValue = next === from || !next.trim() ? from : next;
     else applyAll();
     closeDialog();
@@ -470,7 +472,14 @@
   globalThis.GuideText = {
     setOn: setEditOn,
     payload: payload,
-    importJson: importJson
+    importJson: importJson,
+    snapshot: () => JSON.parse(JSON.stringify(edits)),
+    restore: next => {
+      edits = next && typeof next === "object" ? JSON.parse(JSON.stringify(next)) : {};
+      persist();
+      applyAll();
+      syncBar();
+    }
   };
   new MutationObserver(mutations => {
     if (!Object.keys(edits).length) return;

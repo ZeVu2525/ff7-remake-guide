@@ -194,6 +194,7 @@
       } catch (e) {}
     }
     paintToggle();
+    if (globalThis.GuideApp && GuideApp.paintUndo) GuideApp.paintUndo();
     if (globalThis.GuideApp) GuideApp.setCardBook(book());
   }
 
@@ -1739,7 +1740,7 @@
       const fields = cardFields(child, newId);
       next = GuideProgress.upsertRouteCard(next, null, childIds[index], fields, place.trackId, place.chapterId, order, GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id));
     });
-    GuideApp.setCardBook(next);
+    GuideApp.setCardBook(next, "カードのコピー");
     const created = routeRecord(place.trackId, place.chapterId, newId);
     if (created) openRouteForm(Object.assign({ kind: "route", id: newId, trackId: place.trackId, chapterId: place.chapterId }, created));
   }
@@ -2837,7 +2838,7 @@
     if (status) status.innerHTML = "書き出しました。<a href=\"" + result.url + "\" target=\"_blank\" rel=\"noopener noreferrer\">コミットを開く</a>。GitHub Pages の反映には1〜2分かかります。";
     else window.alert("書き出しました。 " + result.url);
     if (window.confirm("リポジトリに入ったので、このブラウザのカード編集を消しますか。消したあとは、Pages の反映後に再読み込みしてください。")) {
-      GuideApp.setCardBook(GuideProgress.emptyCardBook());
+      GuideApp.setCardBook(GuideProgress.emptyCardBook(), "編集をすべて戻す");
     }
   }
 
@@ -2856,7 +2857,7 @@
       next.labels = UI_SETTINGS.labels || {};
       next.difficulty = UI_SETTINGS.difficulty || "normal";
     }
-    GuideApp.setCardBook(next);
+    GuideApp.setCardBook(next, "GitHubから読み込む");
     if (status) status.textContent = "GitHubの原稿を読み込みました。";
   }
 
@@ -2874,19 +2875,19 @@
         if (parsed.labels && typeof parsed.labels === "object") next.labels = parsed.labels;
         if (parsed.difficulty) next.difficulty = parsed.difficulty;
         if (Array.isArray(parsed.templates)) next.templates = parsed.templates;
-        GuideApp.setCardBook(next);
+        GuideApp.setCardBook(next, "読み込む");
         return;
       }
       const bundle = GuideProgress.acceptBundle(parsed);
       if (!bundle || !bundle.cards) throw new Error("no cards");
-      GuideApp.setCardBook(bundle.cards);
+      GuideApp.setCardBook(bundle.cards, "読み込む");
     } catch (e) {
       window.alert("カードの編集データとして読めませんでした。");
     }
   });
   document.getElementById("card-edit-reset").addEventListener("click", () => {
     if (!window.confirm("このブラウザのカード編集をすべて消し、原稿の並びに戻します。チェックした進行は残ります。")) return;
-    GuideApp.setCardBook(GuideProgress.emptyCardBook());
+    GuideApp.setCardBook(GuideProgress.emptyCardBook(), "編集をすべて戻す");
   });
 
   const footerToggle = document.getElementById("edit-toggle");
