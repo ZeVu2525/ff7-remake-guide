@@ -256,9 +256,11 @@
     if (!value) return "";
     const repo = repoMaps().find(item => item.id === value || item.file === value);
     if (repo) return repo.file;
-    if (/^maps\//.test(value)) return value;
-    if (/^chapter[0-9-]+$/.test(value)) return "jun-field-" + value + ".png";
-    return GuideProgress.imageKeyFromUrl(value) || value;
+    const resolved = globalThis.GuideImages ? GuideImages.resolve(value) : GuideProgress.normalizeLibraryKey(value, "maps");
+    if (GuideProgress.isLibraryKey(resolved)) return resolved;
+    if (/^maps\//.test(value) && !GuideProgress.isLibraryKey(value)) return value;
+    if (/^chapter[0-9-]+$/.test(value)) return GuideProgress.libraryKey("maps", "jun-field-" + value + ".png");
+    return GuideProgress.imageKeyFromUrl(value, "maps") || value;
   }
 
   async function paintMapPreview() {
@@ -297,7 +299,8 @@
     return [
       field("掲載元の地図", `<select name="mapPreset">${options}</select>`),
       field("保存した地図", `<select name="mapRepo">${repoOptions}</select>`),
-      field("地図の画像", `<input name="mapUrl" value="${escapeAttr(custom)}" placeholder="jun-ch01-01.png または maps/ のファイル">`),
+      field("地図の画像", `<input name="mapUrl" value="${escapeAttr(custom)}" placeholder="maps/jun-ch01-01.png または maps/ のファイル">`),
+      field("ライブラリ", `<select data-lib-folder data-picker="map" data-current="maps"></select><select data-img-lib data-picker="map" data-folder="maps" data-current="${escapeAttr(GuideProgress.isLibraryKey(custom) ? custom : "")}"><option value="">このブラウザの地図は使わない</option></select>`),
       '<label class="map-file">画像ファイル<input id="map-file" name="mapFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp"></label>',
       '<p id="map-file-note">選んだ画像は、このブラウザの画像ライブラリにファイル名で保存します。書き出しや GitHub には画像そのものは入りません。</p>',
       '<p id="map-size-warn" hidden></p>',
@@ -354,14 +357,29 @@
         return;
       }
       if (!globalThis.GuideImages) return;
-      const key = GuideImages.safeName(picked.name);
-      await GuideImages.putFile(key, picked, picked.name);
+      const key = GuideProgress.libraryKey("maps", picked.name);
+      await GuideImages.putFile(key, picked, picked.name, "maps");
       if (url) url.value = key;
       if (preset) preset.value = "";
       if (form.elements.mapRepo) form.elements.mapRepo.value = "";
       error.textContent = "";
       paintMapPreview();
     });
+    const mapFolder = form.querySelector('[data-lib-folder][data-picker="map"]');
+    if (mapFolder) mapFolder.addEventListener("change", () => {
+      const imageSelect = form.querySelector('[data-img-lib][data-picker="map"]');
+      if (imageSelect) imageSelect.setAttribute("data-folder", mapFolder.value);
+      fillLibrarySelects(form);
+    });
+    const mapLibrary = form.querySelector('[data-img-lib][data-picker="map"]');
+    if (mapLibrary) mapLibrary.addEventListener("change", () => {
+      if (!mapLibrary.value || !url) return;
+      url.value = mapLibrary.value;
+      if (preset) preset.value = "";
+      if (form.elements.mapRepo) form.elements.mapRepo.value = "";
+      paintMapPreview();
+    });
+    fillLibrarySelects(form);
     paintMapPreview();
   }
 
@@ -449,15 +467,16 @@
     const current = block.src || "";
     const repo = saved.find(item => item.file === current);
     const options = ['<option value="">保存済みの画像は使わない</option>'].concat(saved.map(item => `<option value="${escapeAttr(item.file)}"${repo && item.file === repo.file ? " selected" : ""}>${escapeText(item.label || item.file)}</option>`)).join("");
-    const libraryCurrent = GuideProgress.isLibraryKey(current) ? current : "";
+    const libraryCurrent = GuideProgress.isLibraryKey(GuideProgress.normalizeLibraryKey(current, "images")) ? GuideProgress.normalizeLibraryKey(current, "images") : "";
     const preview = libraryCurrent
       ? `<img class="blk-preview" alt="画像が未登録" data-lib="${escapeAttr(libraryCurrent)}">`
       : (current ? `<img class="blk-preview" alt="" src="${escapeAttr(current)}">` : "");
     return [
       `<div class="blk-file">`,
       `<select data-img-repo>${options}</select>`,
-      `<select data-img-lib data-current="${escapeAttr(libraryCurrent)}"><option value="">このブラウザの画像は使わない</option></select>`,
-      `<input data-img-url value="${escapeAttr(repo ? "" : current)}" placeholder="jun- のキー、maps/ または images/">`,
+      `<select data-lib-folder data-current="images"></select>`,
+      `<select data-img-lib data-folder="images" data-current="${escapeAttr(libraryCurrent)}"><option value="">このブラウザの画像は使わない</option></select>`,
+      `<input data-img-url value="${escapeAttr(repo ? "" : current)}" placeholder="images/ または maps/ のキー">`,
       `<input data-img-file type="file" accept="image/png,image/jpeg,image/gif,image/webp">`,
       tile ? `<input data-tile-label value="${escapeAttr(block.label || "")}" placeholder="ラベル">` : [
         `<input data-img-caption value="${escapeAttr(block.caption || "")}" placeholder="説明（空でもよい）">`,
@@ -505,10 +524,21 @@
 
   async function fillLibrarySelects(root) {
     if (!globalThis.GuideImages) return;
+    const folders = await GuideImages.folders();
     const rows = await GuideImages.list();
-    root.querySelectorAll("[data-img-lib]").forEach(select => {
+    root.querySelectorAll("[data-lib-folder]").forEach(select => {
+      if (select.dataset.ready === "1") return;
+      const current = select.getAttribute("data-current") || "images";
+      select.innerHTML = folders.map(folder => `<option value="${escapeAttr(folder.id)}"${folder.id === current ? " selected" : ""}>${escapeText(folder.label)}</option>`).join("");
+      select.dataset.ready = "1";
+    });
+    root.querySelectorAll("[data-img-lib], [data-enemy-lib]").forEach(select => {
+      const picker = select.getAttribute("data-picker");
+      const paired = picker && select.parentElement ? select.parentElement.querySelector('[data-lib-folder][data-picker="' + picker + '"]') : select.previousElementSibling;
+      const folder = (paired && paired.value) || select.getAttribute("data-folder") || "images";
       const current = select.getAttribute("data-current") || "";
-      select.innerHTML = '<option value="">このブラウザの画像は使わない</option>' + rows.map(row => `<option value="${escapeAttr(row.id)}"${row.id === current ? " selected" : ""}>${escapeText(row.name)}</option>`).join("");
+      const mine = rows.filter(row => row.folder === folder);
+      select.innerHTML = '<option value="">このブラウザの画像は使わない</option>' + mine.map(row => `<option value="${escapeAttr(row.id)}"${row.id === current ? " selected" : ""}>${escapeText(row.name)}</option>`).join("");
     });
   }
 
@@ -594,7 +624,9 @@
     const host = document.getElementById("battle-field");
     if (!host) return;
     if (!document.getElementById("enemy-pick-q")) {
-      host.innerHTML = `<p>戦闘タグのカードだけ、敵の情報を結びます。タグを外しても、選んだ敵は残ります。</p><input id="enemy-pick-q" role="combobox" aria-autocomplete="list" aria-controls="enemy-pick-results" aria-expanded="false" placeholder="敵の名前や番号" autocomplete="off" value="${escapeAttr(editing.enemyQuery || "")}"><div id="enemy-pick-results" role="listbox"></div><ul id="enemy-pick-chosen"></ul><label>メモ<textarea id="enemy-note">${escapeText(editing.enemyNote || "")}</textarea></label><label>戦闘用の画像<input id="enemy-image" value="${escapeAttr(editing.enemyImage || "")}" placeholder="https:// または空"></label>`;
+      const enemyCurrent = GuideProgress.normalizeLibraryKey(editing.enemyImage || "", "enemies");
+      host.innerHTML = `<p>戦闘タグのカードだけ、敵の情報を結びます。タグを外しても、選んだ敵は残ります。</p><input id="enemy-pick-q" role="combobox" aria-autocomplete="list" aria-controls="enemy-pick-results" aria-expanded="false" placeholder="敵の名前や番号" autocomplete="off" value="${escapeAttr(editing.enemyQuery || "")}"><div id="enemy-pick-results" role="listbox"></div><ul id="enemy-pick-chosen"></ul><label>メモ<textarea id="enemy-note">${escapeText(editing.enemyNote || "")}</textarea></label><label>戦闘用の画像<input id="enemy-image" value="${escapeAttr(editing.enemyImage || "")}" placeholder="enemies/ のキー、または空"></label><label>エネミーの画像<select data-lib-folder data-current="enemies"></select><select data-enemy-lib data-folder="enemies" data-current="${escapeAttr(GuideProgress.isLibraryKey(enemyCurrent) ? enemyCurrent : "")}"><option value="">このブラウザの画像は使わない</option></select></label>`;
+      fillLibrarySelects(host);
       bindEnemyPick();
     }
     refreshEnemyPick();
@@ -604,6 +636,19 @@
     const query = document.getElementById("enemy-pick-q");
     if (!query || query.dataset.bound) return;
     query.dataset.bound = "1";
+    const battle = document.getElementById("battle-field");
+    if (battle) battle.addEventListener("change", event => {
+      const target = event.target;
+      if (target.hasAttribute("data-lib-folder")) {
+        const imageSelect = target.parentElement.querySelector("[data-enemy-lib], [data-img-lib]");
+        if (imageSelect) imageSelect.setAttribute("data-folder", target.value);
+        fillLibrarySelects(battle);
+      }
+      if (target.hasAttribute("data-enemy-lib") && target.value) {
+        const input = document.getElementById("enemy-image");
+        if (input) input.value = target.value;
+      }
+    });
     let composing = false;
     let active = -1;
     const refresh = () => {
@@ -717,6 +762,12 @@
       target.value = target.tagName === "SELECT" ? "" : target.value;
       return;
     }
+    if (target.hasAttribute("data-lib-folder")) {
+      const imageSelect = target.parentElement.querySelector("[data-img-lib]");
+      if (imageSelect) imageSelect.setAttribute("data-folder", target.value);
+      fillLibrarySelects(target.parentElement);
+      return;
+    }
     if (target.hasAttribute("data-img-repo") || target.hasAttribute("data-img-lib")) {
       const input = target.parentElement.querySelector("[data-img-url]");
       if (target.value && input) input.value = target.value;
@@ -732,7 +783,9 @@
         return;
       }
       const input = target.parentElement.querySelector("[data-img-url]");
-      GuideImages.putFile(GuideImages.safeName(picked.name), picked, picked.name).then(key => {
+      const folderSelect = target.parentElement.querySelector("[data-lib-folder]");
+      const folder = (folderSelect && folderSelect.value) || "images";
+      GuideImages.putFile(GuideProgress.libraryKey(folder, picked.name), picked, picked.name, folder).then(key => {
         if (input) input.value = key;
         error.textContent = "";
         syncBlocks();
@@ -2535,7 +2588,7 @@
       "<li>編集データの控えは、差分だけのJSONです。「読み込む」でこのブラウザに戻せます。</li>",
       "<li>地図は maps/ の画像と data/maps.js です。掲載元の地図画像は入れません。</li>",
       "<li>カードの画像は images/ と data/images.js です。掲載元の画像は入れません。</li>",
-      "<li>設定の「画像ライブラリ」にある画像は、書き出しにも GitHub にも入りません。残るのは jun-ch01-01.png のようなファイル名だけです。</li>",
+      "<li>設定の「画像ライブラリ」は MAP、エネミー、その他のフォルダに分かれます。書き出しにも GitHub にも画像は入りません。残るのは maps/jun-ch01-01.png のようなキーだけです。zip の一番上のフォルダが、ライブラリのフォルダになります。</li>",
       "<li>地図の zip は「画像をまとめて読み込む」で入れます。iPhone ではファイル App から zip を選ぶか、写真を複数選べます。</li>",
       "<li>定型文は data/templates.js です。宝箱① のような見出しの元です。設定タブでも直せます。</li>",
       "<li>設定はボタン名などのJSONです。「読み込む」でこのブラウザに戻せます。</li>",
@@ -2568,6 +2621,8 @@
       if (!item.blob) continue;
       files.push({ path: item.file, base64: bytesToBase64(new Uint8Array(await item.blob.arrayBuffer())) });
     }
+    const libraryFiles = GuideProgress.libraryExportPlan([], { includeLibrary: false });
+    libraryFiles.forEach(item => files.push({ path: item.path, base64: "" }));
     return GuideProgress.excludeLibraryExports(files.map(file => ({ path: file.path, base64: file.base64 || GuideProgress.utf8ToBase64(file.text) })));
   }
 

@@ -1119,7 +1119,30 @@
     return out.join("").replace(/(?:<br>)+$/g, "");
   }
 
-  function imageKeyFromUrl(url) {
+  const LIBRARY_FOLDERS = [
+    { id: "maps", label: "MAP" },
+    { id: "enemies", label: "エネミー" },
+    { id: "images", label: "その他" }
+  ];
+
+  function libraryFolderId(value) {
+    const id = String(value || "").trim().replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, "-").replace(/^\.+/, "").slice(0, 40);
+    return id === "." || id === ".." ? "" : id;
+  }
+
+  function libraryFileName(name) {
+    const base = String(name || "image.png").split(/[\\/]/).pop().toLowerCase();
+    const clean = base.replace(/[^a-z0-9._-]+/g, "-").replace(/^-+/, "");
+    if (/^[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/.test(clean)) return clean;
+    return "image.png";
+  }
+
+  function libraryKey(folder, name) {
+    const id = libraryFolderId(folder) || "images";
+    return id + "/" + libraryFileName(name);
+  }
+
+  function bareImageKey(url) {
     const match = String(url || "").match(/finalfantasy-jun-site\.com\/ff7_remake\/([^?#]+)/i);
     if (!match) return "";
     const path = match[1];
@@ -1129,12 +1152,50 @@
     if (quest) return "jun-quest-" + quest[1].toLowerCase();
     const field = path.match(/^field\/images\/([^/]+)$/i);
     if (field) return "jun-field-" + field[1].toLowerCase();
+    const enemy = path.match(/^enemy\/img\/([^/]+)$/i);
+    if (enemy) return "jun-enemy-" + enemy[1].toLowerCase();
     const base = path.split("/").pop();
     return base ? "jun-" + base.toLowerCase() : "";
   }
 
+  function imageKeyFromUrl(url, folder) {
+    const file = bareImageKey(url);
+    if (!file) return "";
+    const dir = folder || (String(url).indexOf("/enemy/img/") >= 0 ? "enemies" : "maps");
+    return libraryKey(dir, file);
+  }
+
+  function isRepoImagePath(value) {
+    const path = String(value || "").trim();
+    const lists = [];
+    if (typeof globalThis !== "undefined" && globalThis) {
+      if (Array.isArray(globalThis.MAP_FILES)) lists.push.apply(lists, globalThis.MAP_FILES);
+      if (Array.isArray(globalThis.IMAGE_FILES)) lists.push.apply(lists, globalThis.IMAGE_FILES);
+    }
+    return lists.some(entry => entry && entry.file === path);
+  }
+
   function isLibraryKey(value) {
-    return /^jun-[a-z0-9._-]+\.(?:png|jpe?g|gif|webp)$/i.test(String(value || "").trim());
+    const text = String(value || "").trim();
+    if (isRepoImagePath(text)) return false;
+    if (/^jun-[a-z0-9._-]+\.(?:png|jpe?g|gif|webp)$/i.test(text)) return true;
+    const parts = text.split("/");
+    if (parts.length !== 2 || !libraryFolderId(parts[0]) || parts[0] !== libraryFolderId(parts[0])) return false;
+    return /^[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(parts[1]);
+  }
+
+  function normalizeLibraryKey(value, folder) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    if (text.indexOf("/") > 0 && isLibraryKey(text)) return text;
+    if (/^jun-[a-z0-9._-]+\.(?:png|jpe?g|gif|webp)$/i.test(text)) return libraryKey(folder || "maps", text);
+    return text;
+  }
+
+  function moveLibraryKey(path, folder) {
+    const current = normalizeLibraryKey(path);
+    const file = current.split("/").pop();
+    return libraryKey(folder, file);
   }
 
   function hideMapAfterError(dragging, failedSrc, currentSrc) {
@@ -1150,6 +1211,29 @@
       if (/^image-library\//.test(path)) return false;
       return true;
     });
+  }
+
+  function libraryExportPlan(records, options) {
+    const include = !!(options && options.includeLibrary);
+    return (records || []).reduce((out, row) => {
+      const path = normalizeLibraryKey(row && (row.path || row.id) || "");
+      if (!isLibraryKey(path)) return out;
+      if (/\/jun-|^jun-/.test(path)) return out;
+      if (!include) return out;
+      out.push({ path: path });
+      return out;
+    }, []);
+  }
+
+  function replaceLibraryKey(value, from, to) {
+    if (value === from) return to;
+    if (Array.isArray(value)) return value.map(item => replaceLibraryKey(item, from, to));
+    if (value && typeof value === "object") {
+      const next = {};
+      Object.keys(value).forEach(key => { next[key] = replaceLibraryKey(value[key], from, to); });
+      return next;
+    }
+    return value;
   }
 
   function validImageValue(src) {
@@ -1276,9 +1360,10 @@
     const width = block.width || "m";
     const align = block.align || "center";
     const pct = block.pct ? ' style="width:' + block.pct + '%"' : "";
-    const library = isLibraryKey(block.src);
+    const librarySrc = normalizeLibraryKey(block.src);
+    const library = isLibraryKey(librarySrc);
     const image = library
-      ? '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img data-lib="' + src + '" alt="' + (caption || "画像が未登録") + '" decoding="async"></button>'
+      ? '<button type="button" class="blk-zoom" data-zoom-src="' + escapeRichText(librarySrc) + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img data-lib="' + escapeRichText(librarySrc) + '" alt="' + (caption || "画像が未登録") + '" decoding="async"></button>'
       : '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img src="' + src + '" alt="' + (caption || escapeRichText(block.label || "")) + '" loading="lazy" decoding="async"></button>';
     if (bare) return image;
     return '<figure class="blk-img w-' + width + " align-" + align + '" data-bpath="' + path + '"' + pct + ">" + image + '<i class="blk-resize" data-bpath="' + path + '"></i>' + (caption ? "<figcaption>" + caption + "</figcaption>" : "") + "</figure>";
@@ -1602,10 +1687,18 @@
     numberCards,
     foldCards,
     foldAll,
+    LIBRARY_FOLDERS,
+    libraryFolderId,
+    libraryFileName,
+    libraryKey,
     imageKeyFromUrl,
     isLibraryKey,
+    normalizeLibraryKey,
+    moveLibraryKey,
     hideMapAfterError,
     excludeLibraryExports,
+    libraryExportPlan,
+    replaceLibraryKey,
     clampMapFrame,
     defaultMapFrame,
     numberChapter,

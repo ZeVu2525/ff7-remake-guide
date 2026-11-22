@@ -22,7 +22,7 @@ const CATALOGS = {
           "順路では、チャドリーに報告。"
         ],
         "after": [],
-        "map": "jun-ch03-q01.png",
+        "map": "maps/jun-ch03-q01.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/chadrey.html",
         "enemies": {
           "hp": [],
@@ -107,7 +107,7 @@ const CATALOGS = {
           "順路では、サムから報酬を受け取る。"
         ],
         "after": [],
-        "map": "jun-quest-15b.png",
+        "map": "maps/jun-quest-15b.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/bomb.html",
         "enemies": {
           "hp": [
@@ -198,7 +198,7 @@ const CATALOGS = {
           "ディーングロウを倒す。"
         ],
         "after": [],
-        "map": "jun-ch03-q03.png",
+        "map": "maps/jun-ch03-q03.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/cerulean-drake.html",
         "enemies": {
           "hp": [
@@ -292,7 +292,7 @@ const CATALOGS = {
           "デマンに報告。"
         ],
         "after": [],
-        "map": "jun-quest-09.png",
+        "map": "maps/jun-quest-09.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/chromogger.html",
         "enemies": {
           "hp": [
@@ -357,7 +357,7 @@ const CATALOGS = {
           "順路では、箱を壊して10000以上のスコアを出す。"
         ],
         "after": [],
-        "map": "jun-quest-10.png",
+        "map": "maps/jun-quest-10.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/crush-box.html",
         "enemies": {
           "hp": [],
@@ -382,7 +382,7 @@ const CATALOGS = {
           "順路では、もう一度ジーナンに話しかけて、ゼン・ワンと戦う。"
         ],
         "after": [],
-        "map": "jun-quest-13.png",
+        "map": "maps/jun-quest-13.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/dandandan.html",
         "enemies": {
           "hp": [],
@@ -443,7 +443,7 @@ const CATALOGS = {
           "クエスト「さまよう軍犬」を受けられるようになる。",
           "終えたあと、アイテム屋の品揃えに「ハイポーション」と「ちりょう」マテリアが増える。"
         ],
-        "map": "jun-ch03-q02.png",
+        "map": "maps/jun-ch03-q02.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/doomrat.html",
         "enemies": {
           "hp": [
@@ -603,7 +603,7 @@ const CATALOGS = {
           "順路では、ミレイユに報告し、ホンモノの予告状を入手。"
         ],
         "after": [],
-        "map": "jun-quest-14a.png",
+        "map": "maps/jun-quest-14a.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/grungy-bandit.html",
         "enemies": {
           "hp": [
@@ -711,7 +711,7 @@ const CATALOGS = {
           "順路では、子供たちに報告。"
         ],
         "after": [],
-        "map": "jun-quest-08.png",
+        "map": "maps/jun-quest-08.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/hedgehog-pie-king.html",
         "enemies": {
           "hp": [
@@ -823,7 +823,7 @@ const CATALOGS = {
           "キリエに報告。"
         ],
         "after": [],
-        "map": "jun-quest-09.png",
+        "map": "maps/jun-quest-09.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/helhound.html",
         "enemies": {
           "hp": [
@@ -898,7 +898,7 @@ const CATALOGS = {
         "rewards": [],
         "steps": [],
         "after": [],
-        "map": "jun-quest-21.png",
+        "map": "maps/jun-quest-21.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/hiden.html",
         "enemies": {
           "hp": [],
@@ -920,7 +920,7 @@ const CATALOGS = {
         "rewards": [],
         "steps": [],
         "after": [],
-        "map": "jun-quest-14b.png",
+        "map": "maps/jun-quest-14b.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/inspiration.html",
         "enemies": {
           "hp": [],
@@ -971,7 +971,7 @@ const CATALOGS = {
           "順路では、マムから報酬を受け取る。"
         ],
         "after": [],
-        "map": "jun-quest-15b.png",
+        "map": "maps/jun-quest-15b.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/jury-rigged-cutter.html",
         "enemies": {
           "hp": [
@@ -1036,7 +1036,7 @@ const CATALOGS = {
           "順路では、もう一度アニヤンに話しかけて、けんすい勝負初級に勝利。"
         ],
         "after": [],
-        "map": "jun-quest-19.png",
+        "map": "maps/jun-quest-19.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/kensui.html",
         "enemies": {
           "hp": [],
@@ -1089,7 +1089,7 @@ const CATALOGS = {
           "順路では、・ 4 は順不同 レポートNo.049 羽根トカゲ モード 最大HP EASY 811〜2281 50〜113 67〜151 29〜61 60〜134 NORMAL 1474〜4148 HARD 8253 238 328 120 268 獲得する経験値・AP・ギル モード 経験値 AP ギル EASY 52〜143 3 60〜134 NORMAL HARD 1224 9 1026 入手できるアイテム 通常 ポーション(12%) レア 重力球(5%) 盗む フェニクスの尾(5%) ダメージ 倍率 バーストゲージ 増加倍率 物理 1体.0 近接 0体.25 遠隔 0体.25 魔法 1体.0 1体.0 炎 属性 1体.0 0体.25 氷 属性 1体.0 0体.25 雷 属性 1体.0 0体.25 風 属性 2体.0 2体.0 固定ダメージ 1体.0 - 割合ダメージ 1体.0 - 状態異常耐性値 毒 35 沈黙 35 睡眠 35 スロウ 35 ストップ 35 バーサク 35 ・・・物理攻撃力。"
         ],
         "after": [],
-        "map": "jun-ch03-q03.png",
+        "map": "maps/jun-ch03-q03.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/lesser-drake.html",
         "enemies": {
           "hp": [
@@ -1153,7 +1153,7 @@ const CATALOGS = {
           "ベティと話す。"
         ],
         "after": [],
-        "map": "jun-ch03-q04.png",
+        "map": "maps/jun-ch03-q04.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/lost-friends.html",
         "enemies": {
           "hp": [],
@@ -1206,7 +1206,7 @@ const CATALOGS = {
           "順路では、〜 3 は順不同 画像をクリックすると拡大します。 レポートNo.019 ピアシングアイ モード 最大HP EASY 2026〜3590 140〜223 140〜223 17〜31 17〜31 NORMAL 3684〜6528 HARD 9432 373 373 45 45 獲得する経験値・AP・ギル モード 経験値 AP ギル EASY 32〜90 4 101〜300 NORMAL HARD 476 12 787 入手できるアイテム 通常 ハイポーション(12%) レア エーテルターボ(5%) 盗む エーテルターボ(5%) ダメージ 倍率 バーストゲージ 増加倍率 物理 1体.0 近接 1体.0 遠隔 1体.0 魔法 1体.0 1体.0 炎 属性 1体.0 1体.0 氷 属性 1体.0 1体.0 雷 属性 1体.0 1体.0 風 属性 2体.0 1体.0 固定ダメージ 1体.0 - 割合ダメージ 1体.0 - 状態異常耐性値 毒 35 沈黙 35 睡眠 35 スロウ 35 ストップ 無効 バーサク 35 ・・・物理攻撃力。"
         ],
         "after": [],
-        "map": "jun-quest-09.png",
+        "map": "maps/jun-quest-09.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/mark-li-monodrive.html",
         "enemies": {
           "hp": [
@@ -1267,7 +1267,7 @@ const CATALOGS = {
           "順路では、モーグリメダルとモーグリ・モグ会員証を交換。"
         ],
         "after": [],
-        "map": "jun-ch03-q01.png",
+        "map": "maps/jun-ch03-q01.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/moguya.html",
         "enemies": {
           "hp": [],
@@ -1295,7 +1295,7 @@ const CATALOGS = {
           "順路では、ジュークボックスで 2 〜 4 を全て再生。"
         ],
         "after": [],
-        "map": "jun-quest-20.png",
+        "map": "maps/jun-quest-20.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/musicpower.html",
         "enemies": {
           "hp": [],
@@ -1345,7 +1345,7 @@ const CATALOGS = {
           "順路では、ファントム2体を倒すく。"
         ],
         "after": [],
-        "map": "jun-quest-16.png",
+        "map": "maps/jun-quest-16.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/phantom.html",
         "enemies": {
           "hp": [
@@ -1463,7 +1463,7 @@ const CATALOGS = {
           "順路では、〜 4 は順不同 レポートNo.051 ストライプフォリッジ 出現場所 伍番街スラム「ボルトナットヒルズ」 レベル 23 ハードモードでの報酬 射撃マニュアル 第11巻 モード 最大HP EASY 9776〜14751 113〜167 113〜167 1 44〜65 NORMAL 17775〜26820 HARD 35370 238 238 1 86 獲得する経験値・AP・ギル モード 経験値 AP ギル EASY 56〜114 7 616〜1260 NORMAL HARD 476 21 2624 入手できるアイテム 通常 - レア - 盗む - ダメージ 倍率 バーストゲージ 増加倍率 物理 1体.0 近接 1体.0 遠隔 1体.0 魔法 1体.0 1体.0 炎 属性 1体.0 1体.0 氷 属性 2体.0 1体.0 雷 属性 1体.0 1体.0 風 属性 2体.0 1体.0 固定ダメージ 1体.0 - 割合ダメージ 1体.0 - 状態異常耐性値 毒 35 沈黙 35 睡眠 35 スロウ 35 ストップ 35 バーサク 35 ・・・物理攻撃力。"
         ],
         "after": [],
-        "map": "jun-quest-12.png",
+        "map": "maps/jun-quest-12.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/quest17.html",
         "enemies": {
           "hp": [
@@ -1597,7 +1597,7 @@ const CATALOGS = {
           "順路では、~ 7 は順不同 依頼人のいる場所 状況によって移動するデマン ステーション通りでデマンに依頼を引き受ける前に、クエスト「おてんば盗賊」の依頼を引き受けると教会前に移動したデマンから依頼を引き受けることになる。 クエスト進行順 レポートNo.063 サハギンプリンス ・・・物理攻撃力。"
         ],
         "after": [],
-        "map": "jun-quest-23.png",
+        "map": "maps/jun-quest-23.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/sahagin-prince.html",
         "enemies": {
           "hp": [
@@ -1700,7 +1700,7 @@ const CATALOGS = {
           "順路では、トンベリを倒す。"
         ],
         "after": [],
-        "map": "jun-quest-18.png",
+        "map": "maps/jun-quest-18.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/tonberry.html",
         "enemies": {
           "hp": [
@@ -1785,7 +1785,7 @@ const CATALOGS = {
           "順路では、ワイマーに報告。"
         ],
         "after": [],
-        "map": "jun-quest-24.png",
+        "map": "maps/jun-quest-24.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/type-o-behemoth.html",
         "enemies": {
           "hp": [
@@ -1878,7 +1878,7 @@ const CATALOGS = {
           "順路では、〜 3 は順不同 レポートNo.054 ネフィアウィーバー モード 最大HP EASY 5066〜6815 108〜136 108〜136 74〜103 74〜103 NORMAL 9210〜12390 HARD 23580 283 283 194 194 獲得する経験値・AP・ギル モード 経験値 AP ギル EASY 32〜65 4 252〜531 NORMAL HARD 476 12 1968 入手できるアイテム 通常 - レア - 盗む - ダメージ 倍率 バーストゲージ 増加倍率 物理 1体.0 近接 1体.0 遠隔 1体.0 魔法 1体.0 1体.0 炎 属性 1体.0 1体.0 氷 属性 2体.0 1体.0 雷 属性 1体.0 1体.0 風 属性 1体.0 1体.0 固定ダメージ 1体.0 - 割合ダメージ 1体.0 - 状態異常耐性値 毒 35 沈黙 35 睡眠 35 スロウ 35 ストップ 35 バーサク 35 ・・・物理攻撃力。"
         ],
         "after": [],
-        "map": "jun-quest-12.png",
+        "map": "maps/jun-quest-12.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/venomantis.html",
         "enemies": {
           "hp": [
@@ -1972,7 +1972,7 @@ const CATALOGS = {
           "順路では、・ 4 は順不同 レポートNo.016 レイジハウンド モード 最大HP EASY 3473〜10222 101〜229 33〜79 60〜141 35〜80 NORMAL 6315〜18585 HARD 35370 508 148 268 148 獲得する経験値・AP・ギル モード 経験値 AP ギル EASY 20〜65 8 266〜1239 NORMAL HARD 476 24 4592 入手できるアイテム 通常 - レア - 盗む - ダメージ 倍率 バーストゲージ 増加倍率 物理 1体.0 近接 1体.0 遠隔 1体.0 魔法 1体.0 1体.0 炎 属性 1体.0 1体.0 氷 属性 2体.0 1体.0 雷 属性 1体.0 1体.0 風 属性 1体.0 1体.0 固定ダメージ 1体.0 - 割合ダメージ 1体.0 - 状態異常耐性値 毒 35 沈黙 35 睡眠 35 スロウ 35 ストップ 35 バーサク 35 ・・・物理攻撃力。"
         ],
         "after": [],
-        "map": "jun-ch03-q03.png",
+        "map": "maps/jun-ch03-q03.png",
         "source": "https://finalfantasy-jun-site.com/ff7_remake/quest/wrath-hound.html",
         "enemies": {
           "hp": [

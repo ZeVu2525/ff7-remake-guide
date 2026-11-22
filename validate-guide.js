@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v25") fail("キャッシュ名が ff7r-guide-v25 ではない");
+  if (GAME.cache !== "ff7r-guide-v26") fail("キャッシュ名が ff7r-guide-v26 ではない");
   const mapFiles = guide.MAP_FILES;
   if (!Array.isArray(mapFiles)) fail("data/maps.js の MAP_FILES が配列ではない");
   else mapFiles.forEach(entry => {
@@ -222,7 +222,7 @@ function validateGuide(guide) {
   if (numbers.size !== 114) fail("エネミー番号 001-114 が揃っていない");
   enemies.forEach(enemy => {
     if (!enemy.name || !/^https:\/\//.test(enemy.source || "")) fail("エネミーの名前か出典がない: " + (enemy && enemy.id));
-    if (enemy.image && !/^https:\/\//.test(enemy.image)) fail("エネミー画像は掲載元へのリンクだけにする: " + enemy.id);
+    if (enemy.image && !/^https:\/\//.test(enemy.image) && !/^enemies\/[^/]+\.(?:png|jpe?g|gif|webp)$/i.test(enemy.image)) fail("エネミー画像は掲載元か enemies/ のキーにする: " + enemy.id);
     if (/インターミッション/.test(enemy.name || "")) fail("INTERmission の敵が混ざっている: " + enemy.name);
   });
   const chapter18 = (ROUTE.main || []).find(row => row.chapterId === "ch18");

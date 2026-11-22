@@ -403,15 +403,14 @@
   function mapParts(map, id, label) {
     const files = globalThis.MAP_FILES || [];
     const repo = files.find(entry => entry && (entry.id === map || entry.file === map));
-    if (repo || (map && /^maps\//.test(map))) {
-      const file = repo ? repo.file : map;
-      return { key: (repo && repo.id) || id || map, src: file, href: "", label: (repo && repo.label) || label || "地図", library: false };
-    }
+    if (repo) return { key: repo.id || id || map, src: repo.file, href: "", label: repo.label || label || "地図", library: false };
+    const resolved = globalThis.GuideImages ? GuideImages.resolve(map) : GuideProgress.normalizeLibraryKey(map, "maps");
+    if (GuideProgress.isLibraryKey(resolved)) return { key: resolved, src: resolved, href: "", label: label || "地図", library: true };
     const preset = (GAME.maps || []).find(entry => entry.id === map);
-    if (preset) return { key: preset.id, src: "jun-field-" + preset.id + ".png", href: "", label: preset.label, library: true };
-    const fromHotlink = GuideProgress.imageKeyFromUrl(map);
+    if (preset) return { key: preset.id, src: GuideProgress.libraryKey("maps", "jun-field-" + preset.id + ".png"), href: "", label: preset.label, library: true };
+    const fromHotlink = GuideProgress.imageKeyFromUrl(map, "maps");
     if (fromHotlink) return { key: fromHotlink, src: fromHotlink, href: "", label: label || "地図", library: true };
-    if (GuideProgress.isLibraryKey(map)) return { key: map, src: map, href: "", label: label || "地図", library: true };
+    if (map && /^maps\//.test(map)) return { key: id || map, src: map, href: "", label: label || "地図", library: false };
     return { key: id || map || "custom", src: map || "", href: "", label: label || "地図", library: false };
   }
 
@@ -1256,6 +1255,7 @@
     if (current) {
       tabs.innerHTML = `<button type="button" id="enemy-back">一覧へ戻る</button>`;
       root.innerHTML = enemyPage(current);
+      if (globalThis.GuideImages) GuideImages.hydrate(root);
       document.getElementById("enemy-back").addEventListener("click", () => showHub("enemies"));
       return;
     }
@@ -1282,7 +1282,12 @@
     const loot = enemy.items ? [["通常", enemy.items.drop], ["レア", enemy.items.rare], ["盗む", enemy.items.steal]].filter(row => row[1]).map(row => `<tr><th>${row[0]}</th><td>${lootCell(row[1])}</td></tr>`).join("") : "";
     const actions = (enemy.actions || []).map(row => `<tr><th>${esc(row.name)}</th><td>${esc(row.type || "")}</td><td>${esc(row.element || "")}</td><td>${esc(row.range || "")}</td><td>${esc(row.guard || "")}</td><td>${esc(row.down || "")}</td></tr>`).join("");
     const phases = (enemy.phases || []).map(phase => `<section class="enemy-phase"><h3>${esc(phase.title)}</h3><p>${(phase.actions || []).map(name => esc(name)).join("、") || "技名は表のとおり。"}</p></section>`).join("");
-    const image = enemy.image ? `<p><img class="enemy-hero" alt="" src="${esc(enemy.image)}" loading="lazy"></p>` : "";
+    const enemySrc = GuideProgress.normalizeLibraryKey(enemy.image, "enemies");
+    const image = enemy.image
+      ? (GuideProgress.isLibraryKey(enemySrc)
+        ? `<p><img class="enemy-hero" alt="" data-lib="${esc(enemySrc)}" decoding="async"></p>`
+        : `<p><img class="enemy-hero" alt="" src="${esc(enemy.image)}" loading="lazy"></p>`)
+      : "";
     return `<article class="enemy-page"><p><a href="${esc(enemy.source)}" target="_blank" rel="noopener noreferrer">掲載元の表</a></p>${image}<h2>${esc(enemy.no ? "No." + enemy.no + " " : "")}${esc(enemy.name)}</h2>
       ${places ? `<h3>出現</h3><table class="enemy-table"><thead><tr><th>時期</th><th>場所</th><th>レベル</th></tr></thead><tbody>${places}</tbody></table>` : ""}
       ${hp ? `<h3>ステータス</h3><table class="enemy-table"><thead><tr><th>モード</th><th>HP</th><th>物攻</th><th>魔攻</th><th>物防</th><th>魔防</th></tr></thead><tbody>${hp}</tbody></table>` : ""}
@@ -1354,24 +1359,85 @@
     return (size / (1024 * 1024)).toFixed(1) + " MB";
   }
 
+  let libraryView = "maps";
+
+  function libraryPath(file) {
+    return String((file && (file.webkitRelativePath || file.name)) || "");
+  }
+
+  function libraryTarget(file, fallback) {
+    const parts = libraryPath(file).split("/").filter(Boolean);
+    const name = parts.pop() || "image.png";
+    if (/^__MACOSX$/.test(parts[0] || "") || name.indexOf(".") === 0) return null;
+    if (!/\.(png|jpe?g|gif|webp)$/i.test(name)) return null;
+    const folder = parts.length ? GuideProgress.libraryFolderId(parts[0]) : (fallback || libraryView || "images");
+    return { folder: folder || "images", name };
+  }
+
   async function paintImageLibrary() {
     const usage = document.getElementById("image-library-usage");
     const list = document.getElementById("image-library-list");
+    const folderHost = document.getElementById("image-library-folders");
+    const moveTarget = document.getElementById("image-library-move-target");
     if (!list || !globalThis.GuideImages) return;
+    const folders = await GuideImages.folders();
+    if (!folders.some(folder => folder.id === libraryView)) libraryView = "maps";
     const rows = await GuideImages.list();
     const used = rows.reduce((sum, row) => sum + row.size, 0);
     if (usage) usage.textContent = "保存中 " + rows.length + " 件、" + bytesLabel(used) + "。";
-    list.innerHTML = rows.map(row => `<div class="image-lib-row"><img data-lib="${esc(row.id)}" alt=""><span>${esc(row.name)} <small>${esc(bytesLabel(row.size))}</small></span><button type="button" data-lib-rename="${esc(row.id)}">名前</button><button type="button" data-lib-delete="${esc(row.id)}">削除</button></div>`).join("") || "<p>まだ画像がありません。</p>";
+    if (folderHost) {
+      folderHost.innerHTML = folders.map(folder => {
+        const count = rows.filter(row => row.folder === folder.id).length;
+        return `<button type="button" class="chip${folder.id === libraryView ? " on" : ""}" data-lib-folder="${esc(folder.id)}">${esc(folder.label)} <small>${count}</small></button>`;
+      }).join("");
+    }
+    if (moveTarget) {
+      moveTarget.innerHTML = folders.map(folder => `<option value="${esc(folder.id)}"${folder.id === libraryView ? "" : ""}>${esc(folder.label)}</option>`).join("");
+    }
+    const visible = rows.filter(row => row.folder === libraryView);
+    list.innerHTML = visible.map(row => `<div class="image-lib-row" draggable="true" data-lib-id="${esc(row.id)}"><input type="checkbox" data-lib-check="${esc(row.id)}" aria-label="選択"><img data-lib="${esc(row.id)}" alt=""><span>${esc(row.name)} <small>${esc(bytesLabel(row.size))}</small></span><button type="button" data-lib-rename="${esc(row.id)}">名前</button><button type="button" data-lib-delete="${esc(row.id)}">削除</button></div>`).join("") || "<p>このフォルダには画像がありません。</p>";
     GuideImages.hydrate(list);
   }
 
-  async function storeImageFiles(fileList) {
-    const files = [...(fileList || [])].filter(file => /^image\/(png|jpeg|gif|webp)$/.test(file.type) || /\.(png|jpe?g|gif|webp)$/i.test(file.name));
+  function rememberLibraryMoves(pairs) {
+    (pairs || []).forEach(pair => {
+      const from = pair[0];
+      const to = pair[1];
+      if (!from || !to || from === to) return;
+      cardBook = GuideProgress.replaceLibraryKey(cardBook, from, to);
+      ["main", "hard", "intermission"].forEach(trackId => {
+        chaptersFor(trackId).forEach(chapter => {
+          if ((chapter.sections || []).some(section => section.map === from)) {
+            const saved = chapter.sections.map(item => item.map === from ? Object.assign({}, item, { map: to }) : item);
+            cardBook = GuideProgress.saveSections(cardBook, trackId + ":" + chapter.id, saved);
+          }
+          (chapter.items || []).forEach(item => {
+            if (!item || !item.id) return;
+            const next = GuideProgress.replaceLibraryKey(item, from, to);
+            if (JSON.stringify(next) === JSON.stringify(item)) return;
+            const patch = Object.assign({}, cardBook.patches[item.id] || {});
+            if (next.map !== item.map) patch.map = next.map || "";
+            if (next.enemyImage !== item.enemyImage) patch.enemyImage = next.enemyImage || "";
+            if (JSON.stringify(next.blocks || []) !== JSON.stringify(item.blocks || [])) patch.blocks = next.blocks || [];
+            cardBook.patches[item.id] = patch;
+          });
+        });
+      });
+    });
+    saveBook();
+  }
+
+  async function storeImageFiles(fileList, fallback) {
+    const files = [...(fileList || [])];
+    let count = 0;
     for (const file of files) {
-      const key = GuideImages.safeName(file.name);
-      await GuideImages.putFile(key, file, file.name);
+      const target = libraryTarget(file, fallback);
+      if (!target) continue;
+      if (target.folder !== "maps" && target.folder !== "enemies" && target.folder !== "images") await GuideImages.createFolder(target.folder);
+      await GuideImages.putFile(GuideProgress.libraryKey(target.folder, target.name), file, target.name, target.folder);
+      count += 1;
     }
-    return files.length;
+    return count;
   }
 
   async function inflateRaw(bytes) {
@@ -1385,13 +1451,14 @@
     const entries = GuideZip.unzip(bytes);
     let count = 0;
     for (const entry of entries) {
-      if (!/\.(png|jpe?g|gif|webp)$/i.test(entry.name)) continue;
+      const target = libraryTarget({ name: entry.name, webkitRelativePath: entry.name }, libraryView);
+      if (!target) continue;
       let raw = entry.bytes;
       if (entry.method === 8) raw = await inflateRaw(entry.bytes);
       if (!raw || (entry.method && entry.method !== 0 && entry.method !== 8)) continue;
-      const name = entry.name.split("/").pop();
+      if (target.folder !== "maps" && target.folder !== "enemies" && target.folder !== "images") await GuideImages.createFolder(target.folder);
       const blob = new Blob([raw], { type: "image/png" });
-      await GuideImages.putFile(GuideImages.safeName(name), blob, name);
+      await GuideImages.putFile(GuideProgress.libraryKey(target.folder, target.name), blob, target.name, target.folder);
       count += 1;
     }
     return count;
@@ -1420,15 +1487,20 @@
       <textarea id="settings-templates" rows="6">${esc(templates.map(item => item.label).join("\n"))}</textarea>
       <p><button type="button" id="settings-templates-save">定型文を保存</button></p>
       <h3>画像ライブラリ</h3>
-      <p class="lead">地図とカードの画像は、このブラウザの中だけに保存します。書き出しや GitHub には画像そのものは入りません。ファイル名が jun-ch01-01.png のようなキーと一致すると、その地図が表示されます。</p>
+      <p class="lead">地図とカードの画像は、このブラウザの中だけに保存します。書き出しや GitHub には画像そのものは入りません。キーは maps/jun-ch01-01.png のように、フォルダとファイル名です。最初のフォルダは MAP、エネミー、その他です。</p>
       <p id="image-library-usage" class="lead"></p>
+      <div id="image-library-folders" class="image-lib-folders"></div>
       <p>
         <button type="button" id="image-library-add">画像を追加</button>
         <button type="button" id="image-library-zip">画像をまとめて読み込む</button>
         <button type="button" id="image-library-folder-open">フォルダから読み込む</button>
         <button type="button" id="image-library-export">画像をまとめて書き出す</button>
+        <button type="button" id="image-library-folder-add">フォルダを作る</button>
+        <button type="button" id="image-library-folder-rename">フォルダ名を変える</button>
+        <button type="button" id="image-library-folder-delete">フォルダを削除</button>
       </p>
-      <p class="lead" id="image-library-drop" tabindex="0">ここに画像をドロップするか、この欄を選んで貼り付けできます。まとめて読み込むときは zip、複数ファイル、またはフォルダを選べます。iPhone では「画像をまとめて読み込む」から zip か写真を選びます。</p>
+      <p><select id="image-library-move-target" aria-label="移動先"></select> <button type="button" id="image-library-move">選択を移動</button></p>
+      <p class="lead" id="image-library-drop" tabindex="0">ここに画像をドロップするか、この欄を選んで貼り付けできます。zip の一番上のフォルダが、ライブラリのフォルダになります。地図の zip は maps/ に入ります。画像をフォルダへドラッグするか、選んで移動できます。</p>
       <input id="image-library-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
       <input id="image-library-bundle" type="file" accept=".zip,image/png,image/jpeg,image/gif,image/webp,application/zip" multiple hidden>
       <input id="image-library-folder" type="file" webkitdirectory multiple hidden>
@@ -1481,6 +1553,44 @@
       link.click();
       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     });
+    document.getElementById("image-library-folder-add").addEventListener("click", async () => {
+      const label = window.prompt("フォルダの名前");
+      if (!label) return;
+      libraryView = await GuideImages.createFolder(label) || libraryView;
+      paintImageLibrary();
+    });
+    document.getElementById("image-library-folder-rename").addEventListener("click", async () => {
+      const folders = await GuideImages.folders();
+      const current = folders.find(folder => folder.id === libraryView);
+      const label = window.prompt("フォルダの名前", current ? current.label : "");
+      if (!label) return;
+      const result = await GuideImages.renameFolder(libraryView, label);
+      rememberLibraryMoves(result.moved);
+      libraryView = result.id || libraryView;
+      paintImageLibrary();
+    });
+    document.getElementById("image-library-folder-delete").addEventListener("click", async () => {
+      const result = await GuideImages.deleteFolder(libraryView);
+      if (!result.ok) {
+        window.alert("MAP、エネミー、その他は削除できません。");
+        return;
+      }
+      rememberLibraryMoves(result.moved);
+      libraryView = "images";
+      paintImageLibrary();
+    });
+    document.getElementById("image-library-move").addEventListener("click", async () => {
+      const folder = document.getElementById("image-library-move-target").value;
+      const picked = [...document.querySelectorAll("[data-lib-check]:checked")].map(input => input.getAttribute("data-lib-check"));
+      const moved = [];
+      for (const id of picked) {
+        const next = await GuideImages.move(id, folder);
+        if (next && next !== id) moved.push([id, next]);
+      }
+      rememberLibraryMoves(moved);
+      libraryView = folder || libraryView;
+      paintImageLibrary();
+    });
     if (libraryDrop) {
       libraryDrop.addEventListener("dragover", event => event.preventDefault());
       libraryDrop.addEventListener("drop", async event => {
@@ -1496,15 +1606,58 @@
         paintImageLibrary();
       });
     }
-    document.getElementById("image-library-list").addEventListener("click", async event => {
+    const libraryList = document.getElementById("image-library-list");
+    libraryList.addEventListener("click", async event => {
       const rename = event.target.closest("[data-lib-rename]");
       const remove = event.target.closest("[data-lib-delete]");
       if (rename) {
-        const next = window.prompt("表示名", rename.dataset.libRename);
-        if (next) await GuideImages.rename(rename.dataset.libRename, next);
+        const nextName = window.prompt("ファイル名", rename.dataset.libRename.split("/").pop());
+        if (nextName) {
+          const next = await GuideImages.rename(rename.dataset.libRename, nextName);
+          if (next && next !== rename.dataset.libRename) rememberLibraryMoves([[rename.dataset.libRename, next]]);
+        }
       }
       if (remove) await GuideImages.remove(remove.dataset.libDelete);
       if (rename || remove) paintImageLibrary();
+    });
+    libraryList.addEventListener("dragstart", event => {
+      const row = event.target.closest("[data-lib-id]");
+      if (!row || !event.dataTransfer) return;
+      event.dataTransfer.setData("text/plain", row.getAttribute("data-lib-id"));
+      event.dataTransfer.effectAllowed = "move";
+    });
+    const folderHost = document.getElementById("image-library-folders");
+    folderHost.addEventListener("click", event => {
+      const chip = event.target.closest("[data-lib-folder]");
+      if (!chip) return;
+      libraryView = chip.getAttribute("data-lib-folder");
+      paintImageLibrary();
+    });
+    folderHost.addEventListener("dragover", event => {
+      const chip = event.target.closest("[data-lib-folder]");
+      if (!chip) return;
+      event.preventDefault();
+      chip.classList.add("is-drop");
+    });
+    folderHost.addEventListener("dragleave", event => {
+      const chip = event.target.closest("[data-lib-folder]");
+      if (chip) chip.classList.remove("is-drop");
+    });
+    folderHost.addEventListener("drop", async event => {
+      const chip = event.target.closest("[data-lib-folder]");
+      if (!chip) return;
+      event.preventDefault();
+      chip.classList.remove("is-drop");
+      const folder = chip.getAttribute("data-lib-folder");
+      const id = event.dataTransfer.getData("text/plain");
+      if (id && id.indexOf("/") > 0) {
+        const next = await GuideImages.move(id, folder);
+        if (next && next !== id) rememberLibraryMoves([[id, next]]);
+      } else if (event.dataTransfer.files && event.dataTransfer.files.length) {
+        await storeImageFiles(event.dataTransfer.files, folder);
+      }
+      libraryView = folder;
+      paintImageLibrary();
     });
     const githubStatus = document.getElementById("github-status");
     const savedGithub = (() => {
@@ -2245,17 +2398,18 @@
   }
 
   async function showPinnedMap(image, src) {
-    image.dataset.shown = src || "";
+    const key = globalThis.GuideImages ? GuideImages.resolve(src) : GuideProgress.normalizeLibraryKey(src, "maps");
+    image.dataset.shown = key || src || "";
     const missing = mapPop.querySelector(".map-missing");
     if (missing) missing.hidden = true;
-    if (GuideProgress.isLibraryKey(src) && globalThis.GuideImages) {
-      const url = await GuideImages.objectUrl(src);
+    if (GuideProgress.isLibraryKey(key) && globalThis.GuideImages) {
+      const url = await GuideImages.objectUrl(key);
       if (!url) {
         image.removeAttribute("src");
         image.hidden = true;
         if (missing) {
           missing.hidden = false;
-          missing.dataset.key = src;
+          missing.dataset.key = key;
         }
         return;
       }
@@ -2324,8 +2478,9 @@
     zoomState.x = 0;
     zoomState.y = 0;
     zoomState.pointers.clear();
-    let shown = src;
-    if (GuideProgress.isLibraryKey(src) && globalThis.GuideImages) shown = await GuideImages.objectUrl(src) || "";
+    const key = globalThis.GuideImages ? GuideImages.resolve(src) : src;
+    let shown = key;
+    if (GuideProgress.isLibraryKey(key) && globalThis.GuideImages) shown = await GuideImages.objectUrl(key) || "";
     if (shown) zoomImg.src = shown;
     zoomImg.alt = (label || "地図") + "の拡大";
     mapZoom.querySelector("#map-zoom-label").textContent = label || "地図";
