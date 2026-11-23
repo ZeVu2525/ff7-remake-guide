@@ -483,7 +483,13 @@
     </article>`;
   }
 
-  function chapterBlocks(items, sections) {
+  function emptySection(section, chapterId) {
+    const message = '<p class="empty-chapter">この区分にはカードがありません。</p>';
+    if (!cardEditing()) return message;
+    return message + `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapterId)}" data-card-section="${esc(section.id || "")}">＋ カードを追加</button></p>`;
+  }
+
+  function chapterBlocks(items, sections, chapterId) {
     const groups = sections && sections.length ? sections : [{ id: "", title: "本章", map: "", note: "" }];
     const known = new Set(groups.map(section => section.id));
     const sectionOf = item => item.section && known.has(item.section) ? item.section : groups[0].id;
@@ -514,7 +520,7 @@
           ${tools}
         </div>
         ${callout}
-        <div class="subch-body"${closed ? " hidden" : ""}>${built.html || '<p class="empty-chapter">この区分にはカードがありません。</p>'}</div>
+        <div class="subch-body"${closed ? " hidden" : ""}>${built.html || emptySection(section, chapterId)}</div>
       </section>`;
     }).join("");
     return { html, visible, numbers: {} };
@@ -657,7 +663,7 @@
   }
 
   function chapterBodyHtml(chapter) {
-    const built = chapterBlocks(chapter.items, chapter.sections);
+    const built = chapterBlocks(chapter.items, chapter.sections, chapter.id);
     const tools = cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">${esc(L("addCard"))}</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">${esc(L("addSection"))}</button><button type="button" data-move-selected="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}"${GuideSelect.size ? "" : " disabled"}>${esc(L("moveSelected"))}</button></p>` : "";
     return { html: tools + (built.html || '<p class="empty-chapter">項目はまだありません。</p>'), visible: built.visible };
   }
@@ -941,7 +947,7 @@
 
   function renderWeaponTable(rows) {
     const groups = ["クラウド", "バレット", "エアリス", "ティファ"];
-    return groups.map(character => {
+    const html = groups.map(character => {
       const list = rows.filter(item => item.area === character);
       if (!list.length) return "";
       const source = list[0].source || "";
@@ -958,6 +964,8 @@
       return `<section class="equip-section"><h3>${esc(character)}</h3>${catalogAdder("weapons")}${sourceNote(source)}
         <div class="table-scroll"><table class="sheet"><thead><tr><th>名前</th><th>ステータスの上昇量<br>物攻 / 魔攻 / 物防 / 魔防</th><th>マテリア穴</th><th>武器アビリティ</th><th>入手方法</th><th>買値</th><th>売値</th><th>入手カード</th></tr></thead><tbody>${body}</tbody></table></div></section>`;
     }).join("");
+    if (html) return html;
+    return (cardEditing() ? catalogAdder("weapons") : "") + '<p class="empty-chapter">一致する項目がありません。</p>';
   }
 
   function otherStat(row) {
@@ -1015,7 +1023,7 @@
         ${cardLinksLine(item)}
       </article>`).join("");
       return `<section class="equip-section"><h3>${esc(kind)}</h3>${catalogAdder("materia")}${sourceNote(list[0].source)}${body}</section>`;
-    }).join("");
+    }).join("") || ((cardEditing() ? catalogAdder("materia") : "") + '<p class="empty-chapter">一致する項目がありません。</p>');
   }
 
   function spanAttr(cell) {

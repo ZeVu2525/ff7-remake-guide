@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v38");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v39");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -770,7 +770,13 @@ assert.ok(editSrc.includes('richMenu("font"'));
   assert.ok(!chapterFn.includes('label: "MAP"'));
   assert.ok(sectionFn.includes('label: "メイン"') && sectionFn.includes('label: "MAP"') && sectionFn.includes("mapFields"));
   assert.ok(editSrc.includes("ff7r-chapter-editor-tab"));
+  assert.ok(editSrc.includes('field("画像ライブラリ"'));
+  assert.ok(!editSrc.includes('field("掲載元の地図"') && !editSrc.includes('field("保存した地図"') && !editSrc.includes('field("地図の画像"'));
+  assert.ok(editSrc.includes('name="mapUrl"'));
 }
+assert.ok(appSrc.includes("＋ カードを追加"));
+assert.ok(appSrc.includes("data-card-section"));
+assert.ok(editSrc.includes('add.getAttribute("data-card-section")'));
 assert.ok(!editSrc.includes('<select data-rt="size">'));
 assert.ok(!editSrc.includes('<select data-rt="font">'));
 function mockFetch(handler) {

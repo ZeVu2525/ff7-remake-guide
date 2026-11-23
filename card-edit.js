@@ -276,15 +276,8 @@
   }
 
   function chosenMap() {
-    if (!form.elements.mapUrl && !form.elements.mapPreset && !form.elements.mapRepo) return editing && editing.map ? editing.map : "";
-    const url = String((form.elements.mapUrl && form.elements.mapUrl.value) || "").trim();
-    if (url) return url;
-    const repoId = String((form.elements.mapRepo && form.elements.mapRepo.value) || "").trim();
-    if (repoId) {
-      const found = repoMaps().find(item => item.id === repoId);
-      return found ? found.file : repoId;
-    }
-    return String((form.elements.mapPreset && form.elements.mapPreset.value) || "").trim();
+    if (!form.elements.mapUrl) return editing && editing.map ? editing.map : "";
+    return String(form.elements.mapUrl.value || "").trim();
   }
 
   function mapPreviewSrc(value) {
@@ -323,19 +316,20 @@
     if (warn) warn.hidden = true;
   }
 
+  function mapLibraryValue(current) {
+    const value = String(current || "").trim();
+    if (GuideProgress.isLibraryKey(value)) return value;
+    const normalized = GuideProgress.normalizeLibraryKey(value, "maps");
+    return GuideProgress.isLibraryKey(normalized) ? normalized : "";
+  }
+
   function mapFields(current) {
-    const maps = GAME.maps || [];
-    const saved = repoMaps();
-    const repo = saved.find(item => item.id === current || item.file === current);
-    const presetId = !repo && maps.some(map => map.id === current) ? current : "";
-    const options = ['<option value="">掲載元の地図は使わない</option>'].concat(maps.map(map => `<option value="${map.id}"${map.id === presetId ? " selected" : ""}>${escapeText(map.label)}</option>`)).join("");
-    const repoOptions = ['<option value="">保存した地図は使わない</option>'].concat(saved.map(item => `<option value="${escapeAttr(item.id)}"${repo && item.id === repo.id ? " selected" : ""}>${escapeText(item.label || item.file)}</option>`)).join("");
-    const custom = presetId || repo ? "" : (current || "");
+    const value = String(current || "");
+    const library = mapLibraryValue(value);
+    const folder = library ? library.split("/").slice(0, -1).join("/") : "maps";
     return [
-      field("掲載元の地図", `<select name="mapPreset">${options}</select>`),
-      field("保存した地図", `<select name="mapRepo">${repoOptions}</select>`),
-      field("地図の画像", `<input name="mapUrl" value="${escapeAttr(custom)}" placeholder="maps/jun-ch01-01.png または maps/ のファイル">`),
-      field("ライブラリ", `<select data-lib-folder data-picker="map" data-current="maps"></select><select data-img-lib data-picker="map" data-folder="maps" data-current="${escapeAttr(GuideProgress.isLibraryKey(custom) ? custom : "")}"><option value="">このブラウザの地図は使わない</option></select>`),
+      `<input type="hidden" name="mapUrl" value="${escapeAttr(value)}">`,
+      field("画像ライブラリ", `<select data-lib-folder data-picker="map" data-current="${escapeAttr(folder || "maps")}"></select><select data-img-lib data-picker="map" data-folder="${escapeAttr(folder || "maps")}" data-current="${escapeAttr(library)}"><option value="">このブラウザの地図は使わない</option></select>`),
       '<label class="map-file">画像ファイル<input id="map-file" name="mapFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp"></label>',
       '<p id="map-file-note">選んだ画像は、このブラウザの画像ライブラリにファイル名で保存します。書き出しや GitHub には画像そのものは入りません。</p>',
       '<p id="map-size-warn" hidden></p>',
@@ -345,41 +339,18 @@
   }
 
   function bindMapField() {
-    const preset = form.elements.mapPreset;
     const url = form.elements.mapUrl;
     const file = document.getElementById("map-file");
     const clear = document.getElementById("map-clear");
     const image = document.getElementById("map-preview");
-    const repo = form.elements.mapRepo;
-    if (preset) preset.addEventListener("change", () => {
-      if (preset.value) {
-        if (url) url.value = "";
-        if (repo) repo.value = "";
-      }
-      paintMapPreview();
-    });
-    if (repo) repo.addEventListener("change", () => {
-      if (repo.value) {
-        if (url) url.value = "";
-        if (preset) preset.value = "";
-      }
-      paintMapPreview();
-    });
-    if (url) url.addEventListener("input", () => {
-      if (url.value.trim()) {
-        if (preset) preset.value = "";
-        if (repo) repo.value = "";
-      }
-      paintMapPreview();
-    });
     if (image) image.addEventListener("error", () => {
       image.alt = "この画像は表示できません";
     });
     if (clear) clear.addEventListener("click", () => {
-      if (preset) preset.value = "";
-      if (form.elements.mapRepo) form.elements.mapRepo.value = "";
       if (url) url.value = "";
       if (file) file.value = "";
+      const library = form.querySelector('[data-img-lib][data-picker="map"]');
+      if (library) library.value = "";
       error.textContent = "";
       paintMapPreview();
     });
@@ -395,9 +366,13 @@
       const key = GuideProgress.libraryKey("maps", picked.name);
       await GuideImages.putFile(key, picked, picked.name, "maps");
       if (url) url.value = key;
-      if (preset) preset.value = "";
-      if (form.elements.mapRepo) form.elements.mapRepo.value = "";
+      const library = form.querySelector('[data-img-lib][data-picker="map"]');
+      if (library) {
+        library.setAttribute("data-current", key);
+        library.setAttribute("data-folder", "maps");
+      }
       error.textContent = "";
+      fillLibrarySelects(form);
       paintMapPreview();
     });
     const mapFolder = form.querySelector('[data-lib-folder][data-picker="map"]');
@@ -408,10 +383,8 @@
     });
     const mapLibrary = form.querySelector('[data-img-lib][data-picker="map"]');
     if (mapLibrary) mapLibrary.addEventListener("change", () => {
-      if (!mapLibrary.value || !url) return;
+      if (!url) return;
       url.value = mapLibrary.value;
-      if (preset) preset.value = "";
-      if (form.elements.mapRepo) form.elements.mapRepo.value = "";
       paintMapPreview();
     });
     fillLibrarySelects(form);
@@ -1815,6 +1788,7 @@
         trackId: add.getAttribute("data-card-track"),
         chapterId: add.getAttribute("data-card-chapter"),
         flag: "story",
+        section: add.getAttribute("data-card-section") || "",
         title: "",
         detail: "",
         deadline: "",
