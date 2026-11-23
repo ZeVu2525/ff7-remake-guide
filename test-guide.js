@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v39");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v40");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -668,6 +668,34 @@ assert.strictEqual(progress.suggestPlaces(placeBook.places, "", 2).length, 2);
 const placed = progress.upsertRouteCard(progress.emptyCardBook(), null, "user-place", Object.assign(progress.headerCopyFields({ title: "店", flag: "story" }), { location: "スラム" }), "main", "ch01", ["user-place"], []);
 assert.strictEqual(placed.custom["user-place"].location, "スラム");
 assert.ok(progress.routeModuleSource({ main: [{ chapterId: "ch01", items: [{ id: "a", title: "店", flag: "story", detail: "d", location: "スラム" }] }] }).includes("location"));
+const placeBase = { id: "c1", title: "親", detail: "本文", flag: "story" };
+const placeRoute = { main: [{ chapterId: "ch01", sections: [{ id: "s", title: "区分" }], items: [placeBase, { id: "c2", title: "子", detail: "子", flag: "story", parent: "c1", section: "s" }] }] };
+const placeDefs = [{ id: "ch01", title: "Chapter 1" }];
+const placeSaved = progress.upsertRouteCard(progress.emptyCardBook(), placeBase, "c1", {
+  title: "親", detail: "本文", flag: "story", flags: ["story"], location: "壱番魔晄炉"
+}, "main", "ch01", ["c1", "c2"], ["c1", "c2"]);
+assert.strictEqual(placeSaved.patches.c1.location, "壱番魔晄炉");
+const placeChild = progress.upsertRouteCard(placeSaved, placeRoute.main[0].items[1], "c2", {
+  title: "子", detail: "子", flag: "story", flags: ["story"], parent: "c1", section: "s", location: "七番街"
+}, "main", "ch01", ["c1", "c2"], ["c1", "c2"]);
+const placeMerged = progress.mergeTrack(placeRoute, placeDefs, placeChild, "main");
+assert.strictEqual(placeMerged[0].items.find(item => item.id === "c1").location, "壱番魔晄炉");
+assert.strictEqual(placeMerged[0].items.find(item => item.id === "c2").location, "七番街");
+const placeCustom = progress.upsertRouteCard(progress.emptyCardBook(), null, "made", {
+  title: "追加", detail: "", flag: "story", flags: ["story"], location: "スラム", section: "s"
+}, "main", "ch01", ["made"], []);
+assert.strictEqual(progress.mergeTrack({ main: [{ chapterId: "ch01", sections: [], items: [] }] }, placeDefs, placeCustom, "main")[0].items[0].location, "スラム");
+const placeRound = progress.acceptBundle({ app: progress.APP, cards: placeChild });
+assert.strictEqual(progress.mergeTrack(placeRoute, placeDefs, placeRound.cards, "main")[0].items.find(item => item.id === "c1").location, "壱番魔晄炉");
+const questBaseItem = { id: "q1", name: "依頼", detail: "内容" };
+const questSaved = progress.upsertCatalogCard(progress.emptyCardBook(), questBaseItem, "q1", {
+  name: "依頼", detail: "内容", location: "ウォールマーケット"
+}, "quests", ["q1"], ["q1"]);
+assert.strictEqual(progress.mergeCatalog({ items: [questBaseItem] }, questSaved, "quests")[0].location, "ウォールマーケット");
+const questCustom = progress.upsertCatalogCard(progress.emptyCardBook(), null, "qnew", {
+  name: "新しい依頼", detail: "説明", location: "神羅ビル"
+}, "quests", ["qnew"], []);
+assert.strictEqual(progress.mergeCatalog({ items: [] }, questCustom, "quests")[0].location, "神羅ビル");
 ["app.js", "card-edit.js", "edit-mode.js"].forEach(file => {
   const source = require("fs").readFileSync(require("path").join(__dirname, file), "utf8");
   ["input", "keydown", "paste"].forEach(name => {
@@ -777,6 +805,11 @@ assert.ok(editSrc.includes('richMenu("font"'));
 assert.ok(appSrc.includes("＋ カードを追加"));
 assert.ok(appSrc.includes("data-card-section"));
 assert.ok(editSrc.includes('add.getAttribute("data-card-section")'));
+{
+  const saveRoute = editSrc.slice(editSrc.indexOf("function saveRoute"), editSrc.indexOf("function saveCatalog"));
+  const validateCall = saveRoute.slice(saveRoute.indexOf("validateRouteFields("), saveRoute.indexOf(", flagIds"));
+  assert.ok(validateCall.includes("location: data.get(\"location\")"));
+}
 assert.ok(!editSrc.includes('<select data-rt="size">'));
 assert.ok(!editSrc.includes('<select data-rt="font">'));
 function mockFetch(handler) {
