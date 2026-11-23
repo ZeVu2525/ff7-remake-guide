@@ -244,6 +244,12 @@
     return "<label>" + label + "</label>" + html;
   }
 
+  function tabbedFields(tabs) {
+    const bar = `<div class="card-edit-tabs" role="tablist">${tabs.map(tab => `<button type="button" data-card-tab="${tab.id}">${tab.label}</button>`).join("")}</div>`;
+    const panels = tabs.map(tab => `<div data-tab-panel="${tab.id}" hidden>${tab.body}</div>`).join("");
+    return bar + panels;
+  }
+
   const MAP_FILE_MAX = Math.round(1.2 * 1024 * 1024);
   let formBaseline = "";
 
@@ -1285,11 +1291,29 @@
     return "main";
   }
 
+  function rememberedChapterTab() {
+    try {
+      const saved = sessionStorage.getItem("ff7r-chapter-editor-tab");
+      if (saved === "map" || saved === "main") return saved;
+    } catch (error) {}
+    return "main";
+  }
+
   function showEditorTab(id) {
-    const tab = id || "main";
-    fields.querySelectorAll("[data-card-tab]").forEach(button => button.classList.toggle("on", button.getAttribute("data-card-tab") === tab));
+    const buttons = [...fields.querySelectorAll("[data-card-tab]")];
+    const known = buttons.map(button => button.getAttribute("data-card-tab"));
+    const tab = known.indexOf(id) >= 0 ? id : (known[0] || "main");
+    buttons.forEach(button => {
+      const on = button.getAttribute("data-card-tab") === tab;
+      button.classList.toggle("on", on);
+      button.setAttribute("aria-selected", on ? "true" : "false");
+    });
     fields.querySelectorAll("[data-tab-panel]").forEach(panel => { panel.hidden = panel.getAttribute("data-tab-panel") !== tab; });
-    try { sessionStorage.setItem("ff7r-card-editor-tab", tab); } catch (error) {}
+    const cardTabs = ["main", "blocks", "image", "options"];
+    try {
+      if (cardTabs.indexOf(tab) >= 0 && known.indexOf("blocks") >= 0) sessionStorage.setItem("ff7r-card-editor-tab", tab);
+      if ((tab === "main" || tab === "map") && known.indexOf("map") >= 0) sessionStorage.setItem("ff7r-chapter-editor-tab", tab);
+    } catch (error) {}
     if (tab === "options") paintTagHint();
   }
 
@@ -2087,10 +2111,14 @@
     editing = { chapterEdit: true, trackId, chapterId };
     document.getElementById("card-edit-title").textContent = "チャプター";
     document.getElementById("card-edit-id").textContent = chapter.id;
-    fields.innerHTML = field("名前", `<input name="title" value="${escapeAttr(chapter.title || "")}">`);
+    fields.innerHTML = tabbedFields([
+      { id: "main", label: "メイン", body: field("名前", `<input name="title" value="${escapeAttr(chapter.title || "")}">`) }
+    ]);
     error.textContent = "";
     dialog.hidden = false;
     captureBaseline();
+    showEditorTab("main");
+    if (form.elements.title) form.elements.title.focus();
   }
 
   function saveChapterEdit() {
@@ -2167,17 +2195,21 @@
     const colors = GuideProgress.calloutColors(book(), section);
     document.getElementById("card-edit-title").textContent = "小見出し";
     document.getElementById("card-edit-id").textContent = section.id;
-    fields.innerHTML = [
-      field("区分名", `<input name="title" value="${escapeAttr(GuideProgress.sectionName(section.title))}" placeholder="区分名を入力">`),
-      field("小見出し", `<textarea name="note">${escapeText(section.note || "")}</textarea>`),
-      field("背景", `<input name="bg" type="color" value="${escapeAttr(colors.bg)}">`),
-      field("枠", `<input name="border" type="color" value="${escapeAttr(colors.border)}">`),
-      mapFields(section.map || "")
-    ].join("");
+    fields.innerHTML = tabbedFields([
+      { id: "main", label: "メイン", body: [
+        field("区分名", `<input name="title" value="${escapeAttr(GuideProgress.sectionName(section.title))}" placeholder="区分名を入力">`),
+        field("小見出し", `<textarea name="note">${escapeText(section.note || "")}</textarea>`),
+        field("背景", `<input name="bg" type="color" value="${escapeAttr(colors.bg)}">`),
+        field("枠", `<input name="border" type="color" value="${escapeAttr(colors.border)}">`)
+      ].join("") },
+      { id: "map", label: "MAP", body: mapFields(section.map || "") }
+    ]);
     bindMapField();
     error.textContent = "";
     dialog.hidden = false;
     captureBaseline();
+    showEditorTab(rememberedChapterTab());
+    if (fields.querySelector('[data-tab-panel="main"]:not([hidden])') && form.elements.title) form.elements.title.focus();
   }
 
   function saveSectionEdit() {

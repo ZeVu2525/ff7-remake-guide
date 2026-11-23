@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v37");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v38");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -763,6 +763,14 @@ assert.ok(require("fs").readFileSync(require("path").join(__dirname, "card-edit.
 assert.ok(editSrc.includes('data-rt-menu="${kind}"'));
 assert.ok(editSrc.includes('richMenu("size"'));
 assert.ok(editSrc.includes('richMenu("font"'));
+{
+  const chapterFn = editSrc.slice(editSrc.indexOf("function openChapterEdit"), editSrc.indexOf("function saveChapterEdit"));
+  const sectionFn = editSrc.slice(editSrc.indexOf("function openSectionEdit"), editSrc.indexOf("function saveSectionEdit"));
+  assert.ok(chapterFn.includes('label: "メイン"'));
+  assert.ok(!chapterFn.includes('label: "MAP"'));
+  assert.ok(sectionFn.includes('label: "メイン"') && sectionFn.includes('label: "MAP"') && sectionFn.includes("mapFields"));
+  assert.ok(editSrc.includes("ff7r-chapter-editor-tab"));
+}
 assert.ok(!editSrc.includes('<select data-rt="size">'));
 assert.ok(!editSrc.includes('<select data-rt="font">'));
 function mockFetch(handler) {
