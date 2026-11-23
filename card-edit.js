@@ -56,6 +56,13 @@
     ".card-edit-tabs button{flex:1 1 auto;min-height:40px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}",
     ".card-edit-tabs button.on{background:#14324a;color:#fff;border-color:#14324a}",
     ".card-tab-panel[hidden]{display:none}",
+    ".place-field{position:relative}",
+    ".place-suggest{position:absolute;z-index:6;left:0;right:0;top:100%;max-height:240px;overflow:auto;margin:4px 0 0;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);box-shadow:0 8px 24px rgba(0,0,0,.18)}",
+    ".place-suggest[hidden]{display:none}",
+    ".place-suggest button{display:flex;width:100%;min-height:36px;align-items:center;gap:8px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}",
+    ".place-suggest button.on,.place-suggest button:hover{background:color-mix(in srgb,var(--accent) 18%,transparent)}",
+    ".place-suggest .place-drop{flex:1;min-width:0}",
+    ".place-suggest .place-x{flex:none;width:28px;text-align:center}",
     "#card-menu{position:fixed;z-index:290;display:grid;min-width:160px;padding:6px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);box-shadow:0 8px 24px rgba(0,0,0,.28)}",
     "#card-menu button{min-height:40px;padding:6px 10px;border:0;border-radius:8px;background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}",
     "#card-menu button:hover,#card-menu button:focus-visible{background:color-mix(in srgb,var(--fg) 8%,transparent)}",
@@ -65,6 +72,12 @@
     ".blk-handle{touch-action:none;cursor:grab}",
     ".blk-tools button,.blk-add button,.rt-bar button{min-height:28px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:inherit;font-size:12px;line-height:1.3;cursor:pointer}",
     ".rt-bar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
+    ".rt-pop{position:relative;display:inline-flex}",
+    ".rt-menu{position:absolute;z-index:8;top:calc(100% + 4px);left:0;display:flex;flex-direction:column;gap:2px;min-width:4.5em;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);box-shadow:0 8px 20px rgba(0,0,0,.18)}",
+    ".rt-menu.above{top:auto;bottom:calc(100% + 4px)}",
+    ".rt-menu[hidden]{display:none}",
+    ".rt-menu button.on,.rt-bar [data-rt-menu].is-set{box-shadow:inset 0 -2px 0 var(--accent)}",
+    ".rt-menu button.key{outline:2px solid var(--accent)}",
     ".rt-bar [data-rt=color]{width:22px;min-height:22px;padding:0}",
     ".rt-edit{min-height:72px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);white-space:pre-wrap}",
     ".blk-file input{max-width:100%}",
@@ -231,6 +244,12 @@
     return "<label>" + label + "</label>" + html;
   }
 
+  function tabbedFields(tabs) {
+    const bar = `<div class="card-edit-tabs" role="tablist">${tabs.map(tab => `<button type="button" data-card-tab="${tab.id}">${tab.label}</button>`).join("")}</div>`;
+    const panels = tabs.map(tab => `<div data-tab-panel="${tab.id}" hidden>${tab.body}</div>`).join("");
+    return bar + panels;
+  }
+
   const MAP_FILE_MAX = Math.round(1.2 * 1024 * 1024);
   let formBaseline = "";
 
@@ -257,15 +276,8 @@
   }
 
   function chosenMap() {
-    if (!form.elements.mapUrl && !form.elements.mapPreset && !form.elements.mapRepo) return editing && editing.map ? editing.map : "";
-    const url = String((form.elements.mapUrl && form.elements.mapUrl.value) || "").trim();
-    if (url) return url;
-    const repoId = String((form.elements.mapRepo && form.elements.mapRepo.value) || "").trim();
-    if (repoId) {
-      const found = repoMaps().find(item => item.id === repoId);
-      return found ? found.file : repoId;
-    }
-    return String((form.elements.mapPreset && form.elements.mapPreset.value) || "").trim();
+    if (!form.elements.mapUrl) return editing && editing.map ? editing.map : "";
+    return String(form.elements.mapUrl.value || "").trim();
   }
 
   function mapPreviewSrc(value) {
@@ -304,19 +316,20 @@
     if (warn) warn.hidden = true;
   }
 
+  function mapLibraryValue(current) {
+    const value = String(current || "").trim();
+    if (GuideProgress.isLibraryKey(value)) return value;
+    const normalized = GuideProgress.normalizeLibraryKey(value, "maps");
+    return GuideProgress.isLibraryKey(normalized) ? normalized : "";
+  }
+
   function mapFields(current) {
-    const maps = GAME.maps || [];
-    const saved = repoMaps();
-    const repo = saved.find(item => item.id === current || item.file === current);
-    const presetId = !repo && maps.some(map => map.id === current) ? current : "";
-    const options = ['<option value="">掲載元の地図は使わない</option>'].concat(maps.map(map => `<option value="${map.id}"${map.id === presetId ? " selected" : ""}>${escapeText(map.label)}</option>`)).join("");
-    const repoOptions = ['<option value="">保存した地図は使わない</option>'].concat(saved.map(item => `<option value="${escapeAttr(item.id)}"${repo && item.id === repo.id ? " selected" : ""}>${escapeText(item.label || item.file)}</option>`)).join("");
-    const custom = presetId || repo ? "" : (current || "");
+    const value = String(current || "");
+    const library = mapLibraryValue(value);
+    const folder = library ? library.split("/").slice(0, -1).join("/") : "maps";
     return [
-      field("掲載元の地図", `<select name="mapPreset">${options}</select>`),
-      field("保存した地図", `<select name="mapRepo">${repoOptions}</select>`),
-      field("地図の画像", `<input name="mapUrl" value="${escapeAttr(custom)}" placeholder="maps/jun-ch01-01.png または maps/ のファイル">`),
-      field("ライブラリ", `<select data-lib-folder data-picker="map" data-current="maps"></select><select data-img-lib data-picker="map" data-folder="maps" data-current="${escapeAttr(GuideProgress.isLibraryKey(custom) ? custom : "")}"><option value="">このブラウザの地図は使わない</option></select>`),
+      `<input type="hidden" name="mapUrl" value="${escapeAttr(value)}">`,
+      field("画像ライブラリ", `<select data-lib-folder data-picker="map" data-current="${escapeAttr(folder || "maps")}"></select><select data-img-lib data-picker="map" data-folder="${escapeAttr(folder || "maps")}" data-current="${escapeAttr(library)}"><option value="">このブラウザの地図は使わない</option></select>`),
       '<label class="map-file">画像ファイル<input id="map-file" name="mapFile" type="file" accept="image/png,image/jpeg,image/gif,image/webp"></label>',
       '<p id="map-file-note">選んだ画像は、このブラウザの画像ライブラリにファイル名で保存します。書き出しや GitHub には画像そのものは入りません。</p>',
       '<p id="map-size-warn" hidden></p>',
@@ -326,41 +339,18 @@
   }
 
   function bindMapField() {
-    const preset = form.elements.mapPreset;
     const url = form.elements.mapUrl;
     const file = document.getElementById("map-file");
     const clear = document.getElementById("map-clear");
     const image = document.getElementById("map-preview");
-    const repo = form.elements.mapRepo;
-    if (preset) preset.addEventListener("change", () => {
-      if (preset.value) {
-        if (url) url.value = "";
-        if (repo) repo.value = "";
-      }
-      paintMapPreview();
-    });
-    if (repo) repo.addEventListener("change", () => {
-      if (repo.value) {
-        if (url) url.value = "";
-        if (preset) preset.value = "";
-      }
-      paintMapPreview();
-    });
-    if (url) url.addEventListener("input", () => {
-      if (url.value.trim()) {
-        if (preset) preset.value = "";
-        if (repo) repo.value = "";
-      }
-      paintMapPreview();
-    });
     if (image) image.addEventListener("error", () => {
       image.alt = "この画像は表示できません";
     });
     if (clear) clear.addEventListener("click", () => {
-      if (preset) preset.value = "";
-      if (form.elements.mapRepo) form.elements.mapRepo.value = "";
       if (url) url.value = "";
       if (file) file.value = "";
+      const library = form.querySelector('[data-img-lib][data-picker="map"]');
+      if (library) library.value = "";
       error.textContent = "";
       paintMapPreview();
     });
@@ -376,9 +366,13 @@
       const key = GuideProgress.libraryKey("maps", picked.name);
       await GuideImages.putFile(key, picked, picked.name, "maps");
       if (url) url.value = key;
-      if (preset) preset.value = "";
-      if (form.elements.mapRepo) form.elements.mapRepo.value = "";
+      const library = form.querySelector('[data-img-lib][data-picker="map"]');
+      if (library) {
+        library.setAttribute("data-current", key);
+        library.setAttribute("data-folder", "maps");
+      }
       error.textContent = "";
+      fillLibrarySelects(form);
       paintMapPreview();
     });
     const mapFolder = form.querySelector('[data-lib-folder][data-picker="map"]');
@@ -389,10 +383,8 @@
     });
     const mapLibrary = form.querySelector('[data-img-lib][data-picker="map"]');
     if (mapLibrary) mapLibrary.addEventListener("change", () => {
-      if (!mapLibrary.value || !url) return;
+      if (!url) return;
       url.value = mapLibrary.value;
-      if (preset) preset.value = "";
-      if (form.elements.mapRepo) form.elements.mapRepo.value = "";
       paintMapPreview();
     });
     fillLibrarySelects(form);
@@ -519,9 +511,18 @@
     ].join("");
   }
 
+  function richMenu(kind, rows) {
+    const buttons = rows.map(item => `<button type="button" data-rt="${kind}" data-rt-value="${item[0]}">${item[1]}</button>`).join("");
+    const icon = kind === "size" ? "aA" : "T";
+    const label = kind === "size" ? "大きさ" : "字体";
+    return `<span class="rt-pop"><button type="button" data-rt-menu="${kind}" title="${label}" aria-label="${label}" aria-expanded="false">${icon}</button><span class="rt-menu" hidden>${buttons}</span></span>`;
+  }
+
   function richBox(html) {
     const colors = RICH_COLORS.map(color => `<button type="button" data-rt="color" data-rt-value="${color}" style="background:${color}" aria-label="${color}"></button>`).join("");
-    return `<div class="rt-wrap"><div class="rt-bar"><button type="button" data-rt="bold"><b>B</b></button><button type="button" data-rt="italic"><i>I</i></button><button type="button" data-rt="underline"><u>U</u></button><button type="button" data-rt="strike"><s>S</s></button><button type="button" data-rt="clear">書式を消す</button><select data-rt="size"><option value="">大きさ</option><option value="0.85em">小</option><option value="1em">中</option><option value="1.25em">大</option></select><select data-rt="font"><option value="">字体</option><option value="serif">明朝</option><option value="monospace">等幅</option></select><label>色 <input type="color" data-rt="color" value="#1d4e89"></label>${colors}<label>背景 <input type="color" data-rt="bg" value="#fff3bf"></label></div><div class="rt-edit" contenteditable="true">${GuideProgress.sanitizeRich(html || "")}</div></div>`;
+    const size = richMenu("size", [["0.85em", "小"], ["1em", "中"], ["1.25em", "大"]]);
+    const font = richMenu("font", [["serif", "明朝"], ["monospace", "等幅"]]);
+    return `<div class="rt-wrap"><div class="rt-bar"><button type="button" data-rt="bold" title="太字"><b>B</b></button><button type="button" data-rt="italic" title="斜体"><i>I</i></button><button type="button" data-rt="underline" title="下線"><u>U</u></button><button type="button" data-rt="strike" title="打消し"><s>S</s></button><button type="button" data-rt="clear" title="書式を消す">書式を消す</button>${size}${font}<label>色 <input type="color" data-rt="color" value="#1d4e89"></label>${colors}<label>背景 <input type="color" data-rt="bg" value="#fff3bf"></label></div><div class="rt-edit" contenteditable="true">${GuideProgress.sanitizeRich(html || "")}</div></div>`;
   }
 
   function listField(block) {
@@ -639,6 +640,12 @@
   function applyRich(editor, kind, value) {
     if (!editor) return;
     editor.focus();
+    const saved = editor._rtRange;
+    if (saved) {
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(saved);
+    }
     document.execCommand("styleWithCSS", false, true);
     if (kind === "bold") document.execCommand("bold");
     else if (kind === "italic") document.execCommand("italic");
@@ -656,6 +663,53 @@
       document.execCommand("insertHTML", false, '<span style="' + css + '">' + html + "</span>");
     }
     syncBlocks();
+    refreshRichMarks(editor);
+  }
+
+  function placeRichMenu(panel) {
+    panel.classList.remove("above");
+    const host = panel.closest("#card-edit-fields") || panel.closest("form");
+    const limit = host ? host.getBoundingClientRect().bottom : window.innerHeight;
+    if (panel.getBoundingClientRect().bottom > limit - 8) panel.classList.add("above");
+  }
+
+  function closeRichMenus(root) {
+    (root || document).querySelectorAll(".rt-menu").forEach(menu => {
+      menu.hidden = true;
+      const button = menu.parentElement && menu.parentElement.querySelector("[data-rt-menu]");
+      if (button) button.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function richStyle(editor, kind) {
+    const sel = window.getSelection();
+    const node = sel && sel.anchorNode;
+    let el = node && (node.nodeType === 1 ? node : node.parentElement);
+    if (!el || !editor || !editor.contains(el)) return "";
+    while (el && el !== editor) {
+      const style = el.style || {};
+      if (kind === "size" && style.fontSize) return style.fontSize;
+      if (kind === "font" && style.fontFamily) {
+        const family = style.fontFamily.toLowerCase();
+        if (family.indexOf("mono") >= 0) return "monospace";
+        if (family.indexOf("serif") >= 0) return "serif";
+      }
+      el = el.parentElement;
+    }
+    return "";
+  }
+
+  function refreshRichMarks(editor) {
+    const wrap = editor && editor.closest && editor.closest(".rt-wrap");
+    if (!wrap) return;
+    ["size", "font"].forEach(kind => {
+      const current = richStyle(editor, kind);
+      const button = wrap.querySelector('[data-rt-menu="' + kind + '"]');
+      if (button) button.classList.toggle("is-set", !!current);
+      wrap.querySelectorAll('[data-rt="' + kind + '"]').forEach(item => {
+        item.classList.toggle("on", item.getAttribute("data-rt-value") === current);
+      });
+    });
   }
 
   function missingImage(blocks) {
@@ -787,10 +841,25 @@
       paintBattle();
       return;
     }
+    const menuButton = event.target.closest("[data-rt-menu]");
+    if (menuButton) {
+      event.preventDefault();
+      const panel = menuButton.parentElement.querySelector(".rt-menu");
+      const willOpen = panel.hidden;
+      closeRichMenus(fields);
+      panel.hidden = !willOpen;
+      menuButton.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      if (willOpen) {
+        placeRichMenu(panel);
+        refreshRichMarks(menuButton.closest(".rt-wrap").querySelector(".rt-edit"));
+      }
+      return;
+    }
     const rt = event.target.closest("[data-rt]");
     if (rt && rt.tagName === "BUTTON") {
       event.preventDefault();
       applyRich(rt.closest(".rt-wrap").querySelector(".rt-edit"), rt.getAttribute("data-rt"), rt.getAttribute("data-rt-value") || "");
+      closeRichMenus(fields);
       return;
     }
     const add = event.target.closest("[data-add-block]");
@@ -822,7 +891,7 @@
   function onBlockChange(event) {
     const target = event.target;
     if (!target || !target.closest || !target.closest("#block-editor")) return;
-    if (target.getAttribute("data-rt") === "size" || target.getAttribute("data-rt") === "font" || target.getAttribute("data-rt") === "color" || target.getAttribute("data-rt") === "bg") {
+    if (target.getAttribute("data-rt") === "color" || target.getAttribute("data-rt") === "bg") {
       applyRich(target.closest(".rt-wrap").querySelector(".rt-edit"), target.getAttribute("data-rt"), target.value);
       target.value = target.tagName === "SELECT" ? "" : target.value;
       return;
@@ -905,8 +974,44 @@
     }
     syncBlocks();
   });
+  fields.addEventListener("mouseup", event => {
+    const editor = event.target.closest && event.target.closest(".rt-edit");
+    if (editor) refreshRichMarks(editor);
+  });
+  fields.addEventListener("keyup", event => {
+    const editor = event.target.closest && event.target.closest(".rt-edit");
+    if (editor) refreshRichMarks(editor);
+  });
   fields.addEventListener("mousedown", event => {
-    if (event.target.closest && event.target.closest(".rt-bar button")) event.preventDefault();
+    const tool = event.target.closest && event.target.closest(".rt-bar button, .rt-menu button");
+    if (tool) {
+      event.preventDefault();
+      const editor = tool.closest(".rt-wrap") && tool.closest(".rt-wrap").querySelector(".rt-edit");
+      const sel = window.getSelection();
+      if (editor && sel && sel.rangeCount && editor.contains(sel.anchorNode)) editor._rtRange = sel.getRangeAt(0).cloneRange();
+    }
+    if (!event.target.closest(".rt-pop")) closeRichMenus(fields);
+  });
+  fields.addEventListener("keydown", event => {
+    const panel = fields.querySelector(".rt-menu:not([hidden])");
+    if (!panel) return;
+    const wrap = panel.closest(".rt-wrap");
+    if (wrap && event.target && !wrap.contains(event.target)) return;
+    if (event.isComposing || event.keyCode === 229) return;
+    const options = [...panel.querySelectorAll("button")];
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      let index = options.findIndex(button => button.classList.contains("key"));
+      if (index < 0) index = options.findIndex(button => button.classList.contains("on"));
+      index = event.key === "ArrowDown" ? (index + 1) % options.length : (index <= 0 ? options.length - 1 : index - 1);
+      options.forEach(button => button.classList.remove("key"));
+      options[index].classList.add("key");
+    } else if (event.key === "Enter") {
+      const chosen = options.find(button => button.classList.contains("key")) || options.find(button => button.classList.contains("on"));
+      if (!chosen) return;
+      event.preventDefault();
+      chosen.click();
+    }
   });
   fields.addEventListener("paste", event => {
     const clipboard = event.clipboardData;
@@ -993,6 +1098,101 @@
     clearBlockMarks();
   });
 
+  function gatheredPlaces() {
+    const records = Object.assign({}, book().places || {});
+    const take = name => {
+      const key = GuideProgress.placeKey(name);
+      if (!key || records[key]) return;
+      records[key] = { name: GuideProgress.placeName(name), usedAt: 0 };
+    };
+    Object.keys(book().custom || {}).forEach(id => take(book().custom[id] && book().custom[id].location));
+    Object.keys(book().patches || {}).forEach(id => take(book().patches[id] && book().patches[id].location));
+    return records;
+  }
+
+  function placeUsed(name) {
+    const key = GuideProgress.placeKey(name);
+    const current = book();
+    const hit = item => item && GuideProgress.placeKey(item.location) === key;
+    return Object.keys(current.custom || {}).some(id => hit(current.custom[id])) || Object.keys(current.patches || {}).some(id => hit(current.patches[id]));
+  }
+
+  function bindPlaceField() {
+    const input = form.elements.location;
+    const list = document.getElementById("place-suggest");
+    if (!input || !list) return;
+    let placeComposing = false;
+    let placeIndex = -1;
+    const paint = () => {
+      const rows = GuideProgress.suggestPlaces(gatheredPlaces(), input.value, input.value.trim() ? 20 : 10);
+      if (placeIndex >= rows.length) placeIndex = rows.length - 1;
+      list.innerHTML = rows.map((row, index) => `<button type="button" class="place-option${index === placeIndex ? " on" : ""}" data-place="${escapeAttr(row.name)}" role="option"><span class="place-drop">${escapeText(row.name)}</span><span class="place-x" data-place-forget="${escapeAttr(row.name)}" aria-label="候補から消す">×</span></button>`).join("");
+      list.hidden = !rows.length;
+      input.setAttribute("aria-expanded", list.hidden ? "false" : "true");
+    };
+    input.addEventListener("focus", () => { placeIndex = -1; paint(); });
+    input.addEventListener("compositionstart", () => { placeComposing = true; });
+    input.addEventListener("compositionend", () => { placeComposing = false; placeIndex = -1; paint(); });
+    input.addEventListener("input", event => {
+      if (placeComposing || event.isComposing) return;
+      placeIndex = -1;
+      paint();
+    });
+    input.addEventListener("keydown", event => {
+      if (placeComposing || event.isComposing || event.keyCode === 229) return;
+      if (event.key === "Escape") {
+        if (!list.hidden) {
+          list.hidden = true;
+          input.setAttribute("aria-expanded", "false");
+          event.preventDefault();
+        }
+        return;
+      }
+      const options = () => [...list.querySelectorAll(".place-option")];
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const items = options();
+        if (!items.length) { paint(); return; }
+        list.hidden = false;
+        const delta = event.key === "ArrowDown" ? 1 : -1;
+        placeIndex = (placeIndex + delta + items.length) % items.length;
+        paint();
+        return;
+      }
+      if (event.key === "Enter" && !list.hidden && placeIndex >= 0) {
+        const chosen = options()[placeIndex];
+        if (!chosen) return;
+        event.preventDefault();
+        input.value = chosen.getAttribute("data-place") || "";
+        list.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+      }
+    });
+    list.addEventListener("mousedown", event => {
+      const forget = event.target.closest && event.target.closest("[data-place-forget]");
+      const option = event.target.closest && event.target.closest("[data-place]");
+      if (!forget && !option) return;
+      event.preventDefault();
+      if (forget) {
+        const name = forget.getAttribute("data-place-forget");
+        if (placeUsed(name) && !window.confirm("この場所はカードに残っています。候補から消しますか。")) return;
+        GuideApp.setCardBook(GuideProgress.forgetPlace(JSON.parse(JSON.stringify(book())), name), "場所");
+        placeIndex = -1;
+        paint();
+        return;
+      }
+      input.value = option.getAttribute("data-place") || "";
+      list.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+    });
+    input.addEventListener("blur", () => {
+      setTimeout(() => {
+        list.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+      }, 160);
+    });
+  }
+
   function openRouteForm(seed) {
     editing = seed;
     error.textContent = "";
@@ -1018,6 +1218,7 @@
       `<p class="lead">章: ${escapeText((chapterRow && chapterRow.title) || seed.chapterId || "")}${sectionName ? " / " + escapeText(sectionName) : ""}</p>`,
       field("見出しの定型文", `<select name="template">${templateOptions}</select>`),
       field("見出し", `<input name="title" value="${escapeAttr(seed.title || "")}" placeholder="定型文を選んだときは空でも保存できます">`),
+      field("場所", `<div class="place-field"><input name="location" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="place-suggest" value="${escapeAttr(seed.location || "")}" placeholder="自由入力できます"><div id="place-suggest" class="place-suggest" hidden role="listbox"></div></div>`),
       '<p id="template-preview"></p>',
       '<div id="flag-chips"></div><input type="hidden" name="flag" value="">',
       `</div>`,
@@ -1047,6 +1248,7 @@
     paintItemPicker();
     form.elements.flag.addEventListener("change", paintItemPicker);
     bindMapField();
+    bindPlaceField();
     dialog.hidden = false;
     captureBaseline();
     showEditorTab(seed.focusBlock ? "blocks" : (seed.tab || rememberedEditorTab()));
@@ -1062,11 +1264,29 @@
     return "main";
   }
 
+  function rememberedChapterTab() {
+    try {
+      const saved = sessionStorage.getItem("ff7r-chapter-editor-tab");
+      if (saved === "map" || saved === "main") return saved;
+    } catch (error) {}
+    return "main";
+  }
+
   function showEditorTab(id) {
-    const tab = id || "main";
-    fields.querySelectorAll("[data-card-tab]").forEach(button => button.classList.toggle("on", button.getAttribute("data-card-tab") === tab));
+    const buttons = [...fields.querySelectorAll("[data-card-tab]")];
+    const known = buttons.map(button => button.getAttribute("data-card-tab"));
+    const tab = known.indexOf(id) >= 0 ? id : (known[0] || "main");
+    buttons.forEach(button => {
+      const on = button.getAttribute("data-card-tab") === tab;
+      button.classList.toggle("on", on);
+      button.setAttribute("aria-selected", on ? "true" : "false");
+    });
     fields.querySelectorAll("[data-tab-panel]").forEach(panel => { panel.hidden = panel.getAttribute("data-tab-panel") !== tab; });
-    try { sessionStorage.setItem("ff7r-card-editor-tab", tab); } catch (error) {}
+    const cardTabs = ["main", "blocks", "image", "options"];
+    try {
+      if (cardTabs.indexOf(tab) >= 0 && known.indexOf("blocks") >= 0) sessionStorage.setItem("ff7r-card-editor-tab", tab);
+      if ((tab === "main" || tab === "map") && known.indexOf("map") >= 0) sessionStorage.setItem("ff7r-chapter-editor-tab", tab);
+    } catch (error) {}
     if (tab === "options") paintTagHint();
   }
 
@@ -1155,6 +1375,7 @@
     ].filter(pair => shownFields.indexOf(pair[0]) >= 0 || seed[pair[0]]);
     fields.innerHTML = [
       field("名前", `<input name="name" required value="${escapeAttr(seed.name || "")}">`),
+      field("場所", `<div class="place-field"><input name="location" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="place-suggest" value="${escapeAttr(seed.location || "")}" placeholder="自由入力できます"><div id="place-suggest" class="place-suggest" hidden role="listbox"></div></div>`),
       field("説明", `<textarea name="detail" required>${escapeText(seed.detail || "")}</textarea>`),
       field("場所・種別", `<input name="area" value="${escapeAttr(seed.area || "")}">`),
       extras.map(pair => field(pair[1], `<input name="${pair[0]}" value="${escapeAttr(seed[pair[0]] || "")}">`)).join(""),
@@ -1162,6 +1383,7 @@
       `<label><input type="checkbox" name="missable"${seed.missable ? " checked" : ""}> 取り逃し</label>`
     ].join("");
     if (mapEditor) bindMapField();
+    bindPlaceField();
     dialog.hidden = false;
     captureBaseline();
     form.elements.name.focus();
@@ -1234,6 +1456,7 @@
       place.baseIds
     );
     dialog.hidden = true;
+    GuideProgress.rememberPlace(next, checked.value.location);
     GuideApp.setCardBook(next);
   }
 
@@ -1245,6 +1468,7 @@
       area: data.get("area"),
       source: editing.source || "",
       map: chosenMap(),
+      location: data.get("location"),
       missable: data.get("missable") === "on"
     });
     if (checked.error) {
@@ -1270,6 +1494,7 @@
       GuideApp.baseCatalogItems(editing.catalogId).map(item => item.id)
     );
     dialog.hidden = true;
+    GuideProgress.rememberPlace(next, checked.value.location);
     GuideApp.setCardBook(next);
   }
 
@@ -1447,6 +1672,7 @@
   }, true);
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape" || dialog.hidden) return;
+    if (dialog.querySelector(".rt-menu:not([hidden])")) closeRichMenus(dialog);
     event.preventDefault();
     event.stopPropagation();
   }, true);
@@ -1562,6 +1788,7 @@
         trackId: add.getAttribute("data-card-track"),
         chapterId: add.getAttribute("data-card-chapter"),
         flag: "story",
+        section: add.getAttribute("data-card-section") || "",
         title: "",
         detail: "",
         deadline: "",
@@ -1858,10 +2085,14 @@
     editing = { chapterEdit: true, trackId, chapterId };
     document.getElementById("card-edit-title").textContent = "チャプター";
     document.getElementById("card-edit-id").textContent = chapter.id;
-    fields.innerHTML = field("名前", `<input name="title" value="${escapeAttr(chapter.title || "")}">`);
+    fields.innerHTML = tabbedFields([
+      { id: "main", label: "メイン", body: field("名前", `<input name="title" value="${escapeAttr(chapter.title || "")}">`) }
+    ]);
     error.textContent = "";
     dialog.hidden = false;
     captureBaseline();
+    showEditorTab("main");
+    if (form.elements.title) form.elements.title.focus();
   }
 
   function saveChapterEdit() {
@@ -1938,17 +2169,21 @@
     const colors = GuideProgress.calloutColors(book(), section);
     document.getElementById("card-edit-title").textContent = "小見出し";
     document.getElementById("card-edit-id").textContent = section.id;
-    fields.innerHTML = [
-      field("区分名", `<input name="title" value="${escapeAttr(GuideProgress.sectionName(section.title))}" placeholder="区分名を入力">`),
-      field("小見出し", `<textarea name="note">${escapeText(section.note || "")}</textarea>`),
-      field("背景", `<input name="bg" type="color" value="${escapeAttr(colors.bg)}">`),
-      field("枠", `<input name="border" type="color" value="${escapeAttr(colors.border)}">`),
-      mapFields(section.map || "")
-    ].join("");
+    fields.innerHTML = tabbedFields([
+      { id: "main", label: "メイン", body: [
+        field("区分名", `<input name="title" value="${escapeAttr(GuideProgress.sectionName(section.title))}" placeholder="区分名を入力">`),
+        field("小見出し", `<textarea name="note">${escapeText(section.note || "")}</textarea>`),
+        field("背景", `<input name="bg" type="color" value="${escapeAttr(colors.bg)}">`),
+        field("枠", `<input name="border" type="color" value="${escapeAttr(colors.border)}">`)
+      ].join("") },
+      { id: "map", label: "MAP", body: mapFields(section.map || "") }
+    ]);
     bindMapField();
     error.textContent = "";
     dialog.hidden = false;
     captureBaseline();
+    showEditorTab(rememberedChapterTab());
+    if (fields.querySelector('[data-tab-panel="main"]:not([hidden])') && form.elements.title) form.elements.title.focus();
   }
 
   function saveSectionEdit() {
@@ -2339,6 +2574,7 @@
       quest: item.quest || "",
       section: item.section || "",
       template: item.template || "",
+      location: item.location || "",
       items: item.items || [],
       blocks: item.blocks && item.blocks.length ? item.blocks : GuideProgress.blocksFromDetail(item.detail)
     };
@@ -2868,6 +3104,7 @@
         labels: book().labels || {},
         difficulty: book().difficulty || "normal",
         callout: book().callout || {},
+        places: book().places || {},
         templates: GuideProgress.activeTemplates(book(), globalThis.TEMPLATES)
       }, null, 2), "application/json");
     }
@@ -3264,7 +3501,7 @@
       { path: "data/images.js", text: "const IMAGE_FILES = " + JSON.stringify(images.manifest, null, 2) + ";\n\nglobalThis.IMAGE_FILES = IMAGE_FILES;\n" },
       { path: "data/templates.js", text: "const TEMPLATES = " + JSON.stringify(templates, null, 2) + ";\n\nglobalThis.TEMPLATES = TEMPLATES;\n" },
       { path: "data/enemies.js", text: GuideProgress.enemiesModuleSource(GuideProgress.exportEnemies(globalThis.ENEMIES || [], book())) },
-      { path: "data/settings.js", text: "const UI_SETTINGS = " + JSON.stringify({ difficulty: book().difficulty || "normal", labels: book().labels || {}, callout: book().callout || {} }, null, 2) + ";\n\nglobalThis.UI_SETTINGS = UI_SETTINGS;\n" }
+      { path: "data/settings.js", text: "const UI_SETTINGS = " + JSON.stringify({ difficulty: book().difficulty || "normal", labels: book().labels || {}, callout: book().callout || {}, places: book().places || {} }, null, 2) + ";\n\nglobalThis.UI_SETTINGS = UI_SETTINGS;\n" }
     ];
     for (const item of prepared.fresh.concat(images.fresh)) {
       if (!item.blob) continue;
@@ -3318,6 +3555,7 @@
       next.labels = UI_SETTINGS.labels || {};
       next.difficulty = UI_SETTINGS.difficulty || "normal";
       if (UI_SETTINGS.callout) next.callout = UI_SETTINGS.callout;
+      if (UI_SETTINGS.places) next.places = UI_SETTINGS.places;
     }
     GuideApp.setCardBook(next, "GitHubから読み込む");
     if (status) status.textContent = "GitHubの原稿を読み込みました。";
@@ -3337,6 +3575,7 @@
         if (parsed.labels && typeof parsed.labels === "object") next.labels = parsed.labels;
         if (parsed.difficulty) next.difficulty = parsed.difficulty;
         if (parsed.callout && typeof parsed.callout === "object") next.callout = parsed.callout;
+        if (parsed.places && typeof parsed.places === "object") next.places = parsed.places;
         if (Array.isArray(parsed.templates)) next.templates = parsed.templates;
         GuideApp.setCardBook(next, "読み込む");
         return;

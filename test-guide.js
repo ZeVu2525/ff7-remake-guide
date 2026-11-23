@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v34");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v39");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -653,6 +653,21 @@ const tagsAfter = JSON.stringify({ book: Object.assign(progress.emptyCardBook(),
 assert.strictEqual(progress.toHalfWidth("Ａ１！　、。「」・"), "A1!　、。「」・");
 assert.strictEqual(progress.toHalfWidth("カタカナ"), "カタカナ");
 assert.strictEqual(progress.toHalfWidth("かｋ"), "かk");
+let placeBook = progress.rememberPlace(progress.emptyCardBook(), "しんじゅく", 10);
+placeBook = progress.rememberPlace(placeBook, "シンジュク", 30);
+assert.strictEqual(Object.keys(placeBook.places).length, 1);
+assert.strictEqual(placeBook.places[progress.placeKey("しんじゅく")].name, "シンジュク");
+assert.strictEqual(placeBook.places[progress.placeKey("しんじゅく")].usedAt, 30);
+placeBook = progress.rememberPlace(placeBook, "スラム", 20);
+assert.strictEqual(progress.suggestPlaces(placeBook.places, "")[0].name, "シンジュク");
+assert.strictEqual(progress.suggestPlaces(placeBook.places, "しん").length, 1);
+assert.strictEqual(progress.suggestPlaces(placeBook.places, "スラ").length, 1);
+placeBook = progress.rememberPlace(placeBook, "ＡＢＣ通り", 40);
+assert.strictEqual(progress.suggestPlaces(placeBook.places, "abc").length, 1);
+assert.strictEqual(progress.suggestPlaces(placeBook.places, "", 2).length, 2);
+const placed = progress.upsertRouteCard(progress.emptyCardBook(), null, "user-place", Object.assign(progress.headerCopyFields({ title: "店", flag: "story" }), { location: "スラム" }), "main", "ch01", ["user-place"], []);
+assert.strictEqual(placed.custom["user-place"].location, "スラム");
+assert.ok(progress.routeModuleSource({ main: [{ chapterId: "ch01", items: [{ id: "a", title: "店", flag: "story", detail: "d", location: "スラム" }] }] }).includes("location"));
 ["app.js", "card-edit.js", "edit-mode.js"].forEach(file => {
   const source = require("fs").readFileSync(require("path").join(__dirname, file), "utf8");
   ["input", "keydown", "paste"].forEach(name => {
@@ -734,9 +749,36 @@ const appSrc = require("fs").readFileSync(require("path").join(__dirname, "app.j
 const editSrc = require("fs").readFileSync(require("path").join(__dirname, "card-edit.js"), "utf8");
 assert.ok(appSrc.includes("ff7r-tab-scroll-v1"));
 assert.ok(appSrc.includes("data-section-insert"));
+assert.ok(appSrc.includes("チャプターを追加しますが、よろしいですか？"));
+assert.ok(appSrc.includes("confirm-cancel"));
+{
+  const addAt = appSrc.indexOf('closest("[data-chapter-add]")');
+  const insertAt = appSrc.indexOf("GuideProgress.insertChapter");
+  assert.ok(addAt >= 0 && insertAt > addAt);
+  assert.ok(appSrc.slice(addAt, insertAt).includes("askChapterAdd"));
+}
 assert.ok(editSrc.includes("id=\"tag-pop\"") || editSrc.includes('pop.id = "tag-pop"'));
 
 assert.ok(require("fs").readFileSync(require("path").join(__dirname, "card-edit.js"), "utf8").includes('return [{ type: "text", html: "" }]'));
+assert.ok(editSrc.includes('data-rt-menu="${kind}"'));
+assert.ok(editSrc.includes('richMenu("size"'));
+assert.ok(editSrc.includes('richMenu("font"'));
+{
+  const chapterFn = editSrc.slice(editSrc.indexOf("function openChapterEdit"), editSrc.indexOf("function saveChapterEdit"));
+  const sectionFn = editSrc.slice(editSrc.indexOf("function openSectionEdit"), editSrc.indexOf("function saveSectionEdit"));
+  assert.ok(chapterFn.includes('label: "メイン"'));
+  assert.ok(!chapterFn.includes('label: "MAP"'));
+  assert.ok(sectionFn.includes('label: "メイン"') && sectionFn.includes('label: "MAP"') && sectionFn.includes("mapFields"));
+  assert.ok(editSrc.includes("ff7r-chapter-editor-tab"));
+  assert.ok(editSrc.includes('field("画像ライブラリ"'));
+  assert.ok(!editSrc.includes('field("掲載元の地図"') && !editSrc.includes('field("保存した地図"') && !editSrc.includes('field("地図の画像"'));
+  assert.ok(editSrc.includes('name="mapUrl"'));
+}
+assert.ok(appSrc.includes("＋ カードを追加"));
+assert.ok(appSrc.includes("data-card-section"));
+assert.ok(editSrc.includes('add.getAttribute("data-card-section")'));
+assert.ok(!editSrc.includes('<select data-rt="size">'));
+assert.ok(!editSrc.includes('<select data-rt="font">'));
 function mockFetch(handler) {
   return async (url, options) => {
     const hit = await handler(url, options || {});
