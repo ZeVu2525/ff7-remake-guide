@@ -596,6 +596,10 @@ assert.deepStrictEqual(headed.flags, ["story", "item"]);
 assert.deepStrictEqual(headed.blocks, [{ type: "text", html: "" }]);
 assert.strictEqual(headed.map, "");
 assert.strictEqual(progress.headerCopyFields({ title: "子", parent: "p", flag: "story" }).parent, "p");
+const headedSaved = progress.upsertRouteCard(progress.emptyCardBook(), null, "user-head", progress.headerCopyFields({ title: "子", parent: "p", flag: "story", section: "s1" }), "main", "ch01", ["p", "user-head"], []);
+assert.deepStrictEqual(headedSaved.custom["user-head"].blocks, [{ type: "text", html: "" }]);
+assert.strictEqual(headedSaved.custom["user-head"].parent, "p");
+assert.ok(!headedSaved.custom["user-head"].checks);
 const copyItems = [
   { id: "p" },
   { id: "c", parent: "p" },

@@ -1518,8 +1518,7 @@
     if (!block || typeof block !== "object") return null;
     const type = block.type;
     if (type === "text" || type === "callout") {
-      const html = sanitizeRich(block.html || "");
-      return html ? { type, html } : null;
+      return { type, html: sanitizeRich(block.html || "") };
     }
     if (type === "image") {
       const src = String(block.src || "").trim();
