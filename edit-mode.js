@@ -259,6 +259,7 @@
     input.focus();
   }
   function saveEdit(next) {
+    next = globalThis.GuideProgress ? GuideProgress.toHalfWidth(next) : next;
     const from = activeFrom;
     if (!from) return closeDialog();
     const before = globalThis.GuideApp && GuideApp.editSnapshot ? GuideApp.editSnapshot() : "";

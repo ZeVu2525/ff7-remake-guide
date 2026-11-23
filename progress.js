@@ -1300,8 +1300,12 @@
     return "image.png";
   }
 
+  function libraryFolderPath(value) {
+    return String(value || "").split(/[\\/]+/).map(libraryFolderId).filter(Boolean).join("/");
+  }
+
   function libraryKey(folder, name) {
-    const id = libraryFolderId(folder) || "images";
+    const id = libraryFolderPath(folder) || "images";
     return id + "/" + libraryFileName(name);
   }
 
@@ -1343,8 +1347,10 @@
     if (isRepoImagePath(text)) return false;
     if (/^jun-[a-z0-9._-]+\.(?:png|jpe?g|gif|webp)$/i.test(text)) return true;
     const parts = text.split("/");
-    if (parts.length !== 2 || !libraryFolderId(parts[0]) || parts[0] !== libraryFolderId(parts[0])) return false;
-    return /^[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(parts[1]);
+    if (parts.length < 2) return false;
+    const file = parts.pop();
+    if (!parts.every(part => part && libraryFolderId(part) === part)) return false;
+    return /^[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(file);
   }
 
   function normalizeLibraryKey(value, folder) {
@@ -1512,8 +1518,7 @@
     if (!block || typeof block !== "object") return null;
     const type = block.type;
     if (type === "text" || type === "callout") {
-      const html = sanitizeRich(block.html || "");
-      return html ? { type, html } : null;
+      return { type, html: sanitizeRich(block.html || "") };
     }
     if (type === "image") {
       const src = String(block.src || "").trim();
@@ -1602,7 +1607,7 @@
       source: item && item.source || "",
       trophy: "",
       map: "",
-      parent: "",
+      parent: item && item.parent || "",
       quest: "",
       section: item && item.section || "",
       template: item && item.template || "",
@@ -1612,6 +1617,54 @@
       enemyNote: "",
       enemyImage: ""
     };
+  }
+
+  function descendantIds(items, rootId) {
+    const byParent = {};
+    (items || []).forEach(item => {
+      if (!item || !item.id || !item.parent) return;
+      if (!byParent[item.parent]) byParent[item.parent] = [];
+      byParent[item.parent].push(item.id);
+    });
+    const out = [];
+    const walk = id => {
+      (byParent[id] || []).forEach(child => {
+        out.push(child);
+        walk(child);
+      });
+    };
+    walk(rootId);
+    return out;
+  }
+
+  function planCardCopy(order, items, sourceId, deep) {
+    const list = (items || []).filter(item => item && item.id);
+    const source = list.find(item => item.id === sourceId);
+    if (!source) return null;
+    const ids = Array.isArray(order) ? order.slice() : list.map(item => item.id);
+    const child = !!source.parent;
+    const pool = !deep ? [] : (child ? descendantIds(list, sourceId) : list.filter(item => item.parent === sourceId).map(item => item.id));
+    const ordered = ids.filter(id => pool.indexOf(id) >= 0);
+    pool.forEach(id => { if (ordered.indexOf(id) < 0) ordered.push(id); });
+    const belong = new Set(child ? descendantIds(list, sourceId) : []);
+    belong.add(sourceId);
+    let anchor = ids.length;
+    if (child) {
+      let found = false;
+      ids.forEach((id, index) => {
+        if (belong.has(id)) { anchor = index + 1; found = true; }
+      });
+      if (!found) anchor = ids.length;
+    } else {
+      const at = ids.indexOf(sourceId);
+      anchor = at < 0 ? ids.length : at + 1;
+    }
+    const parents = {};
+    parents[sourceId] = source.parent || "";
+    const byId = {};
+    list.forEach(item => { byId[item.id] = item; });
+    ordered.forEach(id => { parents[id] = byId[id] && byId[id].parent || ""; });
+    return { anchor: anchor, sources: [sourceId].concat(ordered), parents: parents };
   }
 
   function nestMany(ids, items, targetId) {
@@ -1886,7 +1939,7 @@
   }
 
   function validMapValue(map) {
-    return /^chapter[0-9-]+$/.test(map) || /^https:\/\//i.test(map) || /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(map) || /^maps\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(map);
+    return /^chapter[0-9-]+$/.test(map) || /^https:\/\//i.test(map) || /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(map) || /^maps\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(map) || isLibraryKey(map);
   }
 
   function orderForSave(ids, id, parentId, previousParent, insertAfter) {
@@ -2173,9 +2226,11 @@
     foldAll,
     convertBlock,
     headerCopyFields,
+    planCardCopy,
     nestMany,
     LIBRARY_FOLDERS,
     libraryFolderId,
+    libraryFolderPath,
     libraryFileName,
     libraryKey,
     imageKeyFromUrl,

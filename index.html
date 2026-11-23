@@ -269,7 +269,15 @@ tr.is-target td{background:rgba(57,201,255,.18)}
 .map-zoom-pct{position:absolute;right:6px;bottom:6px;z-index:2;padding:1px 6px;border-radius:99px;background:rgba(0,0,0,.55);color:#fff;font:700 11px/1.4 sans-serif;pointer-events:none}
 .map-missing{margin:8px 0;color:#8a5a00;font-weight:700}
 #image-library-drop{padding:8px;border:1px dashed var(--line);border-radius:8px}
-.image-lib-folders{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.image-lib-folders{margin:8px 0}
+.lib-tree,.lib-tree ul{list-style:none;margin:0;padding:0}
+.lib-tree ul{padding-left:16px}
+.lib-tree-row{display:flex;gap:4px;align-items:center;min-height:32px;border-radius:8px}
+.lib-tree-row.on{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.lib-tree-row button{min-height:32px;padding:2px 8px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.lib-tree-gap{width:16px}
+.lib-crumb{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:8px 0}
+.lib-crumb button{min-height:32px;padding:2px 8px;border:0;border-radius:8px;background:transparent;color:var(--accent);font:inherit;font-weight:700;cursor:pointer}
 .image-lib-folders .chip.is-drop{outline:2px solid var(--accent)}
 #image-library-list{display:grid;gap:6px;max-width:720px}
 .image-lib-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -482,19 +490,19 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <footer>
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v33"></script>
-<script src="data/route.js?v=ff7r-guide-v33"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v33"></script>
-<script src="data/maps.js?v=ff7r-guide-v33"></script>
-<script src="data/templates.js?v=ff7r-guide-v33"></script>
-<script src="data/settings.js?v=ff7r-guide-v33"></script>
-<script src="data/images.js?v=ff7r-guide-v33"></script>
-<script src="data/enemies.js?v=ff7r-guide-v33"></script>
-<script src="zip-store.js?v=ff7r-guide-v33"></script>
-<script src="progress.js?v=ff7r-guide-v33"></script>
-<script src="image-library.js?v=ff7r-guide-v33"></script>
-<script src="app.js?v=ff7r-guide-v33"></script>
-<script src="edit-mode.js?v=ff7r-guide-v33"></script>
-<script src="card-edit.js?v=ff7r-guide-v33"></script>
+<script src="data/game.js?v=ff7r-guide-v34"></script>
+<script src="data/route.js?v=ff7r-guide-v34"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v34"></script>
+<script src="data/maps.js?v=ff7r-guide-v34"></script>
+<script src="data/templates.js?v=ff7r-guide-v34"></script>
+<script src="data/settings.js?v=ff7r-guide-v34"></script>
+<script src="data/images.js?v=ff7r-guide-v34"></script>
+<script src="data/enemies.js?v=ff7r-guide-v34"></script>
+<script src="zip-store.js?v=ff7r-guide-v34"></script>
+<script src="progress.js?v=ff7r-guide-v34"></script>
+<script src="image-library.js?v=ff7r-guide-v34"></script>
+<script src="app.js?v=ff7r-guide-v34"></script>
+<script src="edit-mode.js?v=ff7r-guide-v34"></script>
+<script src="card-edit.js?v=ff7r-guide-v34"></script>
 </body>
 </html>

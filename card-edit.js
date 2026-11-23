@@ -572,10 +572,27 @@
     if (!globalThis.GuideImages) return;
     const folders = await GuideImages.folders();
     const rows = await GuideImages.list();
+    const children = {};
+    folders.forEach(folder => {
+      const parent = folder.parent || "";
+      children[parent] = children[parent] || [];
+      children[parent].push(folder);
+    });
+    const folderOptions = (current) => {
+      const lines = [];
+      const walk = (parent, depth) => {
+        (children[parent] || []).forEach(folder => {
+          lines.push(`<option value="${escapeAttr(folder.id)}"${folder.id === current ? " selected" : ""}>${"　".repeat(depth)}${escapeText(folder.label)}</option>`);
+          walk(folder.id, depth + 1);
+        });
+      };
+      walk("", 0);
+      return lines.join("");
+    };
     root.querySelectorAll("[data-lib-folder]").forEach(select => {
       if (select.dataset.ready === "1") return;
       const current = select.getAttribute("data-current") || "images";
-      select.innerHTML = folders.map(folder => `<option value="${escapeAttr(folder.id)}"${folder.id === current ? " selected" : ""}>${escapeText(folder.label)}</option>`).join("");
+      select.innerHTML = folderOptions(current);
       select.dataset.ready = "1";
     });
     root.querySelectorAll("[data-img-lib], [data-enemy-lib]").forEach(select => {
@@ -873,7 +890,20 @@
   });
   fields.addEventListener("change", onBlockChange);
   fields.addEventListener("input", event => {
+    if (event.isComposing || (event.target && event.target.isComposing)) return;
     if (event.target && event.target.closest && event.target.closest("#block-editor")) syncBlocks();
+  });
+  fields.addEventListener("focusout", event => {
+    const editor = event.target.closest && event.target.closest(".rt-edit");
+    if (!editor || event.target.isComposing) return;
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      const next = GuideProgress.toHalfWidth(node.nodeValue);
+      if (next !== node.nodeValue) node.nodeValue = next;
+      node = walker.nextNode();
+    }
+    syncBlocks();
   });
   fields.addEventListener("mousedown", event => {
     if (event.target.closest && event.target.closest(".rt-bar button")) event.preventDefault();
@@ -1999,28 +2029,27 @@
     const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
     if (!item) return;
     const orderIds = GuideApp.currentIds(place.trackId, place.chapterId);
-    const children = orderIds.map(cid => routeRecord(place.trackId, place.chapterId, cid)).filter(entry => entry && entry.parent === id);
+    const items = orderIds.map(cid => routeRecord(place.trackId, place.chapterId, cid)).filter(Boolean);
+    const plan = GuideProgress.planCardCopy(orderIds, items, id, true);
+    if (!plan) return;
     const taken = usedIds();
-    const newId = GuideProgress.createCardId(taken);
-    taken.add(newId);
-    const childIds = children.map(() => {
-      const childId = GuideProgress.createCardId(taken);
-      taken.add(childId);
-      return childId;
+    const idMap = {};
+    plan.sources.forEach(sourceId => {
+      idMap[sourceId] = GuideProgress.createCardId(taken);
+      taken.add(idMap[sourceId]);
     });
     const order = orderIds.slice();
-    const at = order.indexOf(id);
-    order.splice(at < 0 ? order.length : at + 1, 0, newId, ...childIds);
+    order.splice(plan.anchor, 0, ...plan.sources.map(sourceId => idMap[sourceId]));
+    const baseIds = GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id);
     let next = book();
-    const copyFields = cardFields(item, item.parent || "");
-    next = GuideProgress.upsertRouteCard(next, null, newId, copyFields, place.trackId, place.chapterId, order, GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id));
-    children.forEach((child, index) => {
-      const fields = cardFields(child, newId);
-      next = GuideProgress.upsertRouteCard(next, null, childIds[index], fields, place.trackId, place.chapterId, order, GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id));
+    plan.sources.forEach(sourceId => {
+      const source = items.find(entry => entry.id === sourceId);
+      const parent = idMap[plan.parents[sourceId]] || plan.parents[sourceId] || "";
+      next = GuideProgress.upsertRouteCard(next, null, idMap[sourceId], cardFields(source, parent), place.trackId, place.chapterId, order, baseIds);
     });
     GuideApp.setCardBook(next, "カードのコピー");
-    const created = routeRecord(place.trackId, place.chapterId, newId);
-    if (created) openRouteForm(Object.assign({ kind: "route", id: newId, trackId: place.trackId, chapterId: place.chapterId }, created));
+    const created = routeRecord(place.trackId, place.chapterId, idMap[id]);
+    if (created) openRouteForm(Object.assign({ kind: "route", id: idMap[id], trackId: place.trackId, chapterId: place.chapterId }, created));
   }
 
   function headerCopy(id) {
@@ -2028,12 +2057,16 @@
     const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
     if (!item) return;
     const orderIds = GuideApp.currentIds(place.trackId, place.chapterId);
+    const items = orderIds.map(cid => routeRecord(place.trackId, place.chapterId, cid)).filter(Boolean);
+    const plan = GuideProgress.planCardCopy(orderIds, items, id, false);
+    if (!plan) return;
     const newId = GuideProgress.createCardId(usedIds());
     const order = orderIds.slice();
-    const at = order.indexOf(id);
-    order.splice(at < 0 ? order.length : at + 1, 0, newId);
+    order.splice(plan.anchor, 0, newId);
+    const fields = GuideProgress.headerCopyFields(item);
+    fields.parent = plan.parents[id] || "";
     const next = GuideProgress.upsertRouteCard(
-      book(), null, newId, GuideProgress.headerCopyFields(item),
+      book(), null, newId, fields,
       place.trackId, place.chapterId, order,
       GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id)
     );
@@ -3314,28 +3347,6 @@
     } catch (e) {
       window.alert("カードの編集データとして読めませんでした。");
     }
-  });
-  document.addEventListener("input", event => {
-    const el = event.target;
-    if (!el || !el.closest) return;
-    if (!el.closest("#card-edit-dialog, #text-edit-dialog, #settings-body")) return;
-    if (el.type === "password" || el.type === "color" || el.type === "file" || el.type === "checkbox") return;
-    if (el.isContentEditable) {
-      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-      let node = walker.nextNode();
-      while (node) {
-        const next = GuideProgress.toHalfWidth(node.nodeValue);
-        if (next !== node.nodeValue) node.nodeValue = next;
-        node = walker.nextNode();
-      }
-      return;
-    }
-    if (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") return;
-    const next = GuideProgress.toHalfWidth(el.value);
-    if (next === el.value) return;
-    const caret = el.selectionStart;
-    el.value = next;
-    if (caret != null) el.setSelectionRange(caret, caret);
   });
   document.getElementById("card-edit-reset").addEventListener("click", () => {
     if (!window.confirm("このブラウザのカード編集をすべて消し、原稿の並びに戻します。チェックした進行は残ります。")) return;

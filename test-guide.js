@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v33");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v34");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -212,6 +212,10 @@ assert.strictEqual(progress.imageKeyFromUrl("https://finalfantasy-jun-site.com/f
 assert.strictEqual(progress.imageKeyFromUrl("https://finalfantasy-jun-site.com/ff7_remake/enemy/img/001.png"), "enemies/jun-enemy-001.png");
 assert.deepStrictEqual(progress.LIBRARY_FOLDERS.map(folder => folder.label), ["MAP", "エネミー", "その他"]);
 assert.strictEqual(progress.libraryKey("maps", "Jun-ch01-01.PNG"), "maps/jun-ch01-01.png");
+assert.strictEqual(progress.libraryKey("maps/Chapter1", "Photo.PNG"), "maps/Chapter1/photo.png");
+assert.strictEqual(progress.isLibraryKey("maps/Chapter1/photo.png"), true);
+assert.deepStrictEqual(progress.libraryExportPlan([{ id: "maps/Chapter1/photo.png" }], { includeLibrary: true }).map(file => file.path), ["maps/Chapter1/photo.png"]);
+assert.strictEqual(progress.libraryExportPlan([{ id: "maps/Chapter1/jun-a.png" }], { includeLibrary: true }).length, 0);
 assert.strictEqual(progress.moveLibraryKey("maps/jun-ch01-01.png", "enemies"), "enemies/jun-ch01-01.png");
 assert.strictEqual(progress.normalizeLibraryKey("jun-ch01-01.png"), "maps/jun-ch01-01.png");
 assert.strictEqual(progress.isLibraryKey("maps/jun-ch01-01.png"), true);
@@ -591,6 +595,30 @@ assert.strictEqual(headed.title, "宝箱");
 assert.deepStrictEqual(headed.flags, ["story", "item"]);
 assert.deepStrictEqual(headed.blocks, [{ type: "text", html: "" }]);
 assert.strictEqual(headed.map, "");
+assert.strictEqual(progress.headerCopyFields({ title: "子", parent: "p", flag: "story" }).parent, "p");
+const headedSaved = progress.upsertRouteCard(progress.emptyCardBook(), null, "user-head", progress.headerCopyFields({ title: "子", parent: "p", flag: "story", section: "s1" }), "main", "ch01", ["p", "user-head"], []);
+assert.deepStrictEqual(headedSaved.custom["user-head"].blocks, [{ type: "text", html: "" }]);
+assert.strictEqual(headedSaved.custom["user-head"].parent, "p");
+assert.ok(!headedSaved.custom["user-head"].checks);
+const copyItems = [
+  { id: "p" },
+  { id: "c", parent: "p" },
+  { id: "g", parent: "c" },
+  { id: "s", parent: "p" }
+];
+const copyOrder = ["p", "c", "g", "s"];
+const childCopy = progress.planCardCopy(copyOrder, copyItems, "c", true);
+assert.strictEqual(childCopy.parents.c, "p");
+assert.deepStrictEqual(childCopy.sources, ["c", "g"]);
+assert.strictEqual(childCopy.anchor, 3);
+const headerChild = progress.planCardCopy(copyOrder, copyItems, "c", false);
+assert.strictEqual(headerChild.parents.c, "p");
+assert.deepStrictEqual(headerChild.sources, ["c"]);
+assert.strictEqual(headerChild.anchor, 3);
+const parentCopy = progress.planCardCopy(copyOrder, copyItems, "p", true);
+assert.strictEqual(parentCopy.parents.p, "");
+assert.deepStrictEqual(parentCopy.sources, ["p", "c", "s"]);
+assert.strictEqual(parentCopy.anchor, 1);
 const nest = progress.nestMany(["b", "c"], [
   { id: "a" },
   { id: "b" },
@@ -624,6 +652,21 @@ const tagsBefore = JSON.stringify({ book: progress.emptyCardBook() });
 const tagsAfter = JSON.stringify({ book: Object.assign(progress.emptyCardBook(), { achieveTags: ["trophy"] }) });
 assert.strictEqual(progress.toHalfWidth("Ａ１！　、。「」・"), "A1!　、。「」・");
 assert.strictEqual(progress.toHalfWidth("カタカナ"), "カタカナ");
+assert.strictEqual(progress.toHalfWidth("かｋ"), "かk");
+["app.js", "card-edit.js", "edit-mode.js"].forEach(file => {
+  const source = require("fs").readFileSync(require("path").join(__dirname, file), "utf8");
+  ["input", "keydown", "paste"].forEach(name => {
+    let from = 0;
+    const token = 'addEventListener("' + name + '"';
+    while (source.indexOf(token, from) >= 0) {
+      const start = source.indexOf(token, from);
+      const next = source.indexOf("addEventListener(", start + token.length);
+      const end = next < 0 ? start + token.length : next;
+      assert.ok(!source.slice(start, end).includes("toHalfWidth"), file + " " + name);
+      from = start + token.length;
+    }
+  });
+});
 const enemyBase = [{ id: "e001", name: "警備兵", kind: "normal", tactic: "近い" }];
 const enemyMerged = progress.mergeEnemies(enemyBase, { enemyEdits: { patches: { e001: { name: "兵" } }, deleted: {}, custom: { e9: { id: "e9", name: "追加", kind: "boss" } }, order: ["e9", "e001"] } });
 assert.strictEqual(enemyMerged[0].name, "追加");
