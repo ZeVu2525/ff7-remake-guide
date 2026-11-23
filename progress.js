@@ -525,6 +525,7 @@
         if (custom.quest) card.quest = custom.quest;
         if (custom.section) card.section = custom.section;
         if (custom.template) card.template = custom.template;
+        if (custom.location) card.location = custom.location;
         if (custom.flag === "item" && custom.items && custom.items.length) card.items = itemLinks(custom.items);
         if (custom.blocks && custom.blocks.length) card.blocks = normalizeBlocks(custom.blocks);
         if (custom.flags && custom.flags.length) card.flags = custom.flags.slice();
@@ -654,6 +655,7 @@
         missable: custom.missable === true,
         custom: true
       };
+      if (custom.location) card.location = custom.location;
       if (custom.auto === "rest") card.auto = "rest";
       return card;
     }

@@ -1429,6 +1429,7 @@
       flag: (editing.flags || ["story"])[0],
       flags: editing.flags,
       template: data.get("template") || "",
+      location: data.get("location"),
       quest: editing.quest || "",
       items: editing.links || [],
       blocks: editing.blocks,
