@@ -72,6 +72,12 @@
     ".blk-handle{touch-action:none;cursor:grab}",
     ".blk-tools button,.blk-add button,.rt-bar button{min-height:28px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:inherit;font-size:12px;line-height:1.3;cursor:pointer}",
     ".rt-bar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
+    ".rt-pop{position:relative;display:inline-flex}",
+    ".rt-menu{position:absolute;z-index:8;top:calc(100% + 4px);left:0;display:flex;flex-direction:column;gap:2px;min-width:4.5em;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);box-shadow:0 8px 20px rgba(0,0,0,.18)}",
+    ".rt-menu.above{top:auto;bottom:calc(100% + 4px)}",
+    ".rt-menu[hidden]{display:none}",
+    ".rt-menu button.on,.rt-bar [data-rt-menu].is-set{box-shadow:inset 0 -2px 0 var(--accent)}",
+    ".rt-menu button.key{outline:2px solid var(--accent)}",
     ".rt-bar [data-rt=color]{width:22px;min-height:22px;padding:0}",
     ".rt-edit{min-height:72px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);white-space:pre-wrap}",
     ".blk-file input{max-width:100%}",
@@ -526,9 +532,18 @@
     ].join("");
   }
 
+  function richMenu(kind, rows) {
+    const buttons = rows.map(item => `<button type="button" data-rt="${kind}" data-rt-value="${item[0]}">${item[1]}</button>`).join("");
+    const icon = kind === "size" ? "aA" : "T";
+    const label = kind === "size" ? "大きさ" : "字体";
+    return `<span class="rt-pop"><button type="button" data-rt-menu="${kind}" title="${label}" aria-label="${label}" aria-expanded="false">${icon}</button><span class="rt-menu" hidden>${buttons}</span></span>`;
+  }
+
   function richBox(html) {
     const colors = RICH_COLORS.map(color => `<button type="button" data-rt="color" data-rt-value="${color}" style="background:${color}" aria-label="${color}"></button>`).join("");
-    return `<div class="rt-wrap"><div class="rt-bar"><button type="button" data-rt="bold"><b>B</b></button><button type="button" data-rt="italic"><i>I</i></button><button type="button" data-rt="underline"><u>U</u></button><button type="button" data-rt="strike"><s>S</s></button><button type="button" data-rt="clear">書式を消す</button><select data-rt="size"><option value="">大きさ</option><option value="0.85em">小</option><option value="1em">中</option><option value="1.25em">大</option></select><select data-rt="font"><option value="">字体</option><option value="serif">明朝</option><option value="monospace">等幅</option></select><label>色 <input type="color" data-rt="color" value="#1d4e89"></label>${colors}<label>背景 <input type="color" data-rt="bg" value="#fff3bf"></label></div><div class="rt-edit" contenteditable="true">${GuideProgress.sanitizeRich(html || "")}</div></div>`;
+    const size = richMenu("size", [["0.85em", "小"], ["1em", "中"], ["1.25em", "大"]]);
+    const font = richMenu("font", [["serif", "明朝"], ["monospace", "等幅"]]);
+    return `<div class="rt-wrap"><div class="rt-bar"><button type="button" data-rt="bold" title="太字"><b>B</b></button><button type="button" data-rt="italic" title="斜体"><i>I</i></button><button type="button" data-rt="underline" title="下線"><u>U</u></button><button type="button" data-rt="strike" title="打消し"><s>S</s></button><button type="button" data-rt="clear" title="書式を消す">書式を消す</button>${size}${font}<label>色 <input type="color" data-rt="color" value="#1d4e89"></label>${colors}<label>背景 <input type="color" data-rt="bg" value="#fff3bf"></label></div><div class="rt-edit" contenteditable="true">${GuideProgress.sanitizeRich(html || "")}</div></div>`;
   }
 
   function listField(block) {
@@ -646,6 +661,12 @@
   function applyRich(editor, kind, value) {
     if (!editor) return;
     editor.focus();
+    const saved = editor._rtRange;
+    if (saved) {
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(saved);
+    }
     document.execCommand("styleWithCSS", false, true);
     if (kind === "bold") document.execCommand("bold");
     else if (kind === "italic") document.execCommand("italic");
@@ -663,6 +684,53 @@
       document.execCommand("insertHTML", false, '<span style="' + css + '">' + html + "</span>");
     }
     syncBlocks();
+    refreshRichMarks(editor);
+  }
+
+  function placeRichMenu(panel) {
+    panel.classList.remove("above");
+    const host = panel.closest("#card-edit-fields") || panel.closest("form");
+    const limit = host ? host.getBoundingClientRect().bottom : window.innerHeight;
+    if (panel.getBoundingClientRect().bottom > limit - 8) panel.classList.add("above");
+  }
+
+  function closeRichMenus(root) {
+    (root || document).querySelectorAll(".rt-menu").forEach(menu => {
+      menu.hidden = true;
+      const button = menu.parentElement && menu.parentElement.querySelector("[data-rt-menu]");
+      if (button) button.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function richStyle(editor, kind) {
+    const sel = window.getSelection();
+    const node = sel && sel.anchorNode;
+    let el = node && (node.nodeType === 1 ? node : node.parentElement);
+    if (!el || !editor || !editor.contains(el)) return "";
+    while (el && el !== editor) {
+      const style = el.style || {};
+      if (kind === "size" && style.fontSize) return style.fontSize;
+      if (kind === "font" && style.fontFamily) {
+        const family = style.fontFamily.toLowerCase();
+        if (family.indexOf("mono") >= 0) return "monospace";
+        if (family.indexOf("serif") >= 0) return "serif";
+      }
+      el = el.parentElement;
+    }
+    return "";
+  }
+
+  function refreshRichMarks(editor) {
+    const wrap = editor && editor.closest && editor.closest(".rt-wrap");
+    if (!wrap) return;
+    ["size", "font"].forEach(kind => {
+      const current = richStyle(editor, kind);
+      const button = wrap.querySelector('[data-rt-menu="' + kind + '"]');
+      if (button) button.classList.toggle("is-set", !!current);
+      wrap.querySelectorAll('[data-rt="' + kind + '"]').forEach(item => {
+        item.classList.toggle("on", item.getAttribute("data-rt-value") === current);
+      });
+    });
   }
 
   function missingImage(blocks) {
@@ -794,10 +862,25 @@
       paintBattle();
       return;
     }
+    const menuButton = event.target.closest("[data-rt-menu]");
+    if (menuButton) {
+      event.preventDefault();
+      const panel = menuButton.parentElement.querySelector(".rt-menu");
+      const willOpen = panel.hidden;
+      closeRichMenus(fields);
+      panel.hidden = !willOpen;
+      menuButton.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      if (willOpen) {
+        placeRichMenu(panel);
+        refreshRichMarks(menuButton.closest(".rt-wrap").querySelector(".rt-edit"));
+      }
+      return;
+    }
     const rt = event.target.closest("[data-rt]");
     if (rt && rt.tagName === "BUTTON") {
       event.preventDefault();
       applyRich(rt.closest(".rt-wrap").querySelector(".rt-edit"), rt.getAttribute("data-rt"), rt.getAttribute("data-rt-value") || "");
+      closeRichMenus(fields);
       return;
     }
     const add = event.target.closest("[data-add-block]");
@@ -829,7 +912,7 @@
   function onBlockChange(event) {
     const target = event.target;
     if (!target || !target.closest || !target.closest("#block-editor")) return;
-    if (target.getAttribute("data-rt") === "size" || target.getAttribute("data-rt") === "font" || target.getAttribute("data-rt") === "color" || target.getAttribute("data-rt") === "bg") {
+    if (target.getAttribute("data-rt") === "color" || target.getAttribute("data-rt") === "bg") {
       applyRich(target.closest(".rt-wrap").querySelector(".rt-edit"), target.getAttribute("data-rt"), target.value);
       target.value = target.tagName === "SELECT" ? "" : target.value;
       return;
@@ -912,8 +995,44 @@
     }
     syncBlocks();
   });
+  fields.addEventListener("mouseup", event => {
+    const editor = event.target.closest && event.target.closest(".rt-edit");
+    if (editor) refreshRichMarks(editor);
+  });
+  fields.addEventListener("keyup", event => {
+    const editor = event.target.closest && event.target.closest(".rt-edit");
+    if (editor) refreshRichMarks(editor);
+  });
   fields.addEventListener("mousedown", event => {
-    if (event.target.closest && event.target.closest(".rt-bar button")) event.preventDefault();
+    const tool = event.target.closest && event.target.closest(".rt-bar button, .rt-menu button");
+    if (tool) {
+      event.preventDefault();
+      const editor = tool.closest(".rt-wrap") && tool.closest(".rt-wrap").querySelector(".rt-edit");
+      const sel = window.getSelection();
+      if (editor && sel && sel.rangeCount && editor.contains(sel.anchorNode)) editor._rtRange = sel.getRangeAt(0).cloneRange();
+    }
+    if (!event.target.closest(".rt-pop")) closeRichMenus(fields);
+  });
+  fields.addEventListener("keydown", event => {
+    const panel = fields.querySelector(".rt-menu:not([hidden])");
+    if (!panel) return;
+    const wrap = panel.closest(".rt-wrap");
+    if (wrap && event.target && !wrap.contains(event.target)) return;
+    if (event.isComposing || event.keyCode === 229) return;
+    const options = [...panel.querySelectorAll("button")];
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      let index = options.findIndex(button => button.classList.contains("key"));
+      if (index < 0) index = options.findIndex(button => button.classList.contains("on"));
+      index = event.key === "ArrowDown" ? (index + 1) % options.length : (index <= 0 ? options.length - 1 : index - 1);
+      options.forEach(button => button.classList.remove("key"));
+      options[index].classList.add("key");
+    } else if (event.key === "Enter") {
+      const chosen = options.find(button => button.classList.contains("key")) || options.find(button => button.classList.contains("on"));
+      if (!chosen) return;
+      event.preventDefault();
+      chosen.click();
+    }
   });
   fields.addEventListener("paste", event => {
     const clipboard = event.clipboardData;
@@ -1556,6 +1675,7 @@
   }, true);
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape" || dialog.hidden) return;
+    if (dialog.querySelector(".rt-menu:not([hidden])")) closeRichMenus(dialog);
     event.preventDefault();
     event.stopPropagation();
   }, true);

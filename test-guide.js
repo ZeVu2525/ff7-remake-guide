@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v35");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v36");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -752,6 +752,11 @@ assert.ok(appSrc.includes("data-section-insert"));
 assert.ok(editSrc.includes("id=\"tag-pop\"") || editSrc.includes('pop.id = "tag-pop"'));
 
 assert.ok(require("fs").readFileSync(require("path").join(__dirname, "card-edit.js"), "utf8").includes('return [{ type: "text", html: "" }]'));
+assert.ok(editSrc.includes('data-rt-menu="${kind}"'));
+assert.ok(editSrc.includes('richMenu("size"'));
+assert.ok(editSrc.includes('richMenu("font"'));
+assert.ok(!editSrc.includes('<select data-rt="size">'));
+assert.ok(!editSrc.includes('<select data-rt="font">'));
 function mockFetch(handler) {
   return async (url, options) => {
     const hit = await handler(url, options || {});
