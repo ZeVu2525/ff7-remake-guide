@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v36");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v37");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -749,6 +749,14 @@ const appSrc = require("fs").readFileSync(require("path").join(__dirname, "app.j
 const editSrc = require("fs").readFileSync(require("path").join(__dirname, "card-edit.js"), "utf8");
 assert.ok(appSrc.includes("ff7r-tab-scroll-v1"));
 assert.ok(appSrc.includes("data-section-insert"));
+assert.ok(appSrc.includes("チャプターを追加しますが、よろしいですか？"));
+assert.ok(appSrc.includes("confirm-cancel"));
+{
+  const addAt = appSrc.indexOf('closest("[data-chapter-add]")');
+  const insertAt = appSrc.indexOf("GuideProgress.insertChapter");
+  assert.ok(addAt >= 0 && insertAt > addAt);
+  assert.ok(appSrc.slice(addAt, insertAt).includes("askChapterAdd"));
+}
 assert.ok(editSrc.includes("id=\"tag-pop\"") || editSrc.includes('pop.id = "tag-pop"'));
 
 assert.ok(require("fs").readFileSync(require("path").join(__dirname, "card-edit.js"), "utf8").includes('return [{ type: "text", html: "" }]'));

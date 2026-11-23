@@ -2215,11 +2215,14 @@
     if (chapterAdd) {
       const trackId = ui.trackId;
       const afterId = chapterAdd.getAttribute("data-chapter-add");
-      const current = GuideProgress.resolveChapterList(GAME.chapters[trackId] || [], ROUTE[trackId] || [], cardBook, trackId);
-      const added = GuideProgress.insertChapter(current, afterId);
-      storeChapterList(trackId, added.list);
-      const section = document.getElementById("chapter-" + trackId + "-" + added.id);
-      if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+      askChapterAdd().then(yes => {
+        if (!yes) return;
+        const current = GuideProgress.resolveChapterList(GAME.chapters[trackId] || [], ROUTE[trackId] || [], cardBook, trackId);
+        const added = GuideProgress.insertChapter(current, afterId);
+        storeChapterList(trackId, added.list);
+        const section = document.getElementById("chapter-" + trackId + "-" + added.id);
+        if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
       return;
     }
     const chapterRename = event.target.closest("[data-chapter-rename]");
@@ -2577,6 +2580,54 @@
     if (persist) {
       try { localStorage.setItem(storage.theme, theme); } catch (error) {}
     }
+  }
+
+  function askChapterAdd() {
+    const dialog = document.getElementById("confirm-dialog");
+    const ok = document.getElementById("confirm-ok");
+    const cancel = document.getElementById("confirm-cancel");
+    if (!dialog || !dialog.hidden) return Promise.resolve(false);
+    document.getElementById("confirm-text").textContent = "チャプターを追加しますが、よろしいですか？";
+    dialog.hidden = false;
+    cancel.focus();
+    return new Promise(resolve => {
+      const finish = yes => {
+        dialog.hidden = true;
+        ok.removeEventListener("click", onOk);
+        cancel.removeEventListener("click", onCancel);
+        dialog.removeEventListener("keydown", onKey);
+        dialog.removeEventListener("click", onBackdrop);
+        resolve(!!yes);
+      };
+      const onOk = () => finish(true);
+      const onCancel = () => finish(false);
+      const onKey = event => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          finish(false);
+          return;
+        }
+        if (event.key === "Enter" && (document.activeElement === ok || document.activeElement === cancel)) {
+          event.preventDefault();
+          event.stopPropagation();
+          document.activeElement.click();
+          return;
+        }
+        if (event.key !== "Tab") return;
+        const buttons = [ok, cancel];
+        const index = buttons.indexOf(document.activeElement);
+        event.preventDefault();
+        buttons[(index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length].focus();
+      };
+      const onBackdrop = event => {
+        if (event.target === dialog) finish(false);
+      };
+      ok.addEventListener("click", onOk);
+      cancel.addEventListener("click", onCancel);
+      dialog.addEventListener("keydown", onKey);
+      dialog.addEventListener("click", onBackdrop);
+    });
   }
 
   const howto = document.getElementById("howto");
