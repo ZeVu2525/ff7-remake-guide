@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v40");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v41");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -805,6 +805,36 @@ assert.ok(editSrc.includes('richMenu("font"'));
 assert.ok(appSrc.includes("＋ カードを追加"));
 assert.ok(appSrc.includes("data-card-section"));
 assert.ok(editSrc.includes('add.getAttribute("data-card-section")'));
+assert.ok(editSrc.includes('label: "その他"') || editSrc.includes('id: "other", label: "その他"'));
+assert.ok(editSrc.includes("function showRich"));
+assert.ok(editSrc.includes("blk-text"));
+{
+  const base = { id: "c", title: "t", detail: "d", flag: "story" };
+  const route = { main: [{ chapterId: "ch01", items: [base] }] };
+  const defs = [{ id: "ch01", title: "Chapter 1" }];
+  ["story,item", "item,story"].forEach(order => {
+    const flags = order.split(",");
+    const book = progress.upsertRouteCard(progress.emptyCardBook(), base, "c", {
+      title: "t", detail: "d", flag: flags[0], flags, items: [{ id: "potion", qty: 2 }, { name: "５０ギル", qty: 1 }]
+    }, "main", "ch01", ["c"], ["c"]);
+    const card = progress.mergeTrack(route, defs, book, "main")[0].items[0];
+    assert.deepStrictEqual(card.flags, flags);
+    assert.ok(card.items.some(link => link.id === "potion" && link.qty === 2));
+    assert.ok(card.items.some(link => link.name === "50ギル" && link.qty === 1));
+  });
+  const trophyBook = progress.upsertRouteCard(progress.emptyCardBook(), base, "c", {
+    title: "t", detail: "d", flag: "story", flags: ["story", "trophy"], trophy: "trophy-ch01"
+  }, "main", "ch01", ["c"], ["c"]);
+  assert.strictEqual(progress.mergeTrack(route, defs, trophyBook, "main")[0].items[0].trophy, "trophy-ch01");
+  const names = ["quests", "trophies", "summons", "materia", "weapons", "keyItems", "consumables", "accessories", "armor"];
+  const catalogs = {};
+  names.forEach(name => { catalogs[name] = { items: [{ id: name + "-1", name: "n", detail: "d" }] }; });
+  const freeErrors = progress.validateExportBundle({
+    main: [{ chapterId: "ch01", items: [{ id: "c", items: [{ name: "50ギル", qty: 1 }, { id: "missing-item", qty: 1 }] }] }]
+  }, catalogs, catalogs);
+  assert.ok(freeErrors.some(line => line.includes("missing-item")));
+  assert.ok(!freeErrors.some(line => line.includes("50ギル")));
+}
 {
   const saveRoute = editSrc.slice(editSrc.indexOf("function saveRoute"), editSrc.indexOf("function saveCatalog"));
   const validateCall = saveRoute.slice(saveRoute.indexOf("validateRouteFields("), saveRoute.indexOf(", flagIds"));

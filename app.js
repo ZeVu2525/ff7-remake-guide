@@ -370,9 +370,11 @@
   function itemLine(item) {
     if (!hasFlag(item, "item") || !item.items || !item.items.length) return "";
     const links = item.items.map(link => {
+      const qty = esc(String(link.qty || 1));
+      if (link.name && !link.id) return `<span class="item-free">${esc(link.name)} ×${qty}</span>`;
       const found = catalogRecordById(link.id);
       const name = found ? found.name : link.id;
-      return `<button type="button" class="linkish${found ? "" : " is-missing-item"}" data-open-item="${esc(link.id)}">${esc(name)} ×${esc(String(link.qty || 1))}</button>`;
+      return `<button type="button" class="linkish${found ? "" : " is-missing-item"}" data-open-item="${esc(link.id)}">${esc(name)} ×${qty}</button>`;
     }).join("");
     return `<p class="item-links">${links}</p>`;
   }

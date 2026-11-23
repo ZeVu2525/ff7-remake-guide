@@ -29,7 +29,7 @@ function validateGuide(guide) {
   if (GAME.storage.state !== "ff7r-guide-state-v1") fail("進行の保存キーが ff7r-guide-state-v1 ではない");
   if (GAME.storage.textEdits !== "ff7r-text-edits-v1") fail("編集の保存キーが ff7r-text-edits-v1 ではない");
   if (GAME.storage.cardEdits !== "ff7r-card-edits-v1") fail("カード編集の保存キーが ff7r-card-edits-v1 ではない");
-  if (GAME.cache !== "ff7r-guide-v40") fail("キャッシュ名が ff7r-guide-v40 ではない");
+  if (GAME.cache !== "ff7r-guide-v41") fail("キャッシュ名が ff7r-guide-v41 ではない");
   const mapFiles = guide.MAP_FILES;
   if (!Array.isArray(mapFiles)) fail("data/maps.js の MAP_FILES が配列ではない");
   else mapFiles.forEach(entry => {
@@ -196,6 +196,7 @@ function validateGuide(guide) {
         if (item && item.items) {
           if (!Array.isArray(item.items)) fail(item.id + " の items が配列ではない");
           else item.items.forEach(link => {
+            if (link && link.name && !link.id && link.qty >= 1) return;
             if (!link || !catalogIds.has(link.id) || !(link.qty >= 1)) fail(item.id + " のアイテムリンクが不正");
           });
         }
