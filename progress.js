@@ -1300,8 +1300,12 @@
     return "image.png";
   }
 
+  function libraryFolderPath(value) {
+    return String(value || "").split(/[\\/]+/).map(libraryFolderId).filter(Boolean).join("/");
+  }
+
   function libraryKey(folder, name) {
-    const id = libraryFolderId(folder) || "images";
+    const id = libraryFolderPath(folder) || "images";
     return id + "/" + libraryFileName(name);
   }
 
@@ -1343,8 +1347,10 @@
     if (isRepoImagePath(text)) return false;
     if (/^jun-[a-z0-9._-]+\.(?:png|jpe?g|gif|webp)$/i.test(text)) return true;
     const parts = text.split("/");
-    if (parts.length !== 2 || !libraryFolderId(parts[0]) || parts[0] !== libraryFolderId(parts[0])) return false;
-    return /^[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(parts[1]);
+    if (parts.length < 2) return false;
+    const file = parts.pop();
+    if (!parts.every(part => part && libraryFolderId(part) === part)) return false;
+    return /^[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(file);
   }
 
   function normalizeLibraryKey(value, folder) {
@@ -1886,7 +1892,7 @@
   }
 
   function validMapValue(map) {
-    return /^chapter[0-9-]+$/.test(map) || /^https:\/\//i.test(map) || /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(map) || /^maps\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(map);
+    return /^chapter[0-9-]+$/.test(map) || /^https:\/\//i.test(map) || /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(map) || /^maps\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(map) || isLibraryKey(map);
   }
 
   function orderForSave(ids, id, parentId, previousParent, insertAfter) {
@@ -2176,6 +2182,7 @@
     nestMany,
     LIBRARY_FOLDERS,
     libraryFolderId,
+    libraryFolderPath,
     libraryFileName,
     libraryKey,
     imageKeyFromUrl,

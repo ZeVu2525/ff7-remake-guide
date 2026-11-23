@@ -98,13 +98,24 @@
     return result;
   }
 
+  function folderParent(folder) {
+    if (!folder) return "";
+    if (typeof folder.parent === "string") return folder.parent;
+    const slash = String(folder.id || "").lastIndexOf("/");
+    return slash < 0 ? "" : folder.id.slice(0, slash);
+  }
+
+  function isRootFolder(id) {
+    return defaults().some(folder => folder.id === id);
+  }
+
   async function ensureFolders() {
     const rows = await withStore(FOLDERS, "readonly", store => requestResult(store.getAll()));
     const have = new Set((rows || []).map(row => row.id));
     const missing = defaults().filter(folder => !have.has(folder.id));
     if (!missing.length) return;
     await withStore(FOLDERS, "readwrite", store => {
-      missing.forEach(folder => store.put({ id: folder.id, label: folder.label }));
+      missing.forEach(folder => store.put({ id: folder.id, label: folder.label, parent: "" }));
     });
   }
 
@@ -130,7 +141,7 @@
     await ensureFolders();
     const rows = await withStore(FOLDERS, "readonly", store => requestResult(store.getAll()));
     const order = defaults().map(folder => folder.id);
-    return (rows || []).slice().sort((a, b) => {
+    return (rows || []).map(folder => Object.assign({}, folder, { parent: folderParent(folder) })).sort((a, b) => {
       const ai = order.indexOf(a.id);
       const bi = order.indexOf(b.id);
       if (ai >= 0 || bi >= 0) return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
@@ -138,51 +149,108 @@
     });
   }
 
-  async function createFolder(label) {
-    const id = folderId(label);
-    if (!id) return "";
-    await withStore(FOLDERS, "readwrite", store => store.put({ id, label: String(label || id).trim() || id }));
+  async function ensurePath(folderPath) {
+    const parts = String(folderPath || "").split("/").filter(Boolean);
+    let parent = "";
+    for (const part of parts) {
+      const id = parent ? parent + "/" + part : part;
+      const known = (await folders()).some(folder => folder.id === id);
+      if (!known) {
+        await withStore(FOLDERS, "readwrite", store => store.put({ id, label: part, parent }));
+      }
+      parent = id;
+    }
+    return parent;
+  }
+
+  async function createFolder(label, parent) {
+    const segment = folderId(String(label || "").split(/[\\/]/).pop());
+    if (!segment) return "";
+    const parentPath = progress() ? progress().libraryFolderPath(parent || "") : String(parent || "");
+    const id = parentPath ? parentPath + "/" + segment : segment;
+    const display = String(label || segment).split(/[\\/]/).pop().trim() || segment;
+    await withStore(FOLDERS, "readwrite", store => store.put({ id, label: display, parent: parentPath }));
     return id;
   }
 
-  async function renameFolder(id, label) {
-    const current = folderId(id);
-    const folder = (await folders()).find(item => item.id === current);
-    if (!folder) return { id: current, moved: [] };
-    const nextLabel = String(label || "").trim() || folder.label;
-    const builtin = defaults().some(item => item.id === current);
-    if (builtin) {
-      await withStore(FOLDERS, "readwrite", store => store.put({ id: current, label: nextLabel }));
-      return { id: current, moved: [] };
-    }
-    const nextId = folderId(nextLabel);
-    if (!nextId || nextId === current) {
-      await withStore(FOLDERS, "readwrite", store => store.put({ id: current, label: nextLabel }));
-      return { id: current, moved: [] };
-    }
-    const rows = (await list()).filter(row => row.folder === current);
+  function folderDir(key) {
+    const parts = String(key || "").split("/");
+    parts.pop();
+    return parts.join("/");
+  }
+
+  async function rewritePrefix(fromId, toId) {
     const moved = [];
+    const rows = (await list()).filter(row => row.folder === fromId || row.folder.indexOf(fromId + "/") === 0);
     for (const row of rows) {
-      const next = await move(row.id, nextId);
-      if (next && next !== row.id) moved.push([row.id, next]);
+      const record = await getRecord(row.id);
+      if (!record) continue;
+      const next = toId + String(record.id).slice(fromId.length);
+      if (next !== record.id) {
+        await moveRecord(record, next);
+        moved.push([record.id, next]);
+      }
     }
+    const tree = (await folders()).filter(folder => folder.id === fromId || folder.id.indexOf(fromId + "/") === 0);
+    tree.sort((a, b) => b.id.length - a.id.length);
     await withStore(FOLDERS, "readwrite", store => {
-      store.delete(current);
-      store.put({ id: nextId, label: nextLabel });
+      tree.forEach(folder => {
+        const nextId = toId + folder.id.slice(fromId.length);
+        const parent = folder.id === fromId ? folderDir(toId) : toId + String(folder.parent || "").slice(fromId.length);
+        store.delete(folder.id);
+        store.put({ id: nextId, label: folder.id === fromId ? folder.label : folder.label, parent });
+      });
     });
-    return { id: nextId, moved };
+    return { id: toId, moved };
+  }
+
+  async function renameFolder(id, label) {
+    const folder = (await folders()).find(item => item.id === id);
+    if (!folder) return { id, moved: [] };
+    const nextLabel = String(label || "").trim() || folder.label;
+    if (isRootFolder(id)) {
+      await withStore(FOLDERS, "readwrite", store => store.put({ id, label: nextLabel, parent: "" }));
+      return { id, moved: [] };
+    }
+    const segment = folderId(nextLabel);
+    const parent = folder.parent || "";
+    const nextId = parent ? parent + "/" + segment : segment;
+    if (!segment || nextId === id) {
+      await withStore(FOLDERS, "readwrite", store => store.put({ id, label: nextLabel, parent }));
+      return { id, moved: [] };
+    }
+    const result = await rewritePrefix(id, nextId);
+    await withStore(FOLDERS, "readwrite", store => store.put({ id: nextId, label: nextLabel, parent }));
+    return result;
+  }
+
+  async function moveFolder(id, parent) {
+    const folder = (await folders()).find(item => item.id === id);
+    if (!folder || isRootFolder(id)) return { id, moved: [] };
+    const parentPath = progress() ? progress().libraryFolderPath(parent || "") : String(parent || "");
+    if (parentPath === id || parentPath.indexOf(id + "/") === 0) return { id, moved: [] };
+    const segment = id.split("/").pop();
+    let nextId = parentPath ? parentPath + "/" + segment : segment;
+    const taken = new Set((await folders()).map(item => item.id));
+    if (taken.has(nextId) && nextId !== id) nextId += "-2";
+    if (nextId === id) return { id, moved: [] };
+    return rewritePrefix(id, nextId);
   }
 
   async function deleteFolder(id) {
-    const current = folderId(id);
-    if (!current || defaults().some(item => item.id === current)) return { ok: false, moved: [] };
-    const rows = (await list()).filter(row => row.folder === current);
+    const folder = (await folders()).find(item => item.id === id);
+    if (!folder || isRootFolder(id)) return { ok: false, moved: [] };
+    const parent = folder.parent || "images";
     const moved = [];
-    for (const row of rows) {
-      const next = await move(row.id, "images");
-      if (next) moved.push([row.id, next]);
+    for (const row of await list(id)) {
+      const next = await move(row.id, parent);
+      if (next && next !== row.id) moved.push([row.id, next]);
     }
-    await withStore(FOLDERS, "readwrite", store => store.delete(current));
+    for (const child of (await folders()).filter(item => item.parent === id)) {
+      const result = await moveFolder(child.id, parent);
+      (result.moved || []).forEach(pair => moved.push(pair));
+    }
+    await withStore(FOLDERS, "readwrite", store => store.delete(id));
     return { ok: true, moved };
   }
 
@@ -190,7 +258,7 @@
     const key = id && String(id).indexOf("/") > 0 ? normalize(id) : makeKey(folder || "images", name || id);
     const record = {
       id: key,
-      folder: key.split("/")[0],
+      folder: folderDir(key) || "images",
       name: fileName(name || key.split("/").pop()),
       type: (blob && blob.type) || "image/png",
       blob,
@@ -248,7 +316,7 @@
   async function moveRecord(record, next) {
     const previous = record.id;
     if (previous === next) return previous;
-    const copy = Object.assign({}, record, { id: next, folder: next.split("/")[0], name: next.split("/").pop() });
+    const copy = Object.assign({}, record, { id: next, folder: folderDir(next) || "images", name: next.split("/").pop() });
     await withStore(FILES, "readwrite", store => {
       store.put(copy);
       store.delete(previous);
@@ -270,7 +338,7 @@
     const rows = await withStore(FILES, "readonly", store => requestResult(store.getAll()));
     return (rows || []).map(row => ({
       id: row.id,
-      folder: row.folder || String(row.id).split("/")[0],
+      folder: folderDir(row.id) || row.folder || "images",
       name: row.name || String(row.id).split("/").pop(),
       type: row.type,
       size: row.blob ? row.blob.size : 0
@@ -325,6 +393,6 @@
 
   globalThis.GuideImages = {
     putFile, getRecord, objectUrl, revoke, revokeAll, remove, rename, move, list, usage, allBlobs, isKey, hydrate, safeName,
-    folders, createFolder, renameFolder, deleteFolder, ensureFolders, resolve, makeKey
+    folders, createFolder, renameFolder, deleteFolder, moveFolder, ensurePath, ensureFolders, resolve, makeKey
   };
 })();

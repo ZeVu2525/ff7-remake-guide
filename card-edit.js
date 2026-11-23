@@ -572,10 +572,27 @@
     if (!globalThis.GuideImages) return;
     const folders = await GuideImages.folders();
     const rows = await GuideImages.list();
+    const children = {};
+    folders.forEach(folder => {
+      const parent = folder.parent || "";
+      children[parent] = children[parent] || [];
+      children[parent].push(folder);
+    });
+    const folderOptions = (current) => {
+      const lines = [];
+      const walk = (parent, depth) => {
+        (children[parent] || []).forEach(folder => {
+          lines.push(`<option value="${escapeAttr(folder.id)}"${folder.id === current ? " selected" : ""}>${"　".repeat(depth)}${escapeText(folder.label)}</option>`);
+          walk(folder.id, depth + 1);
+        });
+      };
+      walk("", 0);
+      return lines.join("");
+    };
     root.querySelectorAll("[data-lib-folder]").forEach(select => {
       if (select.dataset.ready === "1") return;
       const current = select.getAttribute("data-current") || "images";
-      select.innerHTML = folders.map(folder => `<option value="${escapeAttr(folder.id)}"${folder.id === current ? " selected" : ""}>${escapeText(folder.label)}</option>`).join("");
+      select.innerHTML = folderOptions(current);
       select.dataset.ready = "1";
     });
     root.querySelectorAll("[data-img-lib], [data-enemy-lib]").forEach(select => {
@@ -873,7 +890,20 @@
   });
   fields.addEventListener("change", onBlockChange);
   fields.addEventListener("input", event => {
+    if (event.isComposing || (event.target && event.target.isComposing)) return;
     if (event.target && event.target.closest && event.target.closest("#block-editor")) syncBlocks();
+  });
+  fields.addEventListener("focusout", event => {
+    const editor = event.target.closest && event.target.closest(".rt-edit");
+    if (!editor || event.target.isComposing) return;
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      const next = GuideProgress.toHalfWidth(node.nodeValue);
+      if (next !== node.nodeValue) node.nodeValue = next;
+      node = walker.nextNode();
+    }
+    syncBlocks();
   });
   fields.addEventListener("mousedown", event => {
     if (event.target.closest && event.target.closest(".rt-bar button")) event.preventDefault();
@@ -3314,28 +3344,6 @@
     } catch (e) {
       window.alert("カードの編集データとして読めませんでした。");
     }
-  });
-  document.addEventListener("input", event => {
-    const el = event.target;
-    if (!el || !el.closest) return;
-    if (!el.closest("#card-edit-dialog, #text-edit-dialog, #settings-body")) return;
-    if (el.type === "password" || el.type === "color" || el.type === "file" || el.type === "checkbox") return;
-    if (el.isContentEditable) {
-      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-      let node = walker.nextNode();
-      while (node) {
-        const next = GuideProgress.toHalfWidth(node.nodeValue);
-        if (next !== node.nodeValue) node.nodeValue = next;
-        node = walker.nextNode();
-      }
-      return;
-    }
-    if (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") return;
-    const next = GuideProgress.toHalfWidth(el.value);
-    if (next === el.value) return;
-    const caret = el.selectionStart;
-    el.value = next;
-    if (caret != null) el.setSelectionRange(caret, caret);
   });
   document.getElementById("card-edit-reset").addEventListener("click", () => {
     if (!window.confirm("このブラウザのカード編集をすべて消し、原稿の並びに戻します。チェックした進行は残ります。")) return;

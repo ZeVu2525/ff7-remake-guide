@@ -1399,18 +1399,118 @@
   }
 
   let libraryView = "maps";
+  const libraryOpen = new Set(["maps", "enemies", "images"]);
 
   function libraryPath(file) {
     return String((file && (file.webkitRelativePath || file.name)) || "");
   }
 
   function libraryTarget(file, fallback) {
-    const parts = libraryPath(file).split("/").filter(Boolean);
+    const parts = libraryPath(file).split(/[\\/]+/).filter(Boolean);
     const name = parts.pop() || "image.png";
-    if (/^__MACOSX$/.test(parts[0] || "") || name.indexOf(".") === 0) return null;
+    if (parts.some(part => part === "__MACOSX") || name.indexOf(".") === 0) return null;
     if (!/\.(png|jpe?g|gif|webp)$/i.test(name)) return null;
-    const folder = parts.length ? GuideProgress.libraryFolderId(parts[0]) : (fallback || libraryView || "images");
+    const rel = parts.map(part => GuideProgress.libraryFolderId(part)).filter(Boolean);
+    const base = fallback || libraryView || "images";
+    const rooted = rel.length && ["maps", "enemies", "images"].indexOf(rel[0]) >= 0;
+    const folder = rooted ? rel.join("/") : [base].concat(rel).filter(Boolean).join("/");
     return { folder: folder || "images", name };
+  }
+
+  function walkEntry(entry, prefix) {
+    return new Promise(resolve => {
+      if (!entry) { resolve([]); return; }
+      if (entry.isFile) {
+        entry.file(file => resolve([{ file, relative: prefix + file.name }]));
+        return;
+      }
+      if (!entry.isDirectory) { resolve([]); return; }
+      const reader = entry.createReader();
+      const all = [];
+      const read = () => {
+        reader.readEntries(batch => {
+          if (!batch.length) { resolve(all); return; }
+          Promise.all(batch.map(child => walkEntry(child, prefix + entry.name + "/"))).then(groups => {
+            groups.forEach(group => all.push.apply(all, group));
+            read();
+          });
+        });
+      };
+      read();
+    });
+  }
+
+  async function importLibraryEntries(entries, fallback) {
+    const planned = [];
+    let skipped = 0;
+    for (const entry of entries) {
+      const file = entry.file || entry;
+      const relative = entry.relative || libraryPath(file);
+      const target = libraryTarget({ name: file.name, webkitRelativePath: relative }, fallback);
+      if (!target) { skipped += 1; continue; }
+      planned.push({ blob: entry.blob || file, name: target.name, folder: target.folder, key: GuideProgress.libraryKey(target.folder, target.name) });
+    }
+    const have = new Set((await GuideImages.list()).map(row => row.id));
+    const duplicates = planned.filter(item => have.has(item.key));
+    const overwrite = duplicates.length ? window.confirm(duplicates.length + "件は同じ場所にあります。上書きしますか？キャンセルすると、その分は飛ばします。") : false;
+    const status = document.getElementById("image-library-progress");
+    let added = 0;
+    let overwritten = 0;
+    let duplicate = 0;
+    for (let index = 0; index < planned.length; index += 1) {
+      const item = planned[index];
+      if (status) status.textContent = "読み込み中 " + (index + 1) + " / " + planned.length;
+      if (have.has(item.key) && !overwrite) { duplicate += 1; continue; }
+      await GuideImages.ensurePath(item.folder);
+      const existed = have.has(item.key);
+      await GuideImages.putFile(item.key, item.blob, item.name, item.folder);
+      have.add(item.key);
+      if (existed) overwritten += 1;
+      else added += 1;
+    }
+    const summary = "追加 " + added + "、上書き " + overwritten + "、重複を飛ばした " + duplicate + "、対象外 " + skipped + "。";
+    if (status) status.textContent = summary;
+    return { added, overwritten, duplicate, skipped };
+  }
+
+  function folderOptions(folders, current) {
+    const children = {};
+    folders.forEach(folder => {
+      const parent = folder.parent || "";
+      children[parent] = children[parent] || [];
+      children[parent].push(folder);
+    });
+    const lines = [];
+    const walk = (parent, depth) => {
+      (children[parent] || []).forEach(folder => {
+        lines.push(`<option value="${esc(folder.id)}"${folder.id === current ? " selected" : ""}>${"　".repeat(depth)}${esc(folder.label)}</option>`);
+        walk(folder.id, depth + 1);
+      });
+    };
+    walk("", 0);
+    return lines.join("");
+  }
+
+  function folderTree(folders, parent) {
+    const kids = folders.filter(folder => (folder.parent || "") === parent);
+    if (!kids.length) return "";
+    return `<ul class="lib-tree">${kids.map(folder => {
+      const open = libraryOpen.has(folder.id);
+      const nested = folders.some(item => item.parent === folder.id);
+      return `<li><div class="lib-tree-row${folder.id === libraryView ? " on" : ""}" data-lib-folder="${esc(folder.id)}" draggable="true">${nested ? `<button type="button" data-lib-toggle="${esc(folder.id)}" aria-label="${open ? "閉じる" : "開く"}">${open ? "▾" : "▸"}</button>` : `<span class="lib-tree-gap"></span>`}<button type="button" data-lib-folder="${esc(folder.id)}">${esc(folder.label)}</button></div>${open ? folderTree(folders, folder.id) : ""}</li>`;
+    }).join("")}</ul>`;
+  }
+
+  function folderCrumb(folders) {
+    const byId = {};
+    folders.forEach(folder => { byId[folder.id] = folder; });
+    const chain = [];
+    let cursor = libraryView;
+    while (cursor && byId[cursor]) {
+      chain.unshift(byId[cursor]);
+      cursor = byId[cursor].parent || "";
+    }
+    return `<nav class="lib-crumb" aria-label="フォルダ">${chain.map(folder => `<button type="button" data-lib-folder="${esc(folder.id)}">${esc(folder.label)}</button>`).join("<span>/</span>")}</nav>`;
   }
 
   async function paintImageLibrary() {
@@ -1424,17 +1524,12 @@
     const rows = await GuideImages.list();
     const used = rows.reduce((sum, row) => sum + row.size, 0);
     if (usage) usage.textContent = "保存中 " + rows.length + " 件、" + bytesLabel(used) + "。";
-    if (folderHost) {
-      folderHost.innerHTML = folders.map(folder => {
-        const count = rows.filter(row => row.folder === folder.id).length;
-        return `<button type="button" class="chip${folder.id === libraryView ? " on" : ""}" data-lib-folder="${esc(folder.id)}">${esc(folder.label)} <small>${count}</small></button>`;
-      }).join("");
-    }
-    if (moveTarget) {
-      moveTarget.innerHTML = folders.map(folder => `<option value="${esc(folder.id)}"${folder.id === libraryView ? "" : ""}>${esc(folder.label)}</option>`).join("");
-    }
+    if (folderHost) folderHost.innerHTML = folderTree(folders, "") + folderCrumb(folders);
+    if (moveTarget) moveTarget.innerHTML = folderOptions(folders, libraryView);
+    const childFolders = folders.filter(folder => (folder.parent || "") === libraryView);
     const visible = rows.filter(row => row.folder === libraryView);
-    list.innerHTML = visible.map(row => `<div class="image-lib-row" draggable="true" data-lib-id="${esc(row.id)}"><input type="checkbox" data-lib-check="${esc(row.id)}" aria-label="選択"><img data-lib="${esc(row.id)}" alt=""><span>${esc(row.name)} <small>${esc(bytesLabel(row.size))}</small></span><button type="button" data-lib-rename="${esc(row.id)}">名前</button><button type="button" data-lib-delete="${esc(row.id)}">削除</button></div>`).join("") || "<p>このフォルダには画像がありません。</p>";
+    const folderRows = childFolders.map(folder => `<div class="image-lib-row is-folder" draggable="true" data-lib-folder-row="${esc(folder.id)}"><span>📁 ${esc(folder.label)}</span><button type="button" data-lib-folder="${esc(folder.id)}">開く</button><button type="button" data-lib-folder-rename="${esc(folder.id)}">名前</button><button type="button" data-lib-folder-delete="${esc(folder.id)}">削除</button></div>`).join("");
+    list.innerHTML = folderRows + (visible.map(row => `<div class="image-lib-row" draggable="true" data-lib-id="${esc(row.id)}"><input type="checkbox" data-lib-check="${esc(row.id)}" aria-label="選択"><img data-lib="${esc(row.id)}" alt=""><span>${esc(row.name)} <small>${esc(bytesLabel(row.size))}</small></span><button type="button" data-lib-rename="${esc(row.id)}">名前</button><button type="button" data-lib-delete="${esc(row.id)}">削除</button></div>`).join("") || (childFolders.length ? "" : "<p>このフォルダには画像がありません。</p>"));
     GuideImages.hydrate(list);
   }
 
@@ -1468,16 +1563,9 @@
   }
 
   async function storeImageFiles(fileList, fallback) {
-    const files = [...(fileList || [])];
-    let count = 0;
-    for (const file of files) {
-      const target = libraryTarget(file, fallback);
-      if (!target) continue;
-      if (target.folder !== "maps" && target.folder !== "enemies" && target.folder !== "images") await GuideImages.createFolder(target.folder);
-      await GuideImages.putFile(GuideProgress.libraryKey(target.folder, target.name), file, target.name, target.folder);
-      count += 1;
-    }
-    return count;
+    const files = [...(fileList || [])].map(file => ({ file, relative: file.webkitRelativePath || file.name }));
+    const summary = await importLibraryEntries(files, fallback);
+    return summary.added + summary.overwritten;
   }
 
   async function inflateRaw(bytes) {
@@ -1489,19 +1577,15 @@
   async function storeZip(file) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const entries = GuideZip.unzip(bytes);
-    let count = 0;
+    const planned = [];
     for (const entry of entries) {
-      const target = libraryTarget({ name: entry.name, webkitRelativePath: entry.name }, libraryView);
-      if (!target) continue;
       let raw = entry.bytes;
       if (entry.method === 8) raw = await inflateRaw(entry.bytes);
       if (!raw || (entry.method && entry.method !== 0 && entry.method !== 8)) continue;
-      if (target.folder !== "maps" && target.folder !== "enemies" && target.folder !== "images") await GuideImages.createFolder(target.folder);
       const blob = new Blob([raw], { type: "image/png" });
-      await GuideImages.putFile(GuideProgress.libraryKey(target.folder, target.name), blob, target.name, target.folder);
-      count += 1;
+      planned.push({ file: { name: entry.name.split("/").pop(), webkitRelativePath: entry.name }, blob, relative: entry.name });
     }
-    return count;
+    return importLibraryEntries(planned, libraryView);
   }
 
   function renderSettings() {
@@ -1552,8 +1636,9 @@
       </div>
       <div data-settings-pane="images"${settingsHidden("images")}>
       <h3>画像ライブラリ</h3>
-      <p class="lead">地図とカードの画像は、このブラウザの中だけに保存します。書き出しや GitHub には画像そのものは入りません。キーは maps/jun-ch01-01.png のように、フォルダとファイル名です。最初のフォルダは MAP、エネミー、その他です。</p>
+      <p class="lead">地図とカードの画像は、このブラウザの中だけに保存します。書き出しや GitHub には画像そのものは入りません。キーは maps/jun-ch01-01.png や maps/Chapter1/photo.png のように、フォルダの階層とファイル名です。最初のフォルダは MAP、エネミー、その他です。</p>
       <p id="image-library-usage" class="lead"></p>
+      <p id="image-library-progress" class="lead" aria-live="polite"></p>
       <div id="image-library-folders" class="image-lib-folders"></div>
       <p>
         <button type="button" id="image-library-add">画像を追加</button>
@@ -1565,7 +1650,7 @@
         <button type="button" id="image-library-folder-delete">フォルダを削除</button>
       </p>
       <p><select id="image-library-move-target" aria-label="移動先"></select> <button type="button" id="image-library-move">選択を移動</button></p>
-      <p class="lead" id="image-library-drop" tabindex="0">ここに画像をドロップするか、この欄を選んで貼り付けできます。zip の一番上のフォルダが、ライブラリのフォルダになります。地図の zip は maps/ に入ります。画像をフォルダへドラッグするか、選んで移動できます。</p>
+      <p class="lead" id="image-library-drop" tabindex="0">ここに画像やフォルダをドロップするか、この欄を選んで貼り付けできます。選んでいるフォルダの下に、フォルダの階層ごと入ります。zip も階層を残します。地図の zip で maps/ から始まるものは、その場所のままです。</p>
       <input id="image-library-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
       <input id="image-library-bundle" type="file" accept=".zip,image/png,image/jpeg,image/gif,image/webp,application/zip" multiple hidden>
       <input id="image-library-folder" type="file" webkitdirectory multiple hidden>
@@ -1641,7 +1726,8 @@
     document.getElementById("image-library-folder-add").addEventListener("click", async () => {
       const label = window.prompt("フォルダの名前");
       if (!label) return;
-      libraryView = await GuideImages.createFolder(label) || libraryView;
+      libraryView = await GuideImages.createFolder(label, libraryView) || libraryView;
+      libraryOpen.add(libraryView.split("/").slice(0, -1).join("/") || libraryView);
       paintImageLibrary();
     });
     document.getElementById("image-library-folder-rename").addEventListener("click", async () => {
@@ -1655,13 +1741,16 @@
       paintImageLibrary();
     });
     document.getElementById("image-library-folder-delete").addEventListener("click", async () => {
+      if (!window.confirm("このフォルダを消します。中の画像とフォルダは、上のフォルダへ移します。")) return;
+      const folders = await GuideImages.folders();
+      const current = folders.find(folder => folder.id === libraryView);
       const result = await GuideImages.deleteFolder(libraryView);
       if (!result.ok) {
         window.alert("MAP、エネミー、その他は削除できません。");
         return;
       }
       rememberLibraryMoves(result.moved);
-      libraryView = "images";
+      libraryView = current && current.parent ? current.parent : "images";
       paintImageLibrary();
     });
     document.getElementById("image-library-move").addEventListener("click", async () => {
@@ -1680,7 +1769,15 @@
       libraryDrop.addEventListener("dragover", event => event.preventDefault());
       libraryDrop.addEventListener("drop", async event => {
         event.preventDefault();
-        await storeImageFiles(event.dataTransfer.files);
+        const items = [...(event.dataTransfer.items || [])];
+        const entries = items.map(item => item.webkitGetAsEntry && item.webkitGetAsEntry()).filter(Boolean);
+        if (entries.length) {
+          const files = [];
+          for (const entry of entries) files.push.apply(files, await walkEntry(entry, ""));
+          await importLibraryEntries(files, libraryView);
+        } else {
+          await storeImageFiles(event.dataTransfer.files);
+        }
         paintImageLibrary();
       });
       libraryDrop.addEventListener("paste", async event => {
@@ -1693,6 +1790,36 @@
     }
     const libraryList = document.getElementById("image-library-list");
     libraryList.addEventListener("click", async event => {
+      const openFolder = event.target.closest("[data-lib-folder]");
+      if (openFolder && !event.target.closest("[data-lib-folder-rename], [data-lib-folder-delete]")) {
+        libraryView = openFolder.getAttribute("data-lib-folder");
+        libraryOpen.add(libraryView);
+        paintImageLibrary();
+        return;
+      }
+      const folderRename = event.target.closest("[data-lib-folder-rename]");
+      if (folderRename) {
+        const id = folderRename.getAttribute("data-lib-folder-rename");
+        const folders = await GuideImages.folders();
+        const current = folders.find(folder => folder.id === id);
+        const label = window.prompt("フォルダの名前", current ? current.label : "");
+        if (!label) return;
+        const result = await GuideImages.renameFolder(id, label);
+        rememberLibraryMoves(result.moved);
+        if (libraryView === id) libraryView = result.id || id;
+        paintImageLibrary();
+        return;
+      }
+      const folderDelete = event.target.closest("[data-lib-folder-delete]");
+      if (folderDelete) {
+        const id = folderDelete.getAttribute("data-lib-folder-delete");
+        if (!window.confirm("このフォルダを消します。中の画像とフォルダは、上のフォルダへ移します。")) return;
+        const result = await GuideImages.deleteFolder(id);
+        if (!result.ok) window.alert("MAP、エネミー、その他は削除できません。");
+        else rememberLibraryMoves(result.moved);
+        paintImageLibrary();
+        return;
+      }
       const rename = event.target.closest("[data-lib-rename]");
       const remove = event.target.closest("[data-lib-delete]");
       if (rename) {
@@ -1720,17 +1847,35 @@
       if (rename || remove) paintImageLibrary();
     });
     libraryList.addEventListener("dragstart", event => {
+      const folderRow = event.target.closest("[data-lib-folder-row]");
       const row = event.target.closest("[data-lib-id]");
-      if (!row || !event.dataTransfer) return;
-      event.dataTransfer.setData("text/plain", row.getAttribute("data-lib-id"));
+      if (!event.dataTransfer) return;
+      if (folderRow) event.dataTransfer.setData("text/plain", "folder:" + folderRow.getAttribute("data-lib-folder-row"));
+      else if (row) event.dataTransfer.setData("text/plain", row.getAttribute("data-lib-id"));
+      else return;
       event.dataTransfer.effectAllowed = "move";
     });
     const folderHost = document.getElementById("image-library-folders");
     folderHost.addEventListener("click", event => {
+      const toggle = event.target.closest("[data-lib-toggle]");
+      if (toggle) {
+        const id = toggle.getAttribute("data-lib-toggle");
+        if (libraryOpen.has(id)) libraryOpen.delete(id);
+        else libraryOpen.add(id);
+        paintImageLibrary();
+        return;
+      }
       const chip = event.target.closest("[data-lib-folder]");
       if (!chip) return;
       libraryView = chip.getAttribute("data-lib-folder");
+      libraryOpen.add(libraryView);
       paintImageLibrary();
+    });
+    folderHost.addEventListener("dragstart", event => {
+      const row = event.target.closest("[data-lib-folder]");
+      if (!row || !event.dataTransfer || event.target.closest("[data-lib-toggle]")) return;
+      event.dataTransfer.setData("text/plain", "folder:" + row.getAttribute("data-lib-folder"));
+      event.dataTransfer.effectAllowed = "move";
     });
     folderHost.addEventListener("dragover", event => {
       const chip = event.target.closest("[data-lib-folder]");
@@ -1748,14 +1893,26 @@
       event.preventDefault();
       chip.classList.remove("is-drop");
       const folder = chip.getAttribute("data-lib-folder");
-      const id = event.dataTransfer.getData("text/plain");
-      if (id && id.indexOf("/") > 0) {
-        const next = await GuideImages.move(id, folder);
-        if (next && next !== id) rememberLibraryMoves([[id, next]]);
-      } else if (event.dataTransfer.files && event.dataTransfer.files.length) {
-        await storeImageFiles(event.dataTransfer.files, folder);
+      const payload = event.dataTransfer.getData("text/plain");
+      if (payload.indexOf("folder:") === 0) {
+        const result = await GuideImages.moveFolder(payload.slice(7), folder);
+        rememberLibraryMoves(result.moved);
+      } else if (payload.indexOf("/") > 0) {
+        const next = await GuideImages.move(payload, folder);
+        if (next && next !== payload) rememberLibraryMoves([[payload, next]]);
+      } else {
+        const items = [...(event.dataTransfer.items || [])];
+        const entries = items.map(item => item.webkitGetAsEntry && item.webkitGetAsEntry()).filter(Boolean);
+        if (entries.length) {
+          const files = [];
+          for (const entry of entries) files.push.apply(files, await walkEntry(entry, ""));
+          await importLibraryEntries(files, folder);
+        } else if (event.dataTransfer.files && event.dataTransfer.files.length) {
+          await storeImageFiles(event.dataTransfer.files, folder);
+        }
       }
       libraryView = folder;
+      libraryOpen.add(folder);
       paintImageLibrary();
     });
     const githubStatus = document.getElementById("github-status");
@@ -1829,7 +1986,7 @@
         const key = input.getAttribute("data-label-key");
         const next = JSON.parse(JSON.stringify(cardBook));
         next.labels = Object.assign({}, next.labels);
-        const text = input.value.trim();
+        const text = GuideProgress.toHalfWidth(input.value).trim();
         if (!text || text === labels[key]) delete next.labels[key];
         else next.labels[key] = text;
         setCardBook(next);
@@ -1854,7 +2011,7 @@
     });
     const saveTemplates = document.getElementById("settings-templates-save");
     if (saveTemplates) saveTemplates.addEventListener("click", () => {
-      const lines = String(document.getElementById("settings-templates").value || "").split(/\n/).map(line => line.trim()).filter(Boolean);
+      const lines = GuideProgress.toHalfWidth(document.getElementById("settings-templates").value || "").split(/\n/).map(line => line.trim()).filter(Boolean);
       const current = GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES || []);
       const next = JSON.parse(JSON.stringify(cardBook));
       next.templates = lines.map(label => {
