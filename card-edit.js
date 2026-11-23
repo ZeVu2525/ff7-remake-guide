@@ -79,7 +79,8 @@
     ".rt-menu button.on,.rt-bar [data-rt-menu].is-set{box-shadow:inset 0 -2px 0 var(--accent)}",
     ".rt-menu button.key{outline:2px solid var(--accent)}",
     ".rt-bar [data-rt=color]{width:22px;min-height:22px;padding:0}",
-    ".rt-edit{min-height:72px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);white-space:pre-wrap}",
+    ".rt-edit{min-height:72px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg2);font:16px/1.55 inherit;white-space:pre-wrap}",
+    ".rt-edit b{font-weight:700}.rt-edit i{font-style:italic}.rt-edit u{text-decoration:underline}.rt-edit s{text-decoration:line-through}",
     ".blk-file input{max-width:100%}",
     ".blk-preview{max-width:180px;max-height:120px;margin-top:6px;background:#fff}",
     "#tag-pop{position:fixed;z-index:280;display:grid;gap:4px;min-width:180px;max-width:min(280px,80vw);padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);box-shadow:0 8px 24px rgba(0,0,0,.25)}",
@@ -518,11 +519,12 @@
     return `<span class="rt-pop"><button type="button" data-rt-menu="${kind}" title="${label}" aria-label="${label}" aria-expanded="false">${icon}</button><span class="rt-menu" hidden>${buttons}</span></span>`;
   }
 
-  function richBox(html) {
+  function richBox(html, kind) {
     const colors = RICH_COLORS.map(color => `<button type="button" data-rt="color" data-rt-value="${color}" style="background:${color}" aria-label="${color}"></button>`).join("");
     const size = richMenu("size", [["0.85em", "小"], ["1em", "中"], ["1.25em", "大"]]);
     const font = richMenu("font", [["serif", "明朝"], ["monospace", "等幅"]]);
-    return `<div class="rt-wrap"><div class="rt-bar"><button type="button" data-rt="bold" title="太字"><b>B</b></button><button type="button" data-rt="italic" title="斜体"><i>I</i></button><button type="button" data-rt="underline" title="下線"><u>U</u></button><button type="button" data-rt="strike" title="打消し"><s>S</s></button><button type="button" data-rt="clear" title="書式を消す">書式を消す</button>${size}${font}<label>色 <input type="color" data-rt="color" value="#1d4e89"></label>${colors}<label>背景 <input type="color" data-rt="bg" value="#fff3bf"></label></div><div class="rt-edit" contenteditable="true">${GuideProgress.sanitizeRich(html || "")}</div></div>`;
+    const face = kind === "callout" ? "blk-callout" : "blk-text";
+    return `<div class="rt-wrap"><div class="rt-bar"><button type="button" data-rt="bold" title="太字"><b>B</b></button><button type="button" data-rt="italic" title="斜体"><i>I</i></button><button type="button" data-rt="underline" title="下線"><u>U</u></button><button type="button" data-rt="strike" title="打消し"><s>S</s></button><button type="button" data-rt="clear" title="書式を消す">書式を消す</button>${size}${font}<label>色 <input type="color" data-rt="color" value="#1d4e89"></label>${colors}<label>背景 <input type="color" data-rt="bg" value="#fff3bf"></label></div><div class="rt-edit ${face}" contenteditable="true">${GuideProgress.sanitizeRich(html || "")}</div></div>`;
   }
 
   function listField(block) {
@@ -548,7 +550,7 @@
     const typeSelect = `<select data-block-type="${escapeAttr(path)}" aria-label="種類">${kinds.map(item => `<option value="${item[0]}"${block.type === item[0] ? " selected" : ""}>${item[1]}</option>`).join("")}</select>`;
     const tools = `<div class="blk-tools">${top ? `<button type="button" class="blk-handle" data-drag-block="${escapeAttr(path)}" aria-label="並べ替え">≡</button>` : ""}${typeSelect}<button type="button" data-del-block="${escapeAttr(path)}">この部分を消す</button></div>`;
     let body = "";
-    if (block.type === "text" || block.type === "callout") body = richBox(block.html);
+    if (block.type === "text" || block.type === "callout") body = richBox(block.html, block.type);
     else if (block.type === "list") body = listField(block);
     else if (block.type === "image") body = imageField(block, false);
     else if (block.type === "tiles") {
@@ -646,24 +648,57 @@
       sel.removeAllRanges();
       sel.addRange(saved);
     }
-    document.execCommand("styleWithCSS", false, true);
-    if (kind === "bold") document.execCommand("bold");
-    else if (kind === "italic") document.execCommand("italic");
-    else if (kind === "underline") document.execCommand("underline");
-    else if (kind === "strike") document.execCommand("strikeThrough");
+    document.execCommand("styleWithCSS", false, false);
+    const html = selectionHtml();
+    const wrap = (open, close) => {
+      if (!html) return false;
+      document.execCommand("insertHTML", false, open + html + close);
+      return true;
+    };
+    if (kind === "bold") { if (!wrap("<b>", "</b>")) return; }
+    else if (kind === "italic") { if (!wrap("<i>", "</i>")) return; }
+    else if (kind === "underline") { if (!wrap("<u>", "</u>")) return; }
+    else if (kind === "strike") { if (!wrap("<s>", "</s>")) return; }
     else if (kind === "clear") {
       document.execCommand("removeFormat");
       document.execCommand("unlink");
-    } else if (kind === "color" && value) document.execCommand("foreColor", false, value);
-    else if (kind === "bg" && value) document.execCommand("hiliteColor", false, value);
-    else if ((kind === "size" || kind === "font") && value) {
-      const html = selectionHtml();
-      if (!html) return;
-      const css = kind === "size" ? "font-size:" + value : (value === "serif" ? "font-family:serif" : "font-family:ui-monospace,monospace");
-      document.execCommand("insertHTML", false, '<span style="' + css + '">' + html + "</span>");
+    } else if (kind === "color" && value) { if (!wrap('<span style="color:' + value + '">', "</span>")) return; }
+    else if (kind === "bg" && value) { if (!wrap('<span style="background-color:' + value + '">', "</span>")) return; }
+    else if (kind === "size" && value) { if (!wrap('<span style="font-size:' + value + '">', "</span>")) return; }
+    else if (kind === "font" && value) {
+      const family = value === "serif" ? "serif" : "ui-monospace,monospace";
+      if (!wrap('<span style="font-family:' + family + '">', "</span>")) return;
     }
+    showRich(editor);
     syncBlocks();
     refreshRichMarks(editor);
+  }
+
+  function showRich(editor) {
+    if (!editor) return;
+    const mark = "\u2060";
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && editor.contains(sel.anchorNode)) {
+      const range = sel.getRangeAt(0);
+      range.collapse(false);
+      range.insertNode(document.createTextNode(mark));
+    }
+    editor.innerHTML = GuideProgress.sanitizeRich(editor.innerHTML);
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      const at = node.nodeValue.indexOf(mark);
+      if (at >= 0) {
+        node.nodeValue = node.nodeValue.replace(mark, "");
+        const range = document.createRange();
+        range.setStart(node, Math.min(at, node.nodeValue.length));
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        break;
+      }
+      node = walker.nextNode();
+    }
   }
 
   function placeRichMenu(panel) {
@@ -1201,7 +1236,7 @@
     const trophies = ['<option value="">選ばない</option>'].concat(GuideApp.trophyChoices().map(item => `<option value="${item.id}"${item.id === seed.trophy ? " selected" : ""}>${item.name}</option>`)).join("");
     const chapterRows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[seed.trackId] || [], book(), seed.trackId) || [];
     const chapterRow = chapterRows.find(row => row.chapterId === seed.chapterId);
-    editing.links = (seed.items || []).map(link => ({ id: link.id, qty: link.qty || 1 }));
+    editing.links = (seed.items || []).map(link => link && link.name && !link.id ? { name: link.name, qty: link.qty || 1 } : { id: link.id, qty: link.qty || 1 });
     editing.section = seed.section || "";
     editing.parent = seed.parent || "";
     const templates = GuideProgress.activeTemplates(book(), globalThis.TEMPLATES);
@@ -1309,7 +1344,7 @@
     hint.hidden = shown;
   }
 
-  const pickerState = { hub: "consumables", query: "", selected: "", qty: "1" };
+  const pickerState = { hub: "consumables", query: "", selected: "", qty: "1", free: "" };
 
   function paintItemPicker() {
     const host = document.getElementById("item-picker");
@@ -1322,30 +1357,30 @@
     }
     host.hidden = false;
     const choices = GuideApp.itemChoices();
-    if (!choices.length) {
-      host.innerHTML = "<p class=\"is-missing-item\">台帳を読み込めないので、アイテムを探せません。</p>";
-      return;
-    }
     const hubs = [];
     choices.forEach(item => {
       if (!hubs.some(hub => hub.id === item.hubId)) hubs.push({ id: item.hubId, label: item.hubLabel });
     });
-    hubs.sort((a, b) => (a.id === "consumables" ? -1 : b.id === "consumables" ? 1 : 0));
+    hubs.push({ id: "other", label: "その他" });
+    hubs.sort((a, b) => (a.id === "consumables" ? -1 : b.id === "consumables" ? 1 : a.id === "other" ? 1 : b.id === "other" ? -1 : 0));
     if (!hubs.some(hub => hub.id === pickerState.hub) && hubs[0]) pickerState.hub = hubs[0].id;
     const selected = (editing.links || []).map(link => {
-      const found = choices.find(item => item.id === link.id);
-      return `<li><span class="${found ? "" : "is-missing-item"}">${escapeText((found ? found.name : link.id) + " ×" + link.qty)}</span> <button type="button" data-link-remove="${escapeAttr(link.id)}">外す</button></li>`;
+      const found = link.id ? choices.find(item => item.id === link.id) : null;
+      const label = link.name && !link.id ? link.name : (found ? found.name : link.id);
+      const key = link.name && !link.id ? "name:" + link.name : link.id;
+      return `<li><span class="${found || (link.name && !link.id) ? "" : "is-missing-item"}">${escapeText(label + " ×" + link.qty)}</span> <button type="button" data-link-remove="${escapeAttr(key)}">外す</button></li>`;
     }).join("");
+    const other = pickerState.hub === "other";
     host.innerHTML = [
-      "<p>先にアイテムを選び、そのあと個数を決めて追加します。</p>",
+      "<p>先にアイテムを選び、そのあと個数を決めて追加します。ギルなど台帳にないものは「その他」に書きます。</p>",
       `<select id="item-picker-hub">${hubs.map(hub => `<option value="${escapeAttr(hub.id)}"${hub.id === pickerState.hub ? " selected" : ""}>${escapeText(hub.label)}</option>`).join("")}</select>`,
-      `<input id="item-picker-q" type="search" placeholder="名前で探す" autocomplete="off" value="${escapeAttr(pickerState.query)}">`,
-      '<div id="item-picker-results"></div>',
+      other ? `<input id="item-picker-free" placeholder="50ギル" autocomplete="off" value="${escapeAttr(pickerState.free || "")}">` : `<input id="item-picker-q" type="search" placeholder="名前で探す" autocomplete="off" value="${escapeAttr(pickerState.query)}">`,
+      other ? "" : '<div id="item-picker-results"></div>',
       `<label>個数 <input id="item-picker-qty" type="number" min="1" max="99" value="${escapeAttr(pickerState.qty || "1")}"></label>`,
       '<button type="button" id="item-picker-add">このアイテムを追加</button>',
       `<ul id="item-picker-selected">${selected}</ul>`
     ].join("");
-    refreshItemResults();
+    if (!other) refreshItemResults();
     paintTagHint();
   }
 
@@ -2931,15 +2966,16 @@
       if (!itemComposing) refreshItemResults();
     }
     if (event.target.id === "item-picker-qty") pickerState.qty = event.target.value;
+    if (event.target.id === "item-picker-free") pickerState.free = event.target.value;
     if (event.target.id === "item-picker-hub") {
       pickerState.hub = event.target.value;
-      refreshItemResults();
+      paintItemPicker();
     }
   });
   dialog.addEventListener("change", event => {
     if (event.target && event.target.id === "item-picker-hub") {
       pickerState.hub = event.target.value;
-      refreshItemResults();
+      paintItemPicker();
     }
   });
   dialog.addEventListener("click", event => {
@@ -2954,19 +2990,36 @@
       return;
     }
     if (event.target && event.target.id === "item-picker-add" && editing) {
+      const qty = Math.max(1, Math.min(99, Number(pickerState.qty || (document.getElementById("item-picker-qty") || {}).value) || 1));
+      if (pickerState.hub === "other") {
+        const name = String((document.getElementById("item-picker-free") || {}).value || pickerState.free || "");
+        if (!name.trim()) {
+          error.textContent = "内容を入力してください。";
+          return;
+        }
+        error.textContent = "";
+        editing.links = (editing.links || []).filter(link => !(link.name && !link.id && link.name === name.trim())).concat({ name: name.trim(), qty });
+        pickerState.free = "";
+        paintItemPicker();
+        return;
+      }
       const id = pickerState.selected;
       if (!id) {
         error.textContent = "先にアイテムを選んでください。";
         return;
       }
-      const qty = Math.max(1, Math.min(99, Number(pickerState.qty || (document.getElementById("item-picker-qty") || {}).value) || 1));
+      error.textContent = "";
       editing.links = (editing.links || []).filter(link => link.id !== id).concat({ id, qty });
       paintItemPicker();
       return;
     }
     const remove = event.target.closest && event.target.closest("[data-link-remove]");
     if (remove && editing) {
-      editing.links = (editing.links || []).filter(link => link.id !== remove.getAttribute("data-link-remove"));
+      const key = remove.getAttribute("data-link-remove") || "";
+      editing.links = (editing.links || []).filter(link => {
+        if (key.indexOf("name:") === 0) return !(link.name && !link.id && "name:" + link.name === key);
+        return link.id !== key;
+      });
       paintItemPicker();
     }
   });

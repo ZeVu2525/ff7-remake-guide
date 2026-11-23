@@ -232,9 +232,18 @@
     const out = [];
     const seen = new Set();
     for (const entry of value) {
-      if (!entry || typeof entry.id !== "string" || !/^[a-z][a-z0-9-]+$/.test(entry.id) || seen.has(entry.id)) continue;
-      seen.add(entry.id);
+      if (!entry || typeof entry !== "object") continue;
       const qty = Math.max(1, Math.min(99, Math.round(Number(entry.qty) || 1)));
+      const named = toHalfWidth(entry.name || "").trim().replace(/\s+/g, " ");
+      if (named && typeof entry.id !== "string") {
+        const key = "name:" + named;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ name: named, qty });
+        continue;
+      }
+      if (typeof entry.id !== "string" || !/^[a-z][a-z0-9-]+$/.test(entry.id) || seen.has(entry.id)) continue;
+      seen.add(entry.id);
       out.push({ id: entry.id, qty });
     }
     return out;
@@ -426,15 +435,14 @@
     for (const key of CARD_FIELDS) {
       if (Object.prototype.hasOwnProperty.call(patch, key)) out[key] = patch[key];
     }
-    if (out.flag !== "trophy") delete out.trophy;
-    else if (!out.trophy) delete out.trophy;
-    if (Object.prototype.hasOwnProperty.call(patch, "items")) out.items = itemLinks(patch.items);
     if (Object.prototype.hasOwnProperty.call(patch, "blocks")) out.blocks = normalizeBlocks(patch.blocks);
     if (Object.prototype.hasOwnProperty.call(patch, "flags")) out.flags = patch.flags.slice();
+    if (Object.prototype.hasOwnProperty.call(patch, "items")) out.items = itemLinks(patch.items);
     if (Object.prototype.hasOwnProperty.call(patch, "enemies")) out.enemies = enemyLinks(patch.enemies);
     if (Object.prototype.hasOwnProperty.call(patch, "enemyNote")) out.enemyNote = patch.enemyNote || "";
     if (Object.prototype.hasOwnProperty.call(patch, "enemyImage")) out.enemyImage = patch.enemyImage || "";
-    if (out.flag !== "item") delete out.items;
+    if (cardFlags(out).indexOf("trophy") < 0 || !out.trophy) delete out.trophy;
+    if (cardFlags(out).indexOf("item") < 0) delete out.items;
     if (!out.map) delete out.map;
     return out;
   }
@@ -519,14 +527,14 @@
         source: custom.source || "",
         custom: true
       };
-      if (custom.flag === "trophy" && custom.trophy) card.trophy = custom.trophy;
+      if (cardFlags(custom).indexOf("trophy") >= 0 && custom.trophy) card.trophy = custom.trophy;
       if (custom.map) card.map = custom.map;
       if (custom.parent) card.parent = custom.parent;
         if (custom.quest) card.quest = custom.quest;
         if (custom.section) card.section = custom.section;
         if (custom.template) card.template = custom.template;
         if (custom.location) card.location = custom.location;
-        if (custom.flag === "item" && custom.items && custom.items.length) card.items = itemLinks(custom.items);
+        if (cardFlags(custom).indexOf("item") >= 0 && custom.items && custom.items.length) card.items = itemLinks(custom.items);
         if (custom.blocks && custom.blocks.length) card.blocks = normalizeBlocks(custom.blocks);
         if (custom.flags && custom.flags.length) card.flags = custom.flags.slice();
         if (custom.enemies && custom.enemies.length) card.enemies = enemyLinks(custom.enemies);
@@ -729,6 +737,7 @@
       (route[trackId] || []).forEach(row => {
         (row.items || []).forEach(item => {
           (item && item.items || []).forEach(link => {
+            if (link && link.name && !link.id && link.qty >= 1) return;
             if (link && ids.has(link.id) && link.qty >= 1) return;
             const key = (item && item.id || "") + ":" + (link && link.id || "");
             if (seen.has(key)) return;
@@ -803,7 +812,7 @@
       flag: fields.flag,
       deadline: fields.deadline || "",
       source: fields.source || "",
-      trophy: fields.flag === "trophy" ? fields.trophy || "" : "",
+      trophy: cardFlags(fields).indexOf("trophy") >= 0 ? fields.trophy || "" : "",
       map: fields.map || "",
       parent: fields.parent || "",
       quest: fields.quest || "",
