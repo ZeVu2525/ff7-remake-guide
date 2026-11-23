@@ -462,7 +462,7 @@
       ${selectBox(item)}
       <div class="ibody">
         <div class="ihead">
-          <div class="ihead-main"><span class="tag-spot" data-tag-spot="${esc(item.id)}">${flagTags(item)}</span>${hasFlag(item, "tips") ? `<span class="hint-mark">${esc(GuideProgress.labelText(cardBook, "hint"))}</span>` : ""}${exampleMark(item)}<span class="it-title" data-edit-text>${esc((headings && headings[item.id]) || item.title || item.id)}</span>${achievementMark(item)}</div>
+          <div class="ihead-main"><span class="tag-spot" data-tag-spot="${esc(item.id)}">${flagTags(item)}</span>${hasFlag(item, "tips") ? `<span class="hint-mark">${esc(GuideProgress.labelText(cardBook, "hint"))}</span>` : ""}${exampleMark(item)}<span class="it-title" data-edit-text>${esc((headings && headings[item.id]) || item.title || item.id)}</span>${placeLabel(item)}${achievementMark(item)}</div>
           <div class="imeta">
             ${hasFlag(item, "trophy") && item.trophy && trophyById(item.trophy) ? `<span class="tag tone-trophy">${esc(trophyById(item.trophy).name)}</span>` : ""}
             ${(hasFlag(item, "deadline") || hasFlag(item, "missable")) && item.deadline ? `<span class="deadline-badge">${esc(item.deadline)}</span>` : ""}
@@ -610,6 +610,12 @@
   function dragHandle(id) {
     if (!cardEditing()) return "";
     return `<button type="button" class="card-drag-handle" data-card-drag="${esc(id)}" aria-label="ドラッグして移動" title="ドラッグして移動">⋮⋮</button>`;
+  }
+
+  function placeLabel(item) {
+    const name = item && item.location;
+    if (!name) return "";
+    return `<span class="place-label" title="${esc(name)}"><svg class="place-pin" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"></path></svg><span>${esc(name)}</span></span>`;
   }
 
   function L(key) {
@@ -804,7 +810,7 @@
         ${selectBox(item)}
         <div class="ibody">
           <div class="ihead">
-            <div class="ihead-main">${exampleMark(item)}${item.missable ? '<span class="tag tone-missable">取り逃し</span>' : ""}<span class="it-title">${esc(item.name || item.id)}</span>${achievementMark(item, hub.catalog)}</div>
+            <div class="ihead-main">${exampleMark(item)}${item.missable ? '<span class="tag tone-missable">取り逃し</span>' : ""}<span class="it-title">${esc(item.name || item.id)}</span>${placeLabel(item)}${achievementMark(item, hub.catalog)}</div>
           </div>
           ${item.area ? `<p class="area">${esc(item.area)}${item.intermission && item.area !== "INTERmission" ? " · INTERmission" : ""}</p>` : (item.intermission ? '<p class="area">INTERmission</p>' : "")}
           ${itemObtained(item)}
@@ -1063,7 +1069,7 @@
     const edit = cardTools(item);
     const mark = achievementMark(item, "quests");
     return `<article class="quest${checked(item.id) ? " done" : ""}" id="quest-${esc(item.id)}" data-id="${esc(item.id)}">
-      <button type="button" class="quest-toggle" data-toggle-quest="${esc(item.id)}" aria-expanded="${open ? "true" : "false"}"><span class="caret" aria-hidden="true">▼</span>${esc(item.name)}</button>${mark}
+      <button type="button" class="quest-toggle" data-toggle-quest="${esc(item.id)}" aria-expanded="${open ? "true" : "false"}"><span class="caret" aria-hidden="true">▼</span>${esc(item.name)}${placeLabel(item)}</button>${mark}
       <div class="quest-body"${open ? "" : " hidden"}>
         <p>${esc(item.detail || "")} ${card} ${map}</p>
         ${edit}
@@ -1092,7 +1098,7 @@
     const count = document.getElementById("count-" + hub.id);
     const items = catalogItems(hub.catalog);
     const query = ui.catalogQuery[hub.id] || "";
-    const visible = items.filter(item => !query || [item.name, item.place, item.client, item.clear, item.detail].join("\n").toLowerCase().includes(query.toLowerCase()));
+    const visible = items.filter(item => !query || [item.name, item.place, item.location, item.client, item.clear, item.detail].join("\n").toLowerCase().includes(query.toLowerCase()));
     const achieveOn = GuideProgress.hasAchievementTag(null, currentAchieveTags(), "quests");
     if (count) count.textContent = achieveOn ? (items.filter(item => checked(item.id)).length + " / " + items.length) : (visible.length + " / " + items.length);
     if (host) host.innerHTML = catalogAdder("quests") + (visible.map(renderQuestArticle).join("") || '<p class="empty-chapter">一致する依頼がありません。</p>');
@@ -2131,7 +2137,7 @@
     for (const track of GAME.tracks) {
       for (const item of routeItems(track.id)) {
         const linked = item.trophy && trophyById(item.trophy);
-        const text = [item.title, item.detail, item.deadline, item.id, item.chapterTitle, linked && linked.name].join("\n");
+        const text = [item.title, item.detail, item.deadline, item.location, item.id, item.chapterTitle, linked && linked.name].join("\n");
         if (!text.toLowerCase().includes(needle)) continue;
         hits.push({ id: item.id, label: item.title || item.id, where: track.label + " · " + item.chapterTitle });
       }
@@ -2139,14 +2145,14 @@
     for (const hub of GAME.hubs) {
       if (hub.kind !== "catalog") continue;
       for (const item of catalogItems(hub.catalog)) {
-        const text = [item.name, item.detail, item.area, item.id].join("\n");
+        const text = [item.name, item.detail, item.area, item.location, item.id].join("\n");
         if (!text.toLowerCase().includes(needle)) continue;
         hits.push({ id: item.id, label: item.name || item.id, where: hub.label });
       }
     }
     for (const section of itemSections()) {
       for (const item of catalogItems(section.catalog)) {
-        const text = [item.name, item.detail, item.area, item.obtain, item.id].join("\n");
+        const text = [item.name, item.detail, item.area, item.obtain, item.location, item.id].join("\n");
         if (!text.toLowerCase().includes(needle)) continue;
         hits.push({ id: item.id, label: item.name || item.id, where: "アイテム · " + section.label });
       }

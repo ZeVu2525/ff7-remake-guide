@@ -56,6 +56,13 @@
     ".card-edit-tabs button{flex:1 1 auto;min-height:40px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}",
     ".card-edit-tabs button.on{background:#14324a;color:#fff;border-color:#14324a}",
     ".card-tab-panel[hidden]{display:none}",
+    ".place-field{position:relative}",
+    ".place-suggest{position:absolute;z-index:6;left:0;right:0;top:100%;max-height:240px;overflow:auto;margin:4px 0 0;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);box-shadow:0 8px 24px rgba(0,0,0,.18)}",
+    ".place-suggest[hidden]{display:none}",
+    ".place-suggest button{display:flex;width:100%;min-height:36px;align-items:center;gap:8px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}",
+    ".place-suggest button.on,.place-suggest button:hover{background:color-mix(in srgb,var(--accent) 18%,transparent)}",
+    ".place-suggest .place-drop{flex:1;min-width:0}",
+    ".place-suggest .place-x{flex:none;width:28px;text-align:center}",
     "#card-menu{position:fixed;z-index:290;display:grid;min-width:160px;padding:6px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);box-shadow:0 8px 24px rgba(0,0,0,.28)}",
     "#card-menu button{min-height:40px;padding:6px 10px;border:0;border-radius:8px;background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}",
     "#card-menu button:hover,#card-menu button:focus-visible{background:color-mix(in srgb,var(--fg) 8%,transparent)}",
@@ -993,6 +1000,101 @@
     clearBlockMarks();
   });
 
+  function gatheredPlaces() {
+    const records = Object.assign({}, book().places || {});
+    const take = name => {
+      const key = GuideProgress.placeKey(name);
+      if (!key || records[key]) return;
+      records[key] = { name: GuideProgress.placeName(name), usedAt: 0 };
+    };
+    Object.keys(book().custom || {}).forEach(id => take(book().custom[id] && book().custom[id].location));
+    Object.keys(book().patches || {}).forEach(id => take(book().patches[id] && book().patches[id].location));
+    return records;
+  }
+
+  function placeUsed(name) {
+    const key = GuideProgress.placeKey(name);
+    const current = book();
+    const hit = item => item && GuideProgress.placeKey(item.location) === key;
+    return Object.keys(current.custom || {}).some(id => hit(current.custom[id])) || Object.keys(current.patches || {}).some(id => hit(current.patches[id]));
+  }
+
+  function bindPlaceField() {
+    const input = form.elements.location;
+    const list = document.getElementById("place-suggest");
+    if (!input || !list) return;
+    let placeComposing = false;
+    let placeIndex = -1;
+    const paint = () => {
+      const rows = GuideProgress.suggestPlaces(gatheredPlaces(), input.value, input.value.trim() ? 20 : 10);
+      if (placeIndex >= rows.length) placeIndex = rows.length - 1;
+      list.innerHTML = rows.map((row, index) => `<button type="button" class="place-option${index === placeIndex ? " on" : ""}" data-place="${escapeAttr(row.name)}" role="option"><span class="place-drop">${escapeText(row.name)}</span><span class="place-x" data-place-forget="${escapeAttr(row.name)}" aria-label="候補から消す">×</span></button>`).join("");
+      list.hidden = !rows.length;
+      input.setAttribute("aria-expanded", list.hidden ? "false" : "true");
+    };
+    input.addEventListener("focus", () => { placeIndex = -1; paint(); });
+    input.addEventListener("compositionstart", () => { placeComposing = true; });
+    input.addEventListener("compositionend", () => { placeComposing = false; placeIndex = -1; paint(); });
+    input.addEventListener("input", event => {
+      if (placeComposing || event.isComposing) return;
+      placeIndex = -1;
+      paint();
+    });
+    input.addEventListener("keydown", event => {
+      if (placeComposing || event.isComposing || event.keyCode === 229) return;
+      if (event.key === "Escape") {
+        if (!list.hidden) {
+          list.hidden = true;
+          input.setAttribute("aria-expanded", "false");
+          event.preventDefault();
+        }
+        return;
+      }
+      const options = () => [...list.querySelectorAll(".place-option")];
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const items = options();
+        if (!items.length) { paint(); return; }
+        list.hidden = false;
+        const delta = event.key === "ArrowDown" ? 1 : -1;
+        placeIndex = (placeIndex + delta + items.length) % items.length;
+        paint();
+        return;
+      }
+      if (event.key === "Enter" && !list.hidden && placeIndex >= 0) {
+        const chosen = options()[placeIndex];
+        if (!chosen) return;
+        event.preventDefault();
+        input.value = chosen.getAttribute("data-place") || "";
+        list.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+      }
+    });
+    list.addEventListener("mousedown", event => {
+      const forget = event.target.closest && event.target.closest("[data-place-forget]");
+      const option = event.target.closest && event.target.closest("[data-place]");
+      if (!forget && !option) return;
+      event.preventDefault();
+      if (forget) {
+        const name = forget.getAttribute("data-place-forget");
+        if (placeUsed(name) && !window.confirm("この場所はカードに残っています。候補から消しますか。")) return;
+        GuideApp.setCardBook(GuideProgress.forgetPlace(JSON.parse(JSON.stringify(book())), name), "場所");
+        placeIndex = -1;
+        paint();
+        return;
+      }
+      input.value = option.getAttribute("data-place") || "";
+      list.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+    });
+    input.addEventListener("blur", () => {
+      setTimeout(() => {
+        list.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+      }, 160);
+    });
+  }
+
   function openRouteForm(seed) {
     editing = seed;
     error.textContent = "";
@@ -1018,6 +1120,7 @@
       `<p class="lead">章: ${escapeText((chapterRow && chapterRow.title) || seed.chapterId || "")}${sectionName ? " / " + escapeText(sectionName) : ""}</p>`,
       field("見出しの定型文", `<select name="template">${templateOptions}</select>`),
       field("見出し", `<input name="title" value="${escapeAttr(seed.title || "")}" placeholder="定型文を選んだときは空でも保存できます">`),
+      field("場所", `<div class="place-field"><input name="location" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="place-suggest" value="${escapeAttr(seed.location || "")}" placeholder="自由入力できます"><div id="place-suggest" class="place-suggest" hidden role="listbox"></div></div>`),
       '<p id="template-preview"></p>',
       '<div id="flag-chips"></div><input type="hidden" name="flag" value="">',
       `</div>`,
@@ -1047,6 +1150,7 @@
     paintItemPicker();
     form.elements.flag.addEventListener("change", paintItemPicker);
     bindMapField();
+    bindPlaceField();
     dialog.hidden = false;
     captureBaseline();
     showEditorTab(seed.focusBlock ? "blocks" : (seed.tab || rememberedEditorTab()));
@@ -1155,6 +1259,7 @@
     ].filter(pair => shownFields.indexOf(pair[0]) >= 0 || seed[pair[0]]);
     fields.innerHTML = [
       field("名前", `<input name="name" required value="${escapeAttr(seed.name || "")}">`),
+      field("場所", `<div class="place-field"><input name="location" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="place-suggest" value="${escapeAttr(seed.location || "")}" placeholder="自由入力できます"><div id="place-suggest" class="place-suggest" hidden role="listbox"></div></div>`),
       field("説明", `<textarea name="detail" required>${escapeText(seed.detail || "")}</textarea>`),
       field("場所・種別", `<input name="area" value="${escapeAttr(seed.area || "")}">`),
       extras.map(pair => field(pair[1], `<input name="${pair[0]}" value="${escapeAttr(seed[pair[0]] || "")}">`)).join(""),
@@ -1162,6 +1267,7 @@
       `<label><input type="checkbox" name="missable"${seed.missable ? " checked" : ""}> 取り逃し</label>`
     ].join("");
     if (mapEditor) bindMapField();
+    bindPlaceField();
     dialog.hidden = false;
     captureBaseline();
     form.elements.name.focus();
@@ -1234,6 +1340,7 @@
       place.baseIds
     );
     dialog.hidden = true;
+    GuideProgress.rememberPlace(next, checked.value.location);
     GuideApp.setCardBook(next);
   }
 
@@ -1245,6 +1352,7 @@
       area: data.get("area"),
       source: editing.source || "",
       map: chosenMap(),
+      location: data.get("location"),
       missable: data.get("missable") === "on"
     });
     if (checked.error) {
@@ -1270,6 +1378,7 @@
       GuideApp.baseCatalogItems(editing.catalogId).map(item => item.id)
     );
     dialog.hidden = true;
+    GuideProgress.rememberPlace(next, checked.value.location);
     GuideApp.setCardBook(next);
   }
 
@@ -2339,6 +2448,7 @@
       quest: item.quest || "",
       section: item.section || "",
       template: item.template || "",
+      location: item.location || "",
       items: item.items || [],
       blocks: item.blocks && item.blocks.length ? item.blocks : GuideProgress.blocksFromDetail(item.detail)
     };
@@ -2868,6 +2978,7 @@
         labels: book().labels || {},
         difficulty: book().difficulty || "normal",
         callout: book().callout || {},
+        places: book().places || {},
         templates: GuideProgress.activeTemplates(book(), globalThis.TEMPLATES)
       }, null, 2), "application/json");
     }
@@ -3264,7 +3375,7 @@
       { path: "data/images.js", text: "const IMAGE_FILES = " + JSON.stringify(images.manifest, null, 2) + ";\n\nglobalThis.IMAGE_FILES = IMAGE_FILES;\n" },
       { path: "data/templates.js", text: "const TEMPLATES = " + JSON.stringify(templates, null, 2) + ";\n\nglobalThis.TEMPLATES = TEMPLATES;\n" },
       { path: "data/enemies.js", text: GuideProgress.enemiesModuleSource(GuideProgress.exportEnemies(globalThis.ENEMIES || [], book())) },
-      { path: "data/settings.js", text: "const UI_SETTINGS = " + JSON.stringify({ difficulty: book().difficulty || "normal", labels: book().labels || {}, callout: book().callout || {} }, null, 2) + ";\n\nglobalThis.UI_SETTINGS = UI_SETTINGS;\n" }
+      { path: "data/settings.js", text: "const UI_SETTINGS = " + JSON.stringify({ difficulty: book().difficulty || "normal", labels: book().labels || {}, callout: book().callout || {}, places: book().places || {} }, null, 2) + ";\n\nglobalThis.UI_SETTINGS = UI_SETTINGS;\n" }
     ];
     for (const item of prepared.fresh.concat(images.fresh)) {
       if (!item.blob) continue;
@@ -3318,6 +3429,7 @@
       next.labels = UI_SETTINGS.labels || {};
       next.difficulty = UI_SETTINGS.difficulty || "normal";
       if (UI_SETTINGS.callout) next.callout = UI_SETTINGS.callout;
+      if (UI_SETTINGS.places) next.places = UI_SETTINGS.places;
     }
     GuideApp.setCardBook(next, "GitHubから読み込む");
     if (status) status.textContent = "GitHubの原稿を読み込みました。";
@@ -3337,6 +3449,7 @@
         if (parsed.labels && typeof parsed.labels === "object") next.labels = parsed.labels;
         if (parsed.difficulty) next.difficulty = parsed.difficulty;
         if (parsed.callout && typeof parsed.callout === "object") next.callout = parsed.callout;
+        if (parsed.places && typeof parsed.places === "object") next.places = parsed.places;
         if (Array.isArray(parsed.templates)) next.templates = parsed.templates;
         GuideApp.setCardBook(next, "読み込む");
         return;

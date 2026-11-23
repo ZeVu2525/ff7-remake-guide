@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v34");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v35");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -653,6 +653,21 @@ const tagsAfter = JSON.stringify({ book: Object.assign(progress.emptyCardBook(),
 assert.strictEqual(progress.toHalfWidth("Ａ１！　、。「」・"), "A1!　、。「」・");
 assert.strictEqual(progress.toHalfWidth("カタカナ"), "カタカナ");
 assert.strictEqual(progress.toHalfWidth("かｋ"), "かk");
+let placeBook = progress.rememberPlace(progress.emptyCardBook(), "しんじゅく", 10);
+placeBook = progress.rememberPlace(placeBook, "シンジュク", 30);
+assert.strictEqual(Object.keys(placeBook.places).length, 1);
+assert.strictEqual(placeBook.places[progress.placeKey("しんじゅく")].name, "シンジュク");
+assert.strictEqual(placeBook.places[progress.placeKey("しんじゅく")].usedAt, 30);
+placeBook = progress.rememberPlace(placeBook, "スラム", 20);
+assert.strictEqual(progress.suggestPlaces(placeBook.places, "")[0].name, "シンジュク");
+assert.strictEqual(progress.suggestPlaces(placeBook.places, "しん").length, 1);
+assert.strictEqual(progress.suggestPlaces(placeBook.places, "スラ").length, 1);
+placeBook = progress.rememberPlace(placeBook, "ＡＢＣ通り", 40);
+assert.strictEqual(progress.suggestPlaces(placeBook.places, "abc").length, 1);
+assert.strictEqual(progress.suggestPlaces(placeBook.places, "", 2).length, 2);
+const placed = progress.upsertRouteCard(progress.emptyCardBook(), null, "user-place", Object.assign(progress.headerCopyFields({ title: "店", flag: "story" }), { location: "スラム" }), "main", "ch01", ["user-place"], []);
+assert.strictEqual(placed.custom["user-place"].location, "スラム");
+assert.ok(progress.routeModuleSource({ main: [{ chapterId: "ch01", items: [{ id: "a", title: "店", flag: "story", detail: "d", location: "スラム" }] }] }).includes("location"));
 ["app.js", "card-edit.js", "edit-mode.js"].forEach(file => {
   const source = require("fs").readFileSync(require("path").join(__dirname, file), "utf8");
   ["input", "keydown", "paste"].forEach(name => {

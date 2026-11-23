@@ -100,14 +100,14 @@
     return { total: list.length, done, openBand };
   }
 
-  const CARD_FIELDS = ["title", "detail", "flag", "deadline", "source", "trophy", "map", "parent", "quest", "section", "template"];
+  const CARD_FIELDS = ["title", "detail", "flag", "deadline", "source", "trophy", "map", "parent", "quest", "section", "template", "location"];
   const DEFAULT_ACHIEVE_TAGS = ["trophy", "deadline", "missable", "request", "item"];
   const DEFAULT_TEMPLATES = [
     { id: "tpl-chest", label: "宝箱" },
     { id: "tpl-shinra", label: "神羅ボックス" },
     { id: "tpl-get", label: "入手" }
   ];
-  const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable", "map", "obtain", "buy", "sell", "use", "ability", "client", "place", "when", "condition", "clear", "level"];
+  const CATALOG_FIELDS = ["name", "detail", "area", "source", "missable", "map", "obtain", "buy", "sell", "use", "ability", "client", "place", "when", "condition", "clear", "level", "location"];
   const ENEMY_FIELDS = ["name", "no", "kind", "tactic", "source", "image"];
   const CALLOUT_DEFAULT = { bg: "#e8f4ff", border: "#5b9bd5" };
 
@@ -116,7 +116,43 @@
   }
 
   function emptyCardBook() {
-    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, chapterLists: {}, templates: [], labels: {}, difficulty: "normal", enemyEdits: emptyEnemyEdits(), callout: {} };
+    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, chapterLists: {}, templates: [], labels: {}, difficulty: "normal", enemyEdits: emptyEnemyEdits(), callout: {}, places: {} };
+  }
+
+  function placeKey(value) {
+    return toHalfWidth(value).trim().replace(/\s+/g, " ").replace(/[\u30a1-\u30f6]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60)).toLowerCase();
+  }
+
+  function placeName(value) {
+    return toHalfWidth(value).trim().replace(/\s+/g, " ");
+  }
+
+  function rememberPlace(book, name, now) {
+    const next = book || emptyCardBook();
+    const shown = placeName(name);
+    const key = placeKey(shown);
+    if (!key) return next;
+    next.places = next.places || {};
+    const prev = next.places[key];
+    next.places[key] = { name: shown, usedAt: now || Date.now() };
+    if (prev && prev.usedAt && !now) next.places[key].usedAt = Math.max(prev.usedAt, next.places[key].usedAt);
+    return next;
+  }
+
+  function forgetPlace(book, name) {
+    const next = book || emptyCardBook();
+    const key = placeKey(name);
+    if (next.places && key) delete next.places[key];
+    return next;
+  }
+
+  function suggestPlaces(places, query, limit) {
+    const cap = limit || 10;
+    const list = Object.keys(places || {}).map(key => places[key]).filter(item => item && item.name);
+    const needle = placeKey(query || "");
+    const matched = needle ? list.filter(item => placeKey(item.name).indexOf(needle) >= 0) : list;
+    matched.sort((a, b) => (b.usedAt || 0) - (a.usedAt || 0) || String(a.name).localeCompare(String(b.name), "ja"));
+    return (needle ? matched : matched.slice(0, cap)).slice(0, cap);
   }
 
   function toHalfWidth(value) {
@@ -213,7 +249,7 @@
     for (const id of Object.keys(asObject(src.patches))) {
       const patch = {};
       const raw = asObject(src.patches[id]);
-      for (const key of ["title", "detail", "flag", "deadline", "source", "trophy", "name", "area", "map", "parent", "quest", "section", "template"]) {
+      for (const key of ["title", "detail", "flag", "deadline", "source", "trophy", "name", "area", "map", "parent", "quest", "section", "template", "location"]) {
         if (Object.prototype.hasOwnProperty.call(raw, key) && (typeof raw[key] === "string" || raw[key] == null)) {
           patch[key] = raw[key] == null ? "" : String(raw[key]);
         }
@@ -279,6 +315,15 @@
     });
     book.difficulty = src.difficulty === "easy" || src.difficulty === "hard" ? src.difficulty : "normal";
     if (Array.isArray(src.achieveTags)) book.achieveTags = src.achieveTags.filter(id => typeof id === "string" && id);
+    book.places = {};
+    Object.keys(asObject(src.places)).forEach(key => {
+      const raw = asObject(src.places[key]);
+      const name = typeof raw.name === "string" ? raw.name.trim() : "";
+      const id = placeKey(name);
+      if (!id) return;
+      const usedAt = Number(raw.usedAt) || 0;
+      if (!book.places[id] || usedAt >= (book.places[id].usedAt || 0)) book.places[id] = { name: name, usedAt: usedAt };
+    });
     book.chapterLists = {};
     const lists = asObject(src.chapterLists);
     Object.keys(lists).forEach(trackId => {
@@ -762,6 +807,7 @@
       quest: fields.quest || "",
       section: fields.section || "",
       template: fields.template || "",
+      location: placeName(fields.location),
       items: itemLinks(fields.items),
       blocks: normalizeBlocks(fields.blocks),
       flags: cardFlags(fields),
@@ -1383,7 +1429,7 @@
     if (JSON.stringify(left.text || {}) !== JSON.stringify(right.text || {}) && JSON.stringify(left.book || {}) === JSON.stringify(right.book || {})) return "表示文";
     const a = left.book || {};
     const b = right.book || {};
-    const filled = book => ["deleted", "patches", "custom", "chapters", "chapterLists", "labels"].some(key => book[key] && Object.keys(book[key]).length) || (book.templates && book.templates.length) || (book.difficulty && book.difficulty !== "normal") || enemyEditsFilled(book.enemyEdits) || !!(book.callout && (book.callout.bg || book.callout.border));
+    const filled = book => ["deleted", "patches", "custom", "chapters", "chapterLists", "labels", "places"].some(key => book[key] && Object.keys(book[key]).length) || (book.templates && book.templates.length) || (book.difficulty && book.difficulty !== "normal") || enemyEditsFilled(book.enemyEdits) || !!(book.callout && (book.callout.bg || book.callout.border));
     if (!filled(b) && filled(a)) return "編集をすべて戻す";
     if (Object.keys(b.deleted || {}).some(id => !(a.deleted || {})[id])) return "カード削除";
     if (Object.keys(a.deleted || {}).some(id => !(b.deleted || {})[id])) return "カードの復帰";
@@ -1414,11 +1460,13 @@
         else if (key === "flags" || key === "flag") kinds.add("タグ");
         else if (key === "parent") kinds.add("入れ子");
         else if (key === "title") kinds.add("見出し");
+        else if (key === "location") kinds.add("場所");
         else kinds.add("カードの編集");
       });
     });
     if (kinds.size === 1) return [...kinds][0];
     if (kinds.size > 1) return "カードの編集";
+    if (JSON.stringify(a.places || {}) !== JSON.stringify(b.places || {})) return "場所";
     return "編集";
   }
 
@@ -1818,7 +1866,8 @@
     if (enemyImage && !validImageValue(enemyImage)) return { error: "戦闘用の画像は https:// か、画像ファイルにしてください。" };
     const blocks = normalizeBlocks(fields && fields.blocks);
     const plain = blocks.length ? plainFromBlocks(blocks) : "";
-    return { value: { title, detail: plain || detail, flag, flags, source, deadline, trophy, map, parent, quest, section, template, items, blocks, enemies, enemyNote, enemyImage } };
+    const location = placeName(fields && fields.location);
+    return { value: { title, detail: plain || detail, flag, flags, source, deadline, trophy, map, parent, quest, section, template, location, items, blocks, enemies, enemyNote, enemyImage } };
   }
 
   function validateCatalogFields(fields) {
@@ -1831,7 +1880,7 @@
     if (source && !/^https:\/\//i.test(source)) return { error: "出典は https:// から始めるか、空にします。" };
     const map = String(fields && fields.map || "").trim();
     if (map && !validMapValue(map)) return { error: "地図は章のID、https:// の画像、または画像ファイルにしてください。" };
-    const value = { name, detail, area, source, map, missable: !!(fields && fields.missable) };
+    const value = { name, detail, area, source, map, location: placeName(fields && fields.location), missable: !!(fields && fields.missable) };
     CATALOG_FIELDS.forEach(key => {
       if (value[key] != null || fields[key] == null || key === "missable") return;
       value[key] = toHalfWidth(fields[key]).trim();
@@ -2088,6 +2137,7 @@
           if (!copy.enemies || !copy.enemies.length) delete copy.enemies;
           if (!copy.enemyNote) delete copy.enemyNote;
           if (!copy.enemyImage) delete copy.enemyImage;
+          if (!copy.location) delete copy.location;
           return copy;
         })
       }));
@@ -2256,6 +2306,10 @@
     labelText,
     sectionName,
     toHalfWidth,
+    placeKey,
+    rememberPlace,
+    forgetPlace,
+    suggestPlaces,
     calloutColors,
     CALLOUT_DEFAULT,
     mergeEnemies,
