@@ -2029,28 +2029,27 @@
     const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
     if (!item) return;
     const orderIds = GuideApp.currentIds(place.trackId, place.chapterId);
-    const children = orderIds.map(cid => routeRecord(place.trackId, place.chapterId, cid)).filter(entry => entry && entry.parent === id);
+    const items = orderIds.map(cid => routeRecord(place.trackId, place.chapterId, cid)).filter(Boolean);
+    const plan = GuideProgress.planCardCopy(orderIds, items, id, true);
+    if (!plan) return;
     const taken = usedIds();
-    const newId = GuideProgress.createCardId(taken);
-    taken.add(newId);
-    const childIds = children.map(() => {
-      const childId = GuideProgress.createCardId(taken);
-      taken.add(childId);
-      return childId;
+    const idMap = {};
+    plan.sources.forEach(sourceId => {
+      idMap[sourceId] = GuideProgress.createCardId(taken);
+      taken.add(idMap[sourceId]);
     });
     const order = orderIds.slice();
-    const at = order.indexOf(id);
-    order.splice(at < 0 ? order.length : at + 1, 0, newId, ...childIds);
+    order.splice(plan.anchor, 0, ...plan.sources.map(sourceId => idMap[sourceId]));
+    const baseIds = GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id);
     let next = book();
-    const copyFields = cardFields(item, item.parent || "");
-    next = GuideProgress.upsertRouteCard(next, null, newId, copyFields, place.trackId, place.chapterId, order, GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id));
-    children.forEach((child, index) => {
-      const fields = cardFields(child, newId);
-      next = GuideProgress.upsertRouteCard(next, null, childIds[index], fields, place.trackId, place.chapterId, order, GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id));
+    plan.sources.forEach(sourceId => {
+      const source = items.find(entry => entry.id === sourceId);
+      const parent = idMap[plan.parents[sourceId]] || plan.parents[sourceId] || "";
+      next = GuideProgress.upsertRouteCard(next, null, idMap[sourceId], cardFields(source, parent), place.trackId, place.chapterId, order, baseIds);
     });
     GuideApp.setCardBook(next, "カードのコピー");
-    const created = routeRecord(place.trackId, place.chapterId, newId);
-    if (created) openRouteForm(Object.assign({ kind: "route", id: newId, trackId: place.trackId, chapterId: place.chapterId }, created));
+    const created = routeRecord(place.trackId, place.chapterId, idMap[id]);
+    if (created) openRouteForm(Object.assign({ kind: "route", id: idMap[id], trackId: place.trackId, chapterId: place.chapterId }, created));
   }
 
   function headerCopy(id) {
@@ -2058,12 +2057,16 @@
     const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
     if (!item) return;
     const orderIds = GuideApp.currentIds(place.trackId, place.chapterId);
+    const items = orderIds.map(cid => routeRecord(place.trackId, place.chapterId, cid)).filter(Boolean);
+    const plan = GuideProgress.planCardCopy(orderIds, items, id, false);
+    if (!plan) return;
     const newId = GuideProgress.createCardId(usedIds());
     const order = orderIds.slice();
-    const at = order.indexOf(id);
-    order.splice(at < 0 ? order.length : at + 1, 0, newId);
+    order.splice(plan.anchor, 0, newId);
+    const fields = GuideProgress.headerCopyFields(item);
+    fields.parent = plan.parents[id] || "";
     const next = GuideProgress.upsertRouteCard(
-      book(), null, newId, GuideProgress.headerCopyFields(item),
+      book(), null, newId, fields,
       place.trackId, place.chapterId, order,
       GuideApp.baseItems(place.trackId, place.chapterId).map(entry => entry.id)
     );

@@ -595,6 +595,26 @@ assert.strictEqual(headed.title, "宝箱");
 assert.deepStrictEqual(headed.flags, ["story", "item"]);
 assert.deepStrictEqual(headed.blocks, [{ type: "text", html: "" }]);
 assert.strictEqual(headed.map, "");
+assert.strictEqual(progress.headerCopyFields({ title: "子", parent: "p", flag: "story" }).parent, "p");
+const copyItems = [
+  { id: "p" },
+  { id: "c", parent: "p" },
+  { id: "g", parent: "c" },
+  { id: "s", parent: "p" }
+];
+const copyOrder = ["p", "c", "g", "s"];
+const childCopy = progress.planCardCopy(copyOrder, copyItems, "c", true);
+assert.strictEqual(childCopy.parents.c, "p");
+assert.deepStrictEqual(childCopy.sources, ["c", "g"]);
+assert.strictEqual(childCopy.anchor, 3);
+const headerChild = progress.planCardCopy(copyOrder, copyItems, "c", false);
+assert.strictEqual(headerChild.parents.c, "p");
+assert.deepStrictEqual(headerChild.sources, ["c"]);
+assert.strictEqual(headerChild.anchor, 3);
+const parentCopy = progress.planCardCopy(copyOrder, copyItems, "p", true);
+assert.strictEqual(parentCopy.parents.p, "");
+assert.deepStrictEqual(parentCopy.sources, ["p", "c", "s"]);
+assert.strictEqual(parentCopy.anchor, 1);
 const nest = progress.nestMany(["b", "c"], [
   { id: "a" },
   { id: "b" },

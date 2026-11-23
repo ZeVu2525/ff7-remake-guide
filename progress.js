@@ -1608,7 +1608,7 @@
       source: item && item.source || "",
       trophy: "",
       map: "",
-      parent: "",
+      parent: item && item.parent || "",
       quest: "",
       section: item && item.section || "",
       template: item && item.template || "",
@@ -1618,6 +1618,54 @@
       enemyNote: "",
       enemyImage: ""
     };
+  }
+
+  function descendantIds(items, rootId) {
+    const byParent = {};
+    (items || []).forEach(item => {
+      if (!item || !item.id || !item.parent) return;
+      if (!byParent[item.parent]) byParent[item.parent] = [];
+      byParent[item.parent].push(item.id);
+    });
+    const out = [];
+    const walk = id => {
+      (byParent[id] || []).forEach(child => {
+        out.push(child);
+        walk(child);
+      });
+    };
+    walk(rootId);
+    return out;
+  }
+
+  function planCardCopy(order, items, sourceId, deep) {
+    const list = (items || []).filter(item => item && item.id);
+    const source = list.find(item => item.id === sourceId);
+    if (!source) return null;
+    const ids = Array.isArray(order) ? order.slice() : list.map(item => item.id);
+    const child = !!source.parent;
+    const pool = !deep ? [] : (child ? descendantIds(list, sourceId) : list.filter(item => item.parent === sourceId).map(item => item.id));
+    const ordered = ids.filter(id => pool.indexOf(id) >= 0);
+    pool.forEach(id => { if (ordered.indexOf(id) < 0) ordered.push(id); });
+    const belong = new Set(child ? descendantIds(list, sourceId) : []);
+    belong.add(sourceId);
+    let anchor = ids.length;
+    if (child) {
+      let found = false;
+      ids.forEach((id, index) => {
+        if (belong.has(id)) { anchor = index + 1; found = true; }
+      });
+      if (!found) anchor = ids.length;
+    } else {
+      const at = ids.indexOf(sourceId);
+      anchor = at < 0 ? ids.length : at + 1;
+    }
+    const parents = {};
+    parents[sourceId] = source.parent || "";
+    const byId = {};
+    list.forEach(item => { byId[item.id] = item; });
+    ordered.forEach(id => { parents[id] = byId[id] && byId[id].parent || ""; });
+    return { anchor: anchor, sources: [sourceId].concat(ordered), parents: parents };
   }
 
   function nestMany(ids, items, targetId) {
@@ -2179,6 +2227,7 @@
     foldAll,
     convertBlock,
     headerCopyFields,
+    planCardCopy,
     nestMany,
     LIBRARY_FOLDERS,
     libraryFolderId,
