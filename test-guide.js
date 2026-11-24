@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v41");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v42");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -251,7 +251,7 @@ const routeSource = require("fs").readFileSync(require("path").join(__dirname, "
 const catalogSource = require("fs").readFileSync(require("path").join(__dirname, "data/catalogs.js"), "utf8");
 assert.ok(!/finalfantasy-jun-site\.com[^"']+\.png/.test(routeSource + catalogSource));
 assert.ok(routeSource.includes("maps/jun-ch01-01.png"));
-assert.ok(routeSource.includes("images/jun-ch01-buppanasu.png"));
+assert.ok(routeSource.includes("maps/01.png"));
 const fitted = progress.fitMapPanel({ left: 20, top: 30, imageWidth: 200, ratio: 2, chrome: 80, padX: 16 }, { width: 1200, height: 800 });
 assert.strictEqual(fitted.width, 216);
 assert.strictEqual(fitted.height, 180);
@@ -533,8 +533,10 @@ const columns = progress.normalizeBlocks([{
   arrow: true,
   columns: [[{ type: "text", html: "左" }], [{ type: "image", src: "https://example.com/a.png", width: "l", align: "left" }]]
 }]);
-assert.strictEqual(columns[0].arrow, true);
-assert.strictEqual(columns[0].columns[1][0].width, "l");
+assert.strictEqual(columns[0].type, "row");
+assert.strictEqual(columns[0].children[1].type, "text");
+assert.strictEqual(columns[0].children[2].type, "column");
+assert.strictEqual(columns[0].children[2].children[0].width, "l");
 const untouched = progress.upsertRouteCard(progress.emptyCardBook(), { id: "a", title: "t", detail: "そのまま", flag: "story" }, "a", {
   title: "t", detail: "そのまま", flag: "story", deadline: "", source: "", trophy: "", map: "", parent: "", quest: "", section: "", template: "", items: [],
   blocks: progress.blocksFromDetail("そのまま")
@@ -571,7 +573,8 @@ const nestedList = progress.normalizeBlocks([{
   count: 2,
   columns: [[{ type: "text", html: "左" }, { type: "list", heading: "手順", items: ["A", "B"] }], [{ type: "image", src: "https://example.com/a.png" }]]
 }]);
-assert.strictEqual(nestedList[0].columns[0][1].type, "list");
+assert.strictEqual(nestedList[0].type, "row");
+assert.strictEqual(nestedList[0].children[0].children[1].type, "list");
 const listHtml = progress.blockHtml(listed);
 assert.ok(listHtml.includes("blk-list-head"));
 assert.ok(listHtml.includes("98式機関砲"));
@@ -584,9 +587,21 @@ assert.deepStrictEqual(asList.block.items, ["98式機関砲", "電磁フィー�
 const backText = progress.convertBlock(asList.block, "text");
 assert.ok(backText.block.html.includes("98式機関砲"));
 assert.ok(backText.block.html.includes("電磁フィールド"));
-const callout = progress.convertBlock(textBlock, "callout");
+const callout = progress.convertBlock(textBlock, "container");
 assert.strictEqual(callout.loss, false);
-assert.strictEqual(callout.block.html, textBlock.html);
+assert.strictEqual(callout.block.type, "container");
+assert.ok(callout.block.children[0].html.includes("98式機関砲"));
+const groupMoved = progress.groupMovePlan(
+  [{ id: "a", section: "s1" }, { id: "b", section: "s1", parent: "a" }, { id: "c", section: "s2" }],
+  ["a"],
+  { same: true, sourceOrder: ["a", "b", "c"], destOrder: ["a", "b", "c"], beforeId: "c", after: false, sectionId: "s2", neighborParent: "", mode: "card" }
+);
+assert.deepStrictEqual(groupMoved.moving, ["a", "b"]);
+assert.deepStrictEqual(groupMoved.order, ["a", "b", "c"]);
+assert.strictEqual(groupMoved.sections.a, "s2");
+assert.strictEqual(groupMoved.sections.b, "s2");
+assert.strictEqual(groupMoved.parents.b, "a");
+assert.strictEqual(groupMoved.parents.a, "");
 const toImage = progress.convertBlock(textBlock, "image");
 assert.strictEqual(toImage.loss, true);
 assert.strictEqual(toImage.block.caption, "98式機関砲");

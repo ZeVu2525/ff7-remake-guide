@@ -120,7 +120,7 @@ const ROUTE = {
           ],
           parent: "ch01-s03",
           section: "ch01-sec-1",
-          map: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter01/01.png",
+          map: "maps/01.png",
           blocks: [
             {
               type: "text",
@@ -133,7 +133,7 @@ const ROUTE = {
           flag: "item",
           title: "神羅ボックス①②",
           detail: "先に進んで右側と進行方向に2つある神羅ボックスを破壊する",
-          map: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter01/01.png",
+          map: "maps/01.png",
           parent: "ch01-s03",
           blocks: [
             {

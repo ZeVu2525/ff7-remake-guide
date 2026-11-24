@@ -1203,6 +1203,28 @@
     return rest.slice(0, at).concat(block, rest.slice(at));
   }
 
+  function groupMovePlan(sourceItems, movingIds, options) {
+    const opts = options || {};
+    const items = sourceItems || [];
+    const moving = withChildIds(movingIds, items).filter(id => id && id !== opts.beforeId);
+    const baseOrder = opts.same ? (opts.sourceOrder || []) : (opts.destOrder || []).concat(moving);
+    const order = orderInsertGroup(baseOrder, moving, opts.beforeId || "", !!opts.after);
+    const parents = {};
+    const sections = {};
+    moving.forEach(id => {
+      const item = items.find(entry => entry && entry.id === id) || {};
+      let parent = item.parent || "";
+      const internal = parent && moving.indexOf(parent) >= 0;
+      if (internal) parent = item.parent || "";
+      else if (opts.unnest || opts.mode === "section") parent = "";
+      else if (opts.neighborParent != null) parent = items.some(entry => entry && entry.parent === id) && opts.neighborParent ? "" : opts.neighborParent;
+      else if (parent && !opts.same) parent = "";
+      parents[id] = parent;
+      sections[id] = opts.sectionId || item.section || "";
+    });
+    return { moving, order, parents, sections };
+  }
+
   const UI_LABELS = {
     "delete": "削除",
     "add": "＋追加",
@@ -1573,41 +1595,56 @@
     return value.map(normalizeBlock).filter(Boolean).slice(0, 24);
   }
 
-  function normalizeBlock(block) {
+  function layoutChildren(list, depth) {
+    return (Array.isArray(list) ? list : []).map(child => normalizeBlock(child, depth + 1)).filter(Boolean).slice(0, 12);
+  }
+
+  function normalizeBlock(block, depth) {
     if (!block || typeof block !== "object") return null;
+    const level = depth || 0;
+    if (level > 8) return null;
     const type = block.type;
-    if (type === "text" || type === "callout") {
-      return { type, html: sanitizeRich(block.html || "") };
+    if (type === "callout") {
+      return normalizeBlock({
+        type: "container",
+        bg: "#fff6d8",
+        border: "#e0b000",
+        pad: 12,
+        children: [{ type: "text", html: block.html || "" }]
+      }, level);
     }
+    if (type === "columns") {
+      const cols = (Array.isArray(block.columns) ? block.columns : []).map(col => ({ type: "column", children: col || [] }));
+      const children = block.arrow === true && cols.length >= 2
+        ? [cols[0], { type: "text", html: "→" }, cols[1]].concat(cols.slice(2))
+        : cols;
+      return normalizeBlock({ type: "row", gap: 12, align: "center", children }, level);
+    }
+    if (type === "tiles") {
+      return normalizeBlock({
+        type: "row",
+        gap: 10,
+        wrap: true,
+        children: (Array.isArray(block.items) ? block.items : []).map(item => ({
+          type: "image",
+          src: item && item.src || "",
+          caption: item && item.label || "",
+          width: "s",
+          align: "center"
+        }))
+      }, level);
+    }
+    if (type === "text") return { type: "text", html: sanitizeRich(block.html || "") };
     if (type === "image") {
       const src = String(block.src || "").trim();
-      if (!validImageValue(src)) return null;
+      if (src && !validImageValue(src)) return null;
       const width = ["s", "m", "l", "full"].indexOf(block.width) >= 0 ? block.width : "m";
       const align = ["left", "center", "right"].indexOf(block.align) >= 0 ? block.align : "center";
       const image = { type: "image", src, caption: String(block.caption || "").slice(0, 200), width, align };
       const pct = Math.round(Number(block.pct) / 5) * 5;
       if (pct >= 20 && pct <= 100) image.pct = pct;
+      if (Number(block.flex) > 0) image.flex = Math.max(1, Math.min(4, Math.round(Number(block.flex))));
       return image;
-    }
-    if (type === "columns") {
-      const count = block.count === 3 ? 3 : 2;
-      const source = Array.isArray(block.columns) ? block.columns : [];
-      const columns = [];
-      for (let i = 0; i < count; i += 1) {
-        const children = Array.isArray(source[i]) ? source[i] : [];
-        columns.push(children.map(child => {
-          const next = normalizeBlock(child);
-          return next && (next.type === "text" || next.type === "callout" || next.type === "image" || next.type === "list" || next.type === "tiles") ? next : null;
-        }).filter(Boolean).slice(0, 6));
-      }
-      if (!columns.some(col => col.length)) return null;
-      let widths = Array.isArray(block.widths) ? block.widths.map(n => Number(n)).filter(n => n > 0).slice(0, count) : [];
-      if (widths.length !== count) widths = Array.from({ length: count }, () => 100 / count);
-      const sum = widths.reduce((total, n) => total + n, 0) || 100;
-      widths = widths.map(n => Math.max(15, Math.round((n / sum) * 20) * 5));
-      const head = widths.slice(0, -1).reduce((total, n) => total + n, 0);
-      widths[widths.length - 1] = Math.max(15, 100 - head);
-      return { type: "columns", count, arrow: block.arrow === true && count === 2, widths, columns };
     }
     if (type === "list") {
       const heading = String(block.heading || "").replace(/\s+/g, " ").trim().slice(0, 80);
@@ -1617,42 +1654,68 @@
       if (!heading && !items.length) return null;
       return { type: "list", heading, items, columns };
     }
-    if (type === "tiles") {
-      const items = (Array.isArray(block.items) ? block.items : []).map(item => {
-        const src = String(item && item.src || "").trim();
-        if (!validImageValue(src)) return null;
-        return { src, label: String(item && item.label || "").slice(0, 40) };
-      }).filter(Boolean).slice(0, 8);
-      return items.length ? { type: "tiles", items } : null;
+    if (type === "column" || type === "container") {
+      const next = { type, children: layoutChildren(block.children, level) };
+      const gap = Math.max(0, Math.min(48, Math.round(Number(block.gap) || (type === "column" ? 8 : 0))));
+      if (type === "column") next.gap = gap;
+      if (type === "container") {
+        next.bg = colorValue(block.bg) || "#fff6d8";
+        next.border = colorValue(block.border) || "#e0b000";
+        next.pad = Math.max(0, Math.min(48, Math.round(Number(block.pad) || 12)));
+      }
+      return next;
     }
+    if (type === "row") {
+      const align = ["start", "center", "end", "stretch"].indexOf(block.align) >= 0 ? block.align : "start";
+      const justify = ["start", "center", "end", "between"].indexOf(block.justify) >= 0 ? block.justify : "start";
+      return {
+        type: "row",
+        gap: Math.max(0, Math.min(48, Math.round(Number(block.gap) || 12))),
+        align,
+        justify,
+        wrap: block.wrap !== false,
+        children: layoutChildren(block.children, level)
+      };
+    }
+    if (type === "table") {
+      const rows = layoutChildren(block.children, level).filter(child => child.type === "row");
+      return { type: "table", children: rows.length ? rows : [{ type: "row", gap: 8, children: [{ type: "text", html: "" }, { type: "text", html: "" }] }] };
+    }
+    if (type === "divider") return { type: "divider" };
+    if (type === "spacer") return { type: "spacer", size: Math.max(4, Math.min(80, Math.round(Number(block.size) || 16))) };
     return null;
   }
 
   function blockPlain(block) {
     if (!block) return "";
-    if (block.type === "text" || block.type === "callout") return plainFromHtml(block.html);
+    if (block.type === "text") return plainFromHtml(block.html);
     if (block.type === "list") return [block.heading].concat(block.items || []).filter(Boolean).join("\n");
     if (block.type === "image") return block.caption || "";
-    if (block.type === "tiles") return (block.items || []).map(item => item && item.label).filter(Boolean).join("\n");
-    if (block.type === "columns") return (block.columns || []).map(col => (col || []).map(blockPlain).filter(Boolean).join("\n")).filter(Boolean).join("\n");
+    if (block.type === "column" || block.type === "row" || block.type === "container" || block.type === "table") {
+      return (block.children || []).map(blockPlain).filter(Boolean).join("\n");
+    }
     return "";
   }
 
   function convertBlock(block, type) {
-    const allowed = ["text", "callout", "image", "list", "columns", "tiles"];
+    const allowed = ["text", "image", "list", "column", "row", "table", "container", "divider", "spacer"];
     const nextType = allowed.indexOf(type) >= 0 ? type : "text";
-    if (!block || block.type === nextType) return { block: block, loss: false };
-    const lines = blockPlain(block).split("\n").map(line => line.trim()).filter(Boolean);
-    const family = kind => kind === "text" || kind === "callout" || kind === "list";
-    const keepHtml = (block.type === "text" || block.type === "callout") && (nextType === "text" || nextType === "callout");
-    const html = keepHtml ? (block.html || "") : lines.join("<br>");
+    const current = block && (block.type === "callout" || block.type === "columns" || block.type === "tiles") ? normalizeBlock(block) : block;
+    if (!current || current.type === nextType) return { block: current, loss: false };
+    const lines = blockPlain(current).split("\n").map(line => line.trim()).filter(Boolean);
+    const family = kind => kind === "text" || kind === "list" || kind === "container";
+    const html = current.type === "text" ? (current.html || "") : lines.join("<br>");
     let next;
-    if (nextType === "text" || nextType === "callout") next = { type: nextType, html: html };
+    if (nextType === "text") next = { type: "text", html };
     else if (nextType === "list") next = { type: "list", heading: "", items: lines, columns: 2 };
-    else if (nextType === "image") next = { type: "image", src: block.type === "image" ? block.src : "", caption: lines[0] || "", width: block.width || "m", align: block.align || "center" };
-    else if (nextType === "tiles") next = { type: "tiles", items: block.type === "tiles" && block.items ? block.items : [{ src: "", label: lines[0] || "" }] };
-    else next = { type: "columns", count: 2, arrow: false, widths: [50, 50], columns: [[{ type: "text", html: html }], [{ type: "text", html: "" }]] };
-    return { block: next, loss: !(family(block.type) && family(nextType)) };
+    else if (nextType === "image") next = { type: "image", src: current.type === "image" ? current.src : "", caption: lines[0] || "", width: "m", align: "center" };
+    else if (nextType === "column") next = { type: "column", gap: 8, children: [{ type: "text", html }] };
+    else if (nextType === "row") next = { type: "row", gap: 12, align: "start", justify: "start", wrap: true, children: [{ type: "text", html }, { type: "text", html: "" }] };
+    else if (nextType === "container") next = { type: "container", bg: "#fff6d8", border: "#e0b000", pad: 12, children: [{ type: "text", html }] };
+    else if (nextType === "table") next = { type: "table", children: [{ type: "row", gap: 8, children: [{ type: "text", html }, { type: "text", html: "" }] }] };
+    else if (nextType === "divider") next = { type: "divider" };
+    else next = { type: "spacer", size: 16 };
+    return { block: normalizeBlock(next), loss: !(family(current.type) && family(nextType)) };
   }
 
   function headerCopyFields(item) {
@@ -1767,9 +1830,9 @@
   function plainFromBlocks(blocks) {
     const parts = [];
     normalizeBlocks(blocks).forEach(block => {
-      if (block.type === "text" || block.type === "callout") parts.push(plainFromHtml(block.html));
+      if (block.type === "text") parts.push(plainFromHtml(block.html));
       if (block.type === "image" && block.caption) parts.push(block.caption);
-      if (block.type === "columns") block.columns.forEach(col => parts.push(plainFromBlocks(col)));
+      if (block.type === "column" || block.type === "row" || block.type === "container" || block.type === "table") parts.push(plainFromBlocks(block.children));
       if (block.type === "list") {
         if (block.heading) parts.push(block.heading);
         if (block.items.length) parts.push(block.items.join("\n"));
@@ -1819,21 +1882,27 @@
   function renderBlock(block, path) {
     const attr = ' data-bpath="' + path + '"';
     if (block.type === "text") return '<div class="blk-text"' + attr + ">" + block.html + "</div>";
-    if (block.type === "callout") return '<div class="blk-callout"' + attr + ">" + block.html + "</div>";
     if (block.type === "image") return renderImage(block, false, path);
     if (block.type === "list") return renderList(block, path);
-    if (block.type === "tiles") {
-      return '<div class="blk-tiles"' + attr + ">" + block.items.map((item, index) => '<figure class="blk-tile" data-bpath="' + path + ".tile." + index + '">' + renderImage(item, true, path + ".tile." + index) + (item.label ? "<figcaption>" + escapeRichText(item.label) + "</figcaption>" : "") + "</figure>").join("") + "</div>";
+    if (block.type === "divider") return '<hr class="blk-divider"' + attr + ">";
+    if (block.type === "spacer") return '<div class="blk-spacer"' + attr + ' style="height:' + (block.size || 16) + 'px"></div>';
+    const kids = (block.children || []).map((child, index) => renderBlock(child, path + "." + index)).join("");
+    if (block.type === "column") return '<div class="blk-stack"' + attr + ' style="gap:' + (block.gap || 0) + 'px">' + kids + "</div>";
+    if (block.type === "container") {
+      const style = "background:" + (block.bg || "transparent") + ";border:1px solid " + (block.border || "transparent") + ";padding:" + (block.pad || 0) + "px";
+      return '<div class="blk-box"' + attr + ' style="' + style + '">' + kids + "</div>";
     }
-    const style = block.arrow
-      ? ' style="grid-template-columns:' + block.widths[0] + '% auto ' + block.widths[1] + '%"'
-      : ' style="grid-template-columns:' + block.widths.map(n => n + "%").join(" ") + '"';
-    const cols = block.columns.map((col, index) => {
-      const split = index < block.columns.length - 1 ? '<i class="blk-split" data-split="' + index + '" data-bpath="' + path + '"></i>' : "";
-      return '<div class="blk-col">' + col.map((child, childIndex) => renderBlock(child, path + "." + index + "." + childIndex)).join("") + split + "</div>";
-    });
-    if (block.arrow) cols.splice(1, 0, '<div class="blk-arrow" aria-hidden="true">→</div>');
-    return '<div class="blk-cols c' + block.count + (block.arrow ? " has-arrow" : "") + '"' + attr + style + ">" + cols.join("") + "</div>";
+    if (block.type === "row") {
+      const align = { start: "flex-start", center: "center", end: "flex-end", stretch: "stretch" }[block.align] || "flex-start";
+      const justify = { start: "flex-start", center: "center", end: "flex-end", between: "space-between" }[block.justify] || "flex-start";
+      const cells = (block.children || []).map((child, index) => '<div class="blk-cell" style="flex:' + (child.flex || 1) + '">' + renderBlock(child, path + "." + index) + "</div>").join("");
+      return '<div class="blk-hrow"' + attr + ' style="gap:' + (block.gap || 0) + "px;align-items:" + align + ";justify-content:" + justify + '">' + cells + "</div>";
+    }
+    if (block.type === "table") {
+      const rows = (block.children || []).map((row, index) => '<div class="blk-tr">' + (row.children || []).map((cell, cellIndex) => '<div class="blk-td">' + renderBlock(cell, path + "." + index + "." + cellIndex) + "</div>").join("") + "</div>").join("");
+      return '<div class="blk-table"' + attr + ">" + rows + "</div>";
+    }
+    return "";
   }
 
   function renderImage(block, bare, path) {
@@ -2053,16 +2122,7 @@
         const src = /^data:image\//i.test(block.src) ? (mapOf(block.src) || block.src) : block.src;
         return Object.assign({}, block, { src });
       }
-      if (block.type === "tiles") {
-        return Object.assign({}, block, {
-          items: block.items.map(item => Object.assign({}, item, {
-            src: /^data:image\//i.test(item.src) ? (mapOf(item.src) || item.src) : item.src
-          }))
-        });
-      }
-      if (block.type === "columns") {
-        return Object.assign({}, block, { columns: block.columns.map(col => mapBlockImages(col, mapOf)) });
-      }
+      if (block.children) return Object.assign({}, block, { children: mapBlockImages(block.children, mapOf) });
       return block;
     });
   }
@@ -2332,6 +2392,7 @@
     enemiesModuleSource,
     resolveSections,
     orderInsertGroup,
+    groupMovePlan,
     numbersFromTitle,
     visibleMap,
     displayItems,

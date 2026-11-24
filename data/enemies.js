@@ -4,6 +4,7 @@ const ENEMIES = [
     no: "001",
     name: "警備兵",
     kind: "normal",
+    source: "https://finalfantasy-jun-site.com/ff7_remake/enemy/001.html",
     places: [
       {
         when: "CHAPTER1",
