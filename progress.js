@@ -1205,10 +1205,28 @@
 
   function groupMovePlan(sourceItems, movingIds, options) {
     const opts = options || {};
-    const items = sourceItems || [];
+    const items = [];
+    const seen = new Set();
+    (sourceItems || []).concat(opts.extraItems || []).forEach(item => {
+      if (!item || !item.id || seen.has(item.id)) return;
+      seen.add(item.id);
+      items.push(item);
+    });
     const moving = withChildIds(movingIds, items).filter(id => id && id !== opts.beforeId);
     const baseOrder = opts.same ? (opts.sourceOrder || []) : (opts.destOrder || []).concat(moving);
-    const order = orderInsertGroup(baseOrder, moving, opts.beforeId || "", !!opts.after);
+    let beforeId = opts.beforeId || "";
+    let after = !!opts.after;
+    if (opts.mode === "nest" && beforeId) {
+      let anchor = beforeId;
+      const scan = opts.same ? (opts.sourceOrder || []) : (opts.destOrder || []);
+      items.forEach(item => {
+        if (!item || item.parent !== beforeId || moving.indexOf(item.id) >= 0) return;
+        if (scan.indexOf(item.id) > scan.indexOf(anchor)) anchor = item.id;
+      });
+      beforeId = anchor;
+      after = true;
+    }
+    const order = orderInsertGroup(baseOrder, moving, beforeId, after);
     const parents = {};
     const sections = {};
     moving.forEach(id => {
@@ -1216,6 +1234,7 @@
       let parent = item.parent || "";
       const internal = parent && moving.indexOf(parent) >= 0;
       if (internal) parent = item.parent || "";
+      else if (opts.mode === "nest") parent = opts.nestUnder || opts.beforeId || "";
       else if (opts.unnest || opts.mode === "section") parent = "";
       else if (opts.neighborParent != null) parent = items.some(entry => entry && entry.parent === id) && opts.neighborParent ? "" : opts.neighborParent;
       else if (parent && !opts.same) parent = "";
@@ -1595,6 +1614,46 @@
     return value.map(normalizeBlock).filter(Boolean).slice(0, 24);
   }
 
+  function tableCell(cell) {
+    if (!cell || cell.skip) return { skip: true };
+    const text = String(cell.text != null ? cell.text : (cell.type === "text" ? plainFromHtml(cell.html || "") : "")).replace(/\s+/g, " ").trim().slice(0, 200);
+    const out = { text: text };
+    const rowspan = Math.max(1, Math.min(12, Math.round(Number(cell.rowspan) || 1)));
+    const colspan = Math.max(1, Math.min(8, Math.round(Number(cell.colspan) || 1)));
+    if (rowspan > 1) out.rowspan = rowspan;
+    if (colspan > 1) out.colspan = colspan;
+    return out;
+  }
+
+  function normalizeTable(block, level) {
+    let source = Array.isArray(block.rows) ? block.rows : null;
+    if (!source && Array.isArray(block.children)) {
+      source = block.children.filter(row => row && (row.type === "row" || Array.isArray(row.cells) || Array.isArray(row.children))).map(row => ({
+        cells: (row.cells || row.children || []).map(cell => cell && cell.type === "text" ? { text: plainFromHtml(cell.html || "") } : { text: cell && cell.text || "" })
+      }));
+    }
+    const rows = (source || []).map(row => ({ cells: (row.cells || []).map(tableCell).slice(0, 8) })).filter(row => row.cells.length).slice(0, 24);
+    const safeRows = rows.length ? rows : [{ cells: [{ text: "" }, { text: "" }] }];
+    const widthCount = Math.max.apply(null, safeRows.map(row => row.cells.length));
+    let widths = Array.isArray(block.widths) ? block.widths.map(n => Number(n)).filter(n => n > 0).slice(0, widthCount) : [];
+    if (widths.length !== widthCount) widths = Array.from({ length: widthCount }, () => Math.round(100 / widthCount));
+    return { type: "table", header: block.header === true, widths: widths, rows: safeRows };
+  }
+
+  function renderTable(block, path) {
+    const widths = block.widths || [];
+    const cols = widths.length ? '<colgroup>' + widths.map(n => '<col style="width:' + n + '%">').join("") + "</colgroup>" : "";
+    const body = (block.rows || []).map((row, index) => {
+      const tag = block.header && index === 0 ? "th" : "td";
+      const cells = (row.cells || []).filter(cell => cell && !cell.skip).map(cell => {
+        const span = (cell.rowspan > 1 ? ' rowspan="' + cell.rowspan + '"' : "") + (cell.colspan > 1 ? ' colspan="' + cell.colspan + '"' : "");
+        return "<" + tag + span + ">" + escapeRichText(cell.text || "") + "</" + tag + ">";
+      }).join("");
+      return "<tr>" + cells + "</tr>";
+    }).join("");
+    return '<div class="table-scroll" data-bpath="' + path + '"><table class="sheet blk-sheet">' + cols + "<tbody>" + body + "</tbody></table></div>";
+  }
+
   function layoutChildren(list, depth) {
     return (Array.isArray(list) ? list : []).map(child => normalizeBlock(child, depth + 1)).filter(Boolean).slice(0, 12);
   }
@@ -1677,10 +1736,7 @@
         children: layoutChildren(block.children, level)
       };
     }
-    if (type === "table") {
-      const rows = layoutChildren(block.children, level).filter(child => child.type === "row");
-      return { type: "table", children: rows.length ? rows : [{ type: "row", gap: 8, children: [{ type: "text", html: "" }, { type: "text", html: "" }] }] };
-    }
+    if (type === "table") return normalizeTable(block, level);
     if (type === "divider") return { type: "divider" };
     if (type === "spacer") return { type: "spacer", size: Math.max(4, Math.min(80, Math.round(Number(block.size) || 16))) };
     return null;
@@ -1691,8 +1747,11 @@
     if (block.type === "text") return plainFromHtml(block.html);
     if (block.type === "list") return [block.heading].concat(block.items || []).filter(Boolean).join("\n");
     if (block.type === "image") return block.caption || "";
-    if (block.type === "column" || block.type === "row" || block.type === "container" || block.type === "table") {
+    if (block.type === "column" || block.type === "row" || block.type === "container") {
       return (block.children || []).map(blockPlain).filter(Boolean).join("\n");
+    }
+    if (block.type === "table") {
+      return (block.rows || []).map(row => (row.cells || []).filter(cell => cell && !cell.skip).map(cell => cell.text || "").filter(Boolean).join(" ")).filter(Boolean).join("\n");
     }
     return "";
   }
@@ -1712,7 +1771,7 @@
     else if (nextType === "column") next = { type: "column", gap: 8, children: [{ type: "text", html }] };
     else if (nextType === "row") next = { type: "row", gap: 12, align: "start", justify: "start", wrap: true, children: [{ type: "text", html }, { type: "text", html: "" }] };
     else if (nextType === "container") next = { type: "container", bg: "#fff6d8", border: "#e0b000", pad: 12, children: [{ type: "text", html }] };
-    else if (nextType === "table") next = { type: "table", children: [{ type: "row", gap: 8, children: [{ type: "text", html }, { type: "text", html: "" }] }] };
+    else if (nextType === "table") next = { type: "table", rows: [{ cells: [{ text: lines[0] || "" }, { text: "" }] }] };
     else if (nextType === "divider") next = { type: "divider" };
     else next = { type: "spacer", size: 16 };
     return { block: normalizeBlock(next), loss: !(family(current.type) && family(nextType)) };
@@ -1832,7 +1891,8 @@
     normalizeBlocks(blocks).forEach(block => {
       if (block.type === "text") parts.push(plainFromHtml(block.html));
       if (block.type === "image" && block.caption) parts.push(block.caption);
-      if (block.type === "column" || block.type === "row" || block.type === "container" || block.type === "table") parts.push(plainFromBlocks(block.children));
+      if (block.type === "column" || block.type === "row" || block.type === "container") parts.push(plainFromBlocks(block.children));
+      if (block.type === "table") parts.push(blockPlain(block));
       if (block.type === "list") {
         if (block.heading) parts.push(block.heading);
         if (block.items.length) parts.push(block.items.join("\n"));
@@ -1898,10 +1958,7 @@
       const cells = (block.children || []).map((child, index) => '<div class="blk-cell" style="flex:' + (child.flex || 1) + '">' + renderBlock(child, path + "." + index) + "</div>").join("");
       return '<div class="blk-hrow"' + attr + ' style="gap:' + (block.gap || 0) + "px;align-items:" + align + ";justify-content:" + justify + '">' + cells + "</div>";
     }
-    if (block.type === "table") {
-      const rows = (block.children || []).map((row, index) => '<div class="blk-tr">' + (row.children || []).map((cell, cellIndex) => '<div class="blk-td">' + renderBlock(cell, path + "." + index + "." + cellIndex) + "</div>").join("") + "</div>").join("");
-      return '<div class="blk-table"' + attr + ">" + rows + "</div>";
-    }
+    if (block.type === "table") return renderTable(block, path);
     return "";
   }
 
