@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v44");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v45");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -957,6 +957,23 @@ assert.ok(boot.includes("caches.delete"));
 assert.ok(boot.includes("unregister"));
 assert.ok(!boot.includes("localStorage.clear"));
 assert.ok(!boot.includes("localStorage.removeItem"));
+assert.ok(boot.includes("content-visibility:auto"));
+assert.ok(boot.includes("data/enemies.js?v=" + guide.GAME.cache));
+assert.ok(boot.includes("edit-mode.js?v=" + guide.GAME.cache));
+assert.ok(boot.includes("card-edit.js?v=" + guide.GAME.cache));
+const rowHtml = progress.blockHtml([{ type: "row", children: [{ type: "text", html: "左" }, { type: "text", html: "右" }] }]);
+assert.ok(rowHtml.includes("左") && rowHtml.includes("右"));
+assert.ok(progress.blockHtml([{ type: "image", src: "images/a.png", caption: "" }]).includes('loading="lazy"'));
+const cardSrc = fs.readFileSync("card-edit.js", "utf8");
+assert.ok(cardSrc.includes('["row", "横並び"]'));
+assert.ok(cardSrc.includes("data-make-table"));
+assert.ok(cardSrc.includes("makeTable(3, 3)"));
+assert.ok(!cardSrc.includes("表（3列）"));
+assert.ok(!cardSrc.includes("横2列"));
+const routeApp = fs.readFileSync("app.js", "utf8");
+assert.ok(routeApp.includes("ensureEditors"));
+assert.ok(routeApp.includes("flushBook"));
+assert.ok(routeApp.includes("else if (narrowScreen()) releaseLazyChapter"));
 
 (async () => {
   const denied = await progress.githubTest(mockFetch(async () => ({ status: 200, body: { permissions: { push: false }, full_name: "ZeVu2525/ff7-remake-guide" } })), "secret-token", "ZeVu2525", "ff7-remake-guide");

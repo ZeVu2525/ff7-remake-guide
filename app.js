@@ -132,7 +132,19 @@
     return document.body.classList.contains("is-card-edit");
   }
 
+  let bookTimer = 0;
+  let bookDirty = false;
+
   function saveBook() {
+    bookDirty = true;
+    clearTimeout(bookTimer);
+    bookTimer = setTimeout(flushBook, 250);
+  }
+
+  function flushBook() {
+    if (!bookDirty) return;
+    bookDirty = false;
+    clearTimeout(bookTimer);
     try {
       localStorage.setItem(storage.cardEdits, JSON.stringify(cardBook));
     } catch (error) {
@@ -140,14 +152,24 @@
     }
   }
 
+  const chapterMemo = new WeakMap();
+
   function chaptersFor(trackId) {
+    let memo = chapterMemo.get(cardBook);
+    if (!memo) {
+      memo = Object.create(null);
+      try { chapterMemo.set(cardBook, memo); } catch (error) { memo = null; }
+    }
+    if (memo && memo[trackId]) return memo[trackId];
     const merged = GuideProgress.mergeTrack(ROUTE, GAME.chapters[trackId] || [], cardBook, trackId);
-    return merged.map((row, index) => ({
+    const list = merged.map((row, index) => ({
       id: row.chapterId,
       title: row.title || ("Chapter " + (index + 1)),
       items: row.items || [],
       sections: row.sections || []
     }));
+    if (memo) memo[trackId] = list;
+    return list;
   }
 
   function storeChapterList(trackId, list) {
@@ -543,11 +565,16 @@
     return `<article class="it is-broken" data-id="${esc(item && item.id || "")}"><div class="ibody"><p class="card-broken">このカードを表示できません。</p></div></article>`;
   }
 
+  const bodyMemo = new WeakMap();
+
   function cardBody(item) {
     try {
+      if (item && bodyMemo.has(item)) return bodyMemo.get(item);
       const blocks = item.blocks && item.blocks.length ? item.blocks : GuideProgress.blocksFromDetail(item.detail);
       const html = GuideProgress.blockHtml(blocks);
-      return html ? `<div class="blocks">${html}</div>` : "";
+      const body = html ? `<div class="blocks">${html}</div>` : "";
+      if (item) bodyMemo.set(item, body);
+      return body;
     } catch (error) {
       return '<p class="card-broken">このカードを表示できません。</p>';
     }
@@ -722,17 +749,17 @@
     if (body) body.innerHTML = "";
     delete section.dataset.ready;
     section.dataset.lazy = "1";
+    if (globalThis.GuideImages && GuideImages.releaseUnused) GuideImages.releaseUnused();
   }
 
   function bindLazyChapters() {
     if (lazyObserver) lazyObserver.disconnect();
-    if (!narrowScreen()) return;
     lazyObserver = new IntersectionObserver(entries => {
       entries.forEach(entry => {
         if (entry.isIntersecting) fillLazyChapter(entry.target);
-        else releaseLazyChapter(entry.target);
+        else if (narrowScreen()) releaseLazyChapter(entry.target);
       });
-    }, { rootMargin: "700px 0px" });
+    }, { rootMargin: "900px 0px" });
     document.querySelectorAll("#route section.ch").forEach(section => {
       if (section.dataset.lazy === "1" || section.dataset.ready === "1") lazyObserver.observe(section);
     });
@@ -762,7 +789,7 @@
     if (ui.chapterId && !chapters.some(chapter => chapter.id === ui.chapterId)) ui.chapterId = "";
     const shown = ui.chapterId ? chapters.filter(chapter => chapter.id === ui.chapterId) : chapters;
     const filtering = ui.flag !== "all" || !!ui.query;
-    const lazy = narrowScreen() && !cardEditing() && !filtering && !ui.chapterId;
+    const lazy = !cardEditing() && !filtering && !ui.chapterId;
     let visible = 0;
     let total = 0;
     const host = document.getElementById("route");
@@ -793,8 +820,10 @@
       </section>`;
     }).join("") + (cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-chapter-add="" data-card-track="${esc(ui.trackId)}">チャプターを追加</button></p>` : "");
     if (lazy) {
-      [...host.querySelectorAll("section.ch[data-lazy]")].slice(0, 1).forEach(fillLazyChapter);
+      const y = window.scrollY || 0;
+      [...host.querySelectorAll("section.ch[data-lazy]")].slice(0, 2).forEach(fillLazyChapter);
       bindLazyChapters();
+      if (y) fillLazyUntil(y);
     } else if (lazyObserver) {
       lazyObserver.disconnect();
     }
@@ -2698,6 +2727,72 @@
     }
   });
 
+  const scriptLoads = Object.create(null);
+
+  function loadScript(src) {
+    if (!src) return Promise.resolve();
+    if (scriptLoads[src]) return scriptLoads[src];
+    scriptLoads[src] = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error(src));
+      document.body.appendChild(script);
+    });
+    return scriptLoads[src];
+  }
+
+  let editorsLoading = null;
+
+  function ensureEditors() {
+    if (globalThis.GuideCardEdit && globalThis.GuideText) return Promise.resolve();
+    if (editorsLoading) return editorsLoading;
+    const lazy = window.FF7R_LAZY || {};
+    editorsLoading = loadScript(lazy.edit).then(() => loadScript(lazy.cards)).catch(() => {});
+    return editorsLoading;
+  }
+
+  function editorsWanted() {
+    try {
+      if (localStorage.getItem(storage.cardEditMode) === "1") return true;
+      if (localStorage.getItem(storage.textEditMode) === "1") return true;
+      const text = localStorage.getItem(storage.textEdits);
+      if (text && text !== "{}" && text !== "null") return true;
+      const params = new URL(location.href).searchParams;
+      if (params.get("cards") === "1" || params.get("edit") === "1") return true;
+    } catch (error) {}
+    const toggle = document.getElementById("edit-toggle");
+    return !!(toggle && toggle.checked);
+  }
+
+  function scheduleHeavy() {
+    const lazy = window.FF7R_LAZY || {};
+    const run = () => {
+      if (lazy.enemies && !globalThis.ENEMIES) {
+        loadScript(lazy.enemies).then(() => {
+          if (ui.hub === "enemies") renderEnemies();
+          else if (ui.hub === "route") {
+            const open = [...document.querySelectorAll("#route section.ch")].filter(section => section.dataset.ready === "1").map(section => section.dataset.chapter);
+            const y = window.scrollY || 0;
+            renderRoute();
+            open.forEach(id => {
+              const section = document.querySelector('#route section.ch[data-chapter="' + id + '"]');
+              if (section) fillLazyChapter(section);
+            });
+            if (y) window.scrollTo(0, y);
+          }
+        }).catch(() => {});
+      }
+      if (editorsWanted()) ensureEditors();
+    };
+    if (ui.hub === "enemies") run();
+    else setTimeout(run, 0);
+  }
+
+  document.getElementById("edit-toggle").addEventListener("change", () => {
+    ensureEditors();
+  });
+
   try {
   state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
   renderHeader();
@@ -2720,12 +2815,17 @@
     document.getElementById("progress-toast").hidden = true;
   });
   showHub(ui.hub);
+  scheduleHeavy();
   } catch (error) {
     if (window.ff7rShowBootError) window.ff7rShowBootError();
   }
   window.addEventListener("pagehide", () => {
+    flushBook();
     tabScroll[ui.hub] = window.scrollY || document.documentElement.scrollTop || 0;
     rememberTabScroll();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushBook();
   });
 
   let editHistory = GuideProgress.emptyEditHistory(100);
@@ -2737,8 +2837,18 @@
     return globalThis.GuideText && GuideText.snapshot ? GuideText.snapshot() : {};
   }
 
+  let snapshotCache = "";
+  let snapshotBook = null;
+  let snapshotText = "";
+
   function editSnapshot() {
-    return JSON.stringify({ book: cardBook, text: textSnapshot() });
+    const text = textSnapshot();
+    const textJson = JSON.stringify(text);
+    if (snapshotBook === cardBook && snapshotText === textJson) return snapshotCache;
+    snapshotBook = cardBook;
+    snapshotText = textJson;
+    snapshotCache = JSON.stringify({ book: cardBook, text: text });
+    return snapshotCache;
   }
 
   function persistEditHistory() {
