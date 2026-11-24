@@ -72,7 +72,8 @@
     ".blk-summary{margin-left:6px;color:var(--fg3);font-size:11px;font-weight:600}",
     ".blk-sheet-edit{overflow:auto}",
     ".blk-sheet-edit table{width:100%;border-collapse:collapse;font-size:13px}",
-    ".blk-sheet-edit td,.blk-sheet-edit th{min-width:3em;padding:2px 4px;border:1px solid var(--line);background:var(--bg)}",
+    ".blk-sheet-edit table.sheet{border:1px solid var(--line);border-collapse:collapse}",
+    ".blk-sheet-edit table.sheet td,.blk-sheet-edit table.sheet th{min-width:3em;padding:4px 6px;border:1px solid var(--line);background:var(--bg)}",
     ".blk-sheet-edit td.on,.blk-sheet-edit th.on{outline:2px solid var(--accent)}",
     ".blk-sheet-edit [data-sheet-cell]{min-height:1.2em;outline:none}",
     ".blk-sheet-edit table.sheet{min-width:0}",
@@ -1869,9 +1870,10 @@
     if (!hubs.some(hub => hub.id === pickerState.hub) && hubs[0]) pickerState.hub = hubs[0].id;
     const selected = (editing.links || []).map(link => {
       const found = link.id ? choices.find(item => item.id === link.id) : null;
-      const label = (link.name && !link.id ? link.name : (found ? found.name : link.id)) + ((link.name && !link.id) ? (Number(link.qty) > 1 ? " ×" + link.qty : "") : " ×" + (link.qty || 1));
+      const name = link.name && !link.id ? link.name : (found ? found.name : link.id);
+      const label = name + GuideProgress.itemQtySuffix(link.qty);
       const key = link.name && !link.id ? "name:" + link.name : link.id;
-      return `<li><span class="${found || (link.name && !link.id) ? "" : "is-missing-item"}">${escapeText(label + " ×" + link.qty)}</span> <button type="button" data-link-remove="${escapeAttr(key)}">外す</button></li>`;
+      return `<li><span class="${found || (link.name && !link.id) ? "" : "is-missing-item"}">${escapeText(label)}</span> <button type="button" data-link-remove="${escapeAttr(key)}">外す</button></li>`;
     }).join("");
     const other = pickerState.hub === "other";
     host.innerHTML = [
