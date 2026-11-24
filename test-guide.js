@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v42");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v43");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -602,6 +602,28 @@ assert.strictEqual(groupMoved.sections.a, "s2");
 assert.strictEqual(groupMoved.sections.b, "s2");
 assert.strictEqual(groupMoved.parents.b, "a");
 assert.strictEqual(groupMoved.parents.a, "");
+const nestMoved = progress.groupMovePlan(
+  [{ id: "child", section: "s1", parent: "old" }, { id: "old", section: "s1" }, { id: "parent", section: "s2" }, { id: "sib", section: "s2", parent: "parent" }],
+  ["child"],
+  { same: true, sourceOrder: ["child", "old", "parent", "sib"], destOrder: ["child", "old", "parent", "sib"], beforeId: "parent", sectionId: "s2", mode: "nest", nestUnder: "parent" }
+);
+assert.strictEqual(nestMoved.parents.child, "parent");
+assert.strictEqual(nestMoved.sections.child, "s2");
+assert.deepStrictEqual(nestMoved.order, ["old", "parent", "sib", "child"]);
+const sheet = progress.normalizeBlocks([{
+  type: "table",
+  header: true,
+  rows: [
+    { cells: [{ text: "回" }, { text: "敵" }, { text: "数" }] },
+    { cells: [{ text: "1回戦", rowspan: 2 }, { text: "警備兵" }, { text: "2" }] },
+    { cells: [{ skip: true }, { text: "ガードハウンド" }, { text: "1" }] }
+  ]
+}]);
+assert.strictEqual(sheet[0].rows[1].cells[0].rowspan, 2);
+const sheetHtml = progress.blockHtml(sheet);
+assert.ok(sheetHtml.includes('rowspan="2"'));
+assert.ok(sheetHtml.includes("ガードハウンド"));
+assert.ok(!sheetHtml.includes("skip"));
 const toImage = progress.convertBlock(textBlock, "image");
 assert.strictEqual(toImage.loss, true);
 assert.strictEqual(toImage.block.caption, "98式機関砲");

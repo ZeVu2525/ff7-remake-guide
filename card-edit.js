@@ -67,7 +67,16 @@
     "#card-menu button{min-height:40px;padding:6px 10px;border:0;border-radius:8px;background:transparent;color:var(--fg);font:inherit;text-align:left;cursor:pointer}",
     "#card-menu button:hover,#card-menu button:focus-visible{background:color-mix(in srgb,var(--fg) 8%,transparent)}",
     ".blk-row.is-block-focus{outline:2px solid #39c9ff}",
-    ".blk-row{padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2)}",
+    ".blk-row{position:relative;margin:2px 0;padding:2px 4px 2px 8px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;background:var(--bg2)}",
+    ".blk-row.is-collapsed > :not(.blk-tools){display:none}",
+    ".blk-summary{margin-left:6px;color:var(--fg3);font-size:11px;font-weight:600}",
+    ".blk-sheet-edit{overflow:auto}",
+    ".blk-sheet-edit table{width:100%;border-collapse:collapse;font-size:13px}",
+    ".blk-sheet-edit td,.blk-sheet-edit th{min-width:3em;padding:2px 4px;border:1px solid var(--line);background:var(--bg)}",
+    ".blk-sheet-edit td.on,.blk-sheet-edit th.on{outline:2px solid var(--accent)}",
+    ".blk-sheet-edit [data-sheet-cell]{min-height:1.4em;outline:none}",
+    ".blk-sheet-tools{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0}",
+    ".blk-sheet-tools button,.blk-sheet-tools label{min-height:24px;padding:0 6px;font-size:11px}",
     ".blk-tools{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
     ".blk-handle{touch-action:none;cursor:grab}",
     ".blk-tools button,.blk-add button,.rt-bar button{min-height:28px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:inherit;font-size:12px;line-height:1.3;cursor:pointer}",
@@ -433,6 +442,21 @@
         if (items) block.items = items.value.split(/\n/);
         if (cols) block.columns = Number(cols.value) === 1 || Number(cols.value) === 3 ? Number(cols.value) : 2;
       }
+      if (block.type === "table") {
+        const header = node.querySelector(":scope > .blk-sheet-edit [data-sheet-header]");
+        if (header) block.header = header.checked;
+        node.querySelectorAll(":scope > .blk-sheet-edit [data-sheet-width]").forEach(input => {
+          const index = Number(input.getAttribute("data-sheet-width"));
+          block.widths = block.widths || [];
+          block.widths[index] = Math.max(8, Math.min(80, Number(input.value) || 0));
+        });
+        node.querySelectorAll(":scope > .blk-sheet-edit [data-sheet-cell]").forEach(cell => {
+          const parts = cell.getAttribute("data-sheet-cell").split(",").map(Number);
+          const row = block.rows && block.rows[parts[0]];
+          const item = row && row.cells && row.cells[parts[1]];
+          if (item && !item.skip) item.text = cell.innerText.replace(/\s+/g, " ").trim();
+        });
+      }
       if (block.type === "column" || block.type === "row" || block.type === "container") {
         const gap = node.querySelector(":scope > .blk-layout [data-gap]");
         const align = node.querySelector(":scope > .blk-layout [data-align]");
@@ -529,7 +553,7 @@
   }
 
   function addButtons(path) {
-    const kinds = [["text", "文章"], ["image", "画像"], ["list", "リスト"], ["column", "縦並び"], ["row", "横並び"], ["table", "表"], ["container", "囲み"], ["divider", "区切り"], ["spacer", "余白"]];
+    const kinds = [["text", "文章"], ["image", "画像"], ["list", "リスト"], ["column", "縦並び"], ["row2", "横2列"], ["table3", "表（3列）"], ["table", "表"], ["callout", "囲み文"], ["divider", "区切り"], ["spacer", "余白"]];
     return kinds.map(item => `<button type="button" data-add-block="${item[0]}" data-add-path="${escapeAttr(path)}">${item[1]}</button>`).join("");
   }
 
@@ -542,21 +566,110 @@
     return "";
   }
 
+  const collapsedBlocks = {};
+  let sheetSelection = [];
+
+  function editSheet(path, button) {
+    const table = blockAt(path);
+    if (!table || table.type !== "table") return;
+    const cols = ((table.rows[0] && table.rows[0].cells) || []).length || 1;
+    if (button.hasAttribute("data-sheet-row")) {
+      table.rows.push({ cells: Array.from({ length: cols }, () => ({ text: "" })) });
+    } else if (button.hasAttribute("data-sheet-col")) {
+      table.rows.forEach(row => row.cells.push({ text: "" }));
+      table.widths = (table.widths || []).concat(Math.round(100 / (cols + 1)));
+    } else if (button.hasAttribute("data-sheet-del-row") && table.rows.length > 1) {
+      table.rows.pop();
+    } else if (button.hasAttribute("data-sheet-del-col") && cols > 1) {
+      table.rows.forEach(row => row.cells.pop());
+      table.widths = (table.widths || []).slice(0, cols - 1);
+    } else if (button.hasAttribute("data-sheet-merge")) {
+      const coords = sheetSelection.map(key => key.split(",").map(Number));
+      if (coords.length < 2) return;
+      const r0 = Math.min.apply(null, coords.map(item => item[0]));
+      const r1 = Math.max.apply(null, coords.map(item => item[0]));
+      const c0 = Math.min.apply(null, coords.map(item => item[1]));
+      const c1 = Math.max.apply(null, coords.map(item => item[1]));
+      for (let r = r0; r <= r1; r += 1) {
+        for (let c = c0; c <= c1; c += 1) {
+          const cell = table.rows[r] && table.rows[r].cells[c];
+          if (!cell || cell.skip || cell.rowspan > 1 || cell.colspan > 1) return;
+        }
+      }
+      const origin = table.rows[r0].cells[c0];
+      if (r1 > r0) origin.rowspan = r1 - r0 + 1;
+      if (c1 > c0) origin.colspan = c1 - c0 + 1;
+      for (let r = r0; r <= r1; r += 1) {
+        for (let c = c0; c <= c1; c += 1) {
+          if (r === r0 && c === c0) continue;
+          table.rows[r].cells[c] = { skip: true };
+        }
+      }
+      sheetSelection = [];
+    } else if (button.hasAttribute("data-sheet-unmerge")) {
+      sheetSelection.forEach(key => {
+        const parts = key.split(",").map(Number);
+        const cell = table.rows[parts[0]] && table.rows[parts[0]].cells[parts[1]];
+        if (!cell || cell.skip) return;
+        const rs = cell.rowspan || 1;
+        const cs = cell.colspan || 1;
+        delete cell.rowspan;
+        delete cell.colspan;
+        for (let r = parts[0]; r < parts[0] + rs; r += 1) {
+          for (let c = parts[1]; c < parts[1] + cs; c += 1) {
+            if (r === parts[0] && c === parts[1]) continue;
+            if (table.rows[r] && table.rows[r].cells[c]) table.rows[r].cells[c] = { text: "" };
+          }
+        }
+      });
+      sheetSelection = [];
+    }
+  }
+
+  function blockSummary(block) {
+    if (!block) return "";
+    if (block.type === "text") return String(block.html || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 28) || "文章";
+    if (block.type === "image") return "画像 " + (block.caption || block.src || "").slice(0, 20);
+    if (block.type === "list") return "リスト " + (block.heading || (block.items && block.items[0]) || "");
+    if (block.type === "table") return "表 " + ((block.rows || []).length) + "×" + (((block.rows || [])[0] && block.rows[0].cells) || []).length;
+    if (block.type === "container") return "囲み";
+    if (block.type === "row") return "横並び " + ((block.children || []).length);
+    if (block.type === "column") return "縦並び " + ((block.children || []).length);
+    if (block.type === "divider") return "区切り";
+    if (block.type === "spacer") return "余白";
+    return block.type;
+  }
+
+  function sheetEditor(block, path) {
+    const rows = block.rows || [];
+    const widthInputs = (block.widths || []).map((width, index) => `<input data-sheet-width="${index}" type="number" min="8" max="80" value="${width}" aria-label="列${index + 1}の幅">`).join("");
+    const body = rows.map((row, r) => "<tr>" + (row.cells || []).map((cell, c) => {
+      if (!cell || cell.skip) return "";
+      const span = (cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : "") + (cell.colspan > 1 ? ` colspan="${cell.colspan}"` : "");
+      const tag = block.header && r === 0 ? "th" : "td";
+      return `<${tag}${span}><div contenteditable="true" data-sheet-cell="${r},${c}">${escapeText(cell.text || "")}</div></${tag}>`;
+    }).join("") + "</tr>").join("");
+    return `<div class="blk-sheet-edit"><div class="blk-sheet-tools"><button type="button" data-sheet-row="${escapeAttr(path)}">行+</button><button type="button" data-sheet-col="${escapeAttr(path)}">列+</button><button type="button" data-sheet-del-row="${escapeAttr(path)}">行-</button><button type="button" data-sheet-del-col="${escapeAttr(path)}">列-</button><button type="button" data-sheet-merge="${escapeAttr(path)}">結合</button><button type="button" data-sheet-unmerge="${escapeAttr(path)}">解除</button><label><input type="checkbox" data-sheet-header${block.header ? " checked" : ""}>見出し行</label></div><div class="blk-sheet-tools">${widthInputs}</div><div class="table-scroll"><table class="sheet"><tbody>${body}</tbody></table></div></div>`;
+  }
+
   function blockRow(block, path) {
     const kinds = [["text", "文章"], ["image", "画像"], ["list", "リスト"], ["column", "縦並び"], ["row", "横並び"], ["table", "表"], ["container", "囲み"], ["divider", "区切り"], ["spacer", "余白"]];
     const typeSelect = `<select data-block-type="${escapeAttr(path)}" aria-label="種類">${kinds.map(item => `<option value="${item[0]}"${block.type === item[0] ? " selected" : ""}>${item[1]}</option>`).join("")}</select>`;
-    const tools = `<div class="blk-tools"><button type="button" class="blk-handle" data-drag-block="${escapeAttr(path)}" aria-label="並べ替え">≡</button>${typeSelect}<button type="button" data-del-block="${escapeAttr(path)}">この部分を消す</button></div>`;
+    const depth = path ? path.split(".").length - 1 : 0;
+    const nest = block.type === "column" || block.type === "row" || block.type === "container" || block.type === "table";
+    const collapsed = !!collapsedBlocks[path];
+    const tools = `<div class="blk-tools">${nest ? `<button type="button" data-collapse-block="${escapeAttr(path)}" aria-label="折りたたむ">${collapsed ? "▸" : "▾"}</button>` : ""}<button type="button" class="blk-handle" data-drag-block="${escapeAttr(path)}" aria-label="並べ替え">≡</button>${typeSelect}<button type="button" data-del-block="${escapeAttr(path)}" aria-label="消す">✕</button>${collapsed ? `<span class="blk-summary">${escapeText(blockSummary(block))}</span>` : ""}</div>`;
     let body = "";
     if (block.type === "text") body = richBox(block.html, block.type);
     else if (block.type === "list") body = listField(block);
     else if (block.type === "image") body = imageField(block, false);
     else if (block.type === "divider" || block.type === "spacer") body = block.type === "spacer" ? `<div class="blk-layout"><label>高さ<input data-gap type="number" min="4" max="80" value="${block.size || 16}"></label></div>` : "<hr class=\"blk-divider\">";
-    else if (block.type === "column" || block.type === "row" || block.type === "container" || block.type === "table") {
+    else if (block.type === "table") body = sheetEditor(block, path);
+    else if (block.type === "column" || block.type === "row" || block.type === "container") {
       const children = block.children || [];
       body = layoutFields(block) + children.map((child, index) => blockRow(child, path + "." + index)).join("") + `<p class="blk-add">${addButtons(path)}</p>`;
-      if (block.type === "table") body += `<p class="blk-add"><button type="button" data-add-table-row="${escapeAttr(path)}">行を足す</button></p>`;
     }
-    return `<div class="blk-row" data-block-path="${escapeAttr(path)}">${tools}${body}</div>`;
+    return `<div class="blk-row${collapsed ? " is-collapsed" : ""}" data-block-path="${escapeAttr(path)}" style="margin-left:${depth * 10}px">${tools}${body}</div>`;
   }
 
   function paintBlocks() {
@@ -611,7 +724,10 @@
     if (type === "column") return { type: "column", gap: 8, children: [{ type: "text", html: "" }] };
     if (type === "row") return { type: "row", gap: 12, align: "start", justify: "start", wrap: true, children: [{ type: "text", html: "" }, { type: "text", html: "" }] };
     if (type === "container") return { type: "container", bg: "#fff6d8", border: "#e0b000", pad: 12, children: [{ type: "text", html: "" }] };
-    if (type === "table") return { type: "table", children: [{ type: "row", gap: 8, align: "stretch", children: [{ type: "text", html: "" }, { type: "text", html: "" }] }, { type: "row", gap: 8, align: "stretch", children: [{ type: "text", html: "" }, { type: "text", html: "" }] }] };
+    if (type === "table") return { type: "table", header: false, widths: [50, 50], rows: [{ cells: [{ text: "" }, { text: "" }] }, { cells: [{ text: "" }, { text: "" }] }] };
+    if (type === "table3") return { type: "table", header: true, widths: [34, 46, 20], rows: [{ cells: [{ text: "回" }, { text: "敵" }, { text: "数" }] }, { cells: [{ text: "1回戦", rowspan: 2 }, { text: "" }, { text: "" }] }, { cells: [{ skip: true }, { text: "" }, { text: "" }] }] };
+    if (type === "row2") return { type: "row", gap: 12, align: "start", justify: "start", wrap: true, children: [{ type: "column", gap: 8, children: [{ type: "text", html: "" }] }, { type: "column", gap: 8, children: [{ type: "text", html: "" }] }] };
+    if (type === "callout") return { type: "container", bg: "#fff6d8", border: "#e0b000", pad: 12, children: [{ type: "text", html: "" }] };
     if (type === "divider") return { type: "divider" };
     if (type === "spacer") return { type: "spacer", size: 16 };
     return { type: "text", html: "" };
@@ -896,6 +1012,30 @@
     }
     const add = event.target.closest("[data-add-block]");
     if (add) { insertBlock(add.getAttribute("data-add-block"), add.getAttribute("data-add-path")); return; }
+    const sheetCell = event.target.closest("[data-sheet-cell]");
+    if (sheetCell) {
+      const key = sheetCell.getAttribute("data-sheet-cell");
+      const box = sheetCell.closest(".blk-sheet-edit");
+      sheetSelection = event.shiftKey ? sheetSelection.concat(key) : [key];
+      if (box) box.querySelectorAll("[data-sheet-cell]").forEach(node => node.parentElement.classList.toggle("on", sheetSelection.indexOf(node.getAttribute("data-sheet-cell")) >= 0));
+      return;
+    }
+    const collapse = event.target.closest("[data-collapse-block]");
+    if (collapse) {
+      const key = collapse.getAttribute("data-collapse-block");
+      collapsedBlocks[key] = !collapsedBlocks[key];
+      syncBlocks();
+      paintBlocks();
+      return;
+    }
+    const sheet = event.target.closest("[data-sheet-row], [data-sheet-col], [data-sheet-del-row], [data-sheet-del-col], [data-sheet-merge], [data-sheet-unmerge]");
+    if (sheet && editing) {
+      syncBlocks();
+      const path = sheet.getAttribute("data-sheet-row") || sheet.getAttribute("data-sheet-col") || sheet.getAttribute("data-sheet-del-row") || sheet.getAttribute("data-sheet-del-col") || sheet.getAttribute("data-sheet-merge") || sheet.getAttribute("data-sheet-unmerge");
+      editSheet(path, sheet);
+      paintBlocks();
+      return;
+    }
     const addRow = event.target.closest("[data-add-table-row]");
     if (addRow && editing) {
       syncBlocks();
@@ -2550,7 +2690,7 @@
           if (targetIsChild || movingHasChildren || targetId === drag.id) {
             return { type: "blocked", id: targetId, element: card };
           }
-          return { type: "nest", id: targetId, element: card };
+          return { type: "nest", id: targetId, sectionId, element: card };
         }
         return { type: "card", id: targetId, after: ratio >= 0.5, unnest: draggedLeft, sectionId, element: card };
       }
@@ -2640,6 +2780,59 @@
       items: item.items || [],
       blocks: item.blocks && item.blocks.length ? item.blocks : GuideProgress.blocksFromDetail(item.detail)
     };
+  }
+
+  function commitNest(ids, targetId, sectionHint) {
+    const to = locate(targetId);
+    const from = locate(ids[0]);
+    if (!to || !from || to.kind !== "route") return;
+    const target = routeRecord(to.trackId, to.chapterId, targetId);
+    if (!target || target.parent || ids.indexOf(targetId) >= 0) return;
+    const sourceRow = (GuideProgress.mergeTrack(ROUTE, GAME.chapters[from.trackId] || [], book(), from.trackId) || []).find(item => item.chapterId === from.chapterId);
+    const destRow = (GuideProgress.mergeTrack(ROUTE, GAME.chapters[to.trackId] || [], book(), to.trackId) || []).find(item => item.chapterId === to.chapterId);
+    const sourceItems = sourceRow && sourceRow.items || [];
+    const same = from.trackId === to.trackId && from.chapterId === to.chapterId;
+    const sourceOrder = GuideApp.currentIds(from.trackId, from.chapterId);
+    const destOrder = same ? sourceOrder : GuideApp.currentIds(to.trackId, to.chapterId);
+    const plan = GuideProgress.groupMovePlan(sourceItems, ids, {
+      same,
+      sourceOrder,
+      destOrder,
+      extraItems: destRow && destRow.items || [],
+      beforeId: targetId,
+      after: true,
+      sectionId: sectionHint || target.section || "",
+      mode: "nest",
+      nestUnder: targetId
+    });
+    if (!plan.moving.length) return;
+    let next = book();
+    if (!same) {
+      next = GuideProgress.saveOrder(
+        next,
+        from.trackId + ":" + from.chapterId,
+        sourceOrder.filter(itemId => plan.moving.indexOf(itemId) < 0),
+        GuideApp.baseItems(from.trackId, from.chapterId).map(item => item.id)
+      );
+    }
+    const known = GuideApp.baseItems(to.trackId, to.chapterId).map(item => item.id);
+    plan.moving.forEach(itemId => {
+      const item = sourceItems.find(entry => entry.id === itemId);
+      if (!item) return;
+      if (next.custom[itemId] && next.custom[itemId].kind === "route") {
+        next.custom[itemId].trackId = to.trackId;
+        next.custom[itemId].chapterId = to.chapterId;
+      }
+      const base = GuideApp.findBaseRoute(itemId);
+      next = GuideProgress.upsertRouteCard(
+        next, base && base.item, itemId,
+        cardFields(Object.assign({}, item, { section: plan.sections[itemId] || "" }), plan.parents[itemId] || ""),
+        to.trackId, to.chapterId, plan.order, known
+      );
+    });
+    clearSelect();
+    GuideApp.setCardBook(next, "入れ子");
+    revealCard(to.trackId, to.chapterId, targetId);
   }
 
   function nestGroup(ids, targetId) {
@@ -2858,7 +3051,7 @@
     }
     if (current.ids && current.ids.length > 1 && from.kind === "route") {
       if (target.type === "nest") {
-        nestGroup(current.ids, target.id);
+        commitNest(current.ids, target.id, target.sectionId || "");
         return;
       }
       commitGroup(current, current.ids);
@@ -2866,7 +3059,7 @@
     }
     if (target.type === "blocked") return;
     if (target.type === "nest" && from.kind === "route") {
-      nestRoute(id, from, target.id);
+      commitNest(current.ids && current.ids.length ? current.ids : [id], target.id, target.sectionId || "");
       return;
     }
     if (target.type === "card") {
