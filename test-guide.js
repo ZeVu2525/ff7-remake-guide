@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v43");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v44");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -885,6 +885,79 @@ function mockFetch(handler) {
     return { ok: hit.status < 300, status: hit.status, text: async () => JSON.stringify(hit.body) };
   };
 }
+const fs = require("fs");
+const legacyBook = progress.normalizeCardBook({
+  achieveTags: ["trophy", "item", "deadline", "missable"],
+  places: { "いちばんがい": { name: "壱番街", usedAt: 5 } },
+  patches: {
+    "ch01-02": {
+      location: "壱番街",
+      items: [{ name: "ポーション" }, { id: "cons-001", qty: 2 }],
+      flags: ["item", "story"],
+      blocks: [
+        { type: "callout", html: "古い囲み" },
+        { type: "columns", arrow: true, count: 2, widths: [50, 50], columns: [[{ type: "text", html: "左の手順" }], [{ type: "text", html: "右の手順" }]] },
+        { type: "tiles", items: [{ src: "maps/01.png", label: "入口" }] },
+        { type: "text", get html() { throw new Error("bad block"); } }
+      ]
+    }
+  },
+  custom: {
+    "user-legacy-card": {
+      kind: "route",
+      trackId: "main",
+      chapterId: "ch01",
+      title: "入手(1)〜(400000)",
+      detail: "古い詳細",
+      flag: "item",
+      section: "ch01-sec-1",
+      location: "壱番街",
+      blocks: [{ type: "callout", html: "<b>レガシー</b>" }]
+    },
+    "user-broken-card": {
+      kind: "route",
+      trackId: "main",
+      chapterId: "ch01",
+      flag: "story",
+      get title() { throw new Error("bad card"); }
+    }
+  }
+});
+assert.strictEqual(legacyBook.achieveTags.indexOf("item") >= 0, true);
+assert.ok(legacyBook.places[progress.placeKey("壱番街")]);
+assert.ok(!JSON.stringify(legacyBook.patches["ch01-02"].blocks).includes('"callout"'));
+assert.ok(legacyBook.patches["ch01-02"].blocks.some(block => block.type === "container"));
+assert.ok(legacyBook.patches["ch01-02"].blocks.some(block => block.type === "row"));
+assert.strictEqual(legacyBook.custom["user-broken-card"].title, "このカードを表示できません。");
+const started = Date.now();
+const legacyRoute = progress.mergeTrack(guide.ROUTE, guide.GAME.chapters.main, legacyBook, "main");
+const first = legacyRoute.find(chapter => chapter.chapterId === "ch01");
+assert.ok(first.items.some(item => item.id === "ch01-02" && item.location === "壱番街"));
+assert.ok(first.items.some(item => item.id === "user-legacy-card"));
+assert.ok(first.items.some(item => item.id === "user-broken-card" && item.title === "このカードを表示できません。"));
+const headings = progress.templateHeadings(progress.displayItems(first.items, first.sections), progress.DEFAULT_TEMPLATES);
+assert.ok(headings);
+const pageHtml = first.items.map(item => progress.blockHtml(item.blocks && item.blocks.length ? item.blocks : progress.blocksFromDetail(item.detail))).join("\n");
+assert.ok(pageHtml.includes("古い囲み"));
+assert.ok(pageHtml.includes("左の手順"));
+assert.ok(pageHtml.includes("レガシー"));
+assert.ok(pageHtml.includes("ソルジャーの肩慣らし"));
+assert.ok(first.items.length > 20);
+assert.ok(Date.now() - started < 2000);
+const sw = fs.readFileSync("sw.js", "utf8");
+const activate = sw.slice(sw.indexOf('addEventListener("activate"'), sw.indexOf('addEventListener("message"'));
+assert.ok(activate.includes("clients.claim"));
+assert.ok(!activate.includes("client.navigate"));
+assert.ok(sw.includes("client.navigate"));
+assert.ok(sw.includes("ff7r-sw"));
+const boot = fs.readFileSync("index.html", "utf8");
+assert.ok(boot.includes("ff7rShowBootError"));
+assert.ok(boot.includes("キャッシュを消して読み直す"));
+assert.ok(boot.includes("caches.delete"));
+assert.ok(boot.includes("unregister"));
+assert.ok(!boot.includes("localStorage.clear"));
+assert.ok(!boot.includes("localStorage.removeItem"));
+
 (async () => {
   const denied = await progress.githubTest(mockFetch(async () => ({ status: 200, body: { permissions: { push: false }, full_name: "ZeVu2525/ff7-remake-guide" } })), "secret-token", "ZeVu2525", "ff7-remake-guide");
   assert.strictEqual(denied.push, false);

@@ -1,6 +1,6 @@
 /* 版は data/game.js の GAME.cache と同じ文字列にする。importScripts は使わない。
    古いサービスワーカーが data/game.js を横取りすると、新しい戦略まで古い版に戻る。 */
-const CACHE = "ff7r-guide-v43";
+const CACHE = "ff7r-guide-v44";
 const CORE = [
   "./",
   "./index.html",
@@ -43,23 +43,26 @@ self.addEventListener("activate", event => {
     await self.clients.claim();
     if (!old.length) return;
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    await Promise.all(windows.map(async client => {
-      if (typeof client.navigate === "function") {
-        try {
-          const next = new URL(client.url);
-          next.searchParams.set("ff7r-sw", CACHE);
-          await client.navigate(next.href);
-          return;
-        } catch (error) {}
-      }
-      client.postMessage({ type: "ff7r-reload" });
-    }));
+    windows.forEach(client => client.postMessage({ type: "ff7r-reload" }));
   })());
 });
 
 self.addEventListener("message", event => {
   if (event.data && event.data.type === "ff7r-skip-waiting") self.skipWaiting();
+  if (event.data && event.data.type === "ff7r-refresh" && event.source) refreshClient(event.source);
 });
+
+async function refreshClient(client) {
+  if (typeof client.navigate === "function") {
+    try {
+      const next = new URL(client.url);
+      next.searchParams.set("ff7r-sw", CACHE);
+      await client.navigate(next.href);
+      return;
+    } catch (error) {}
+  }
+  client.postMessage({ type: "ff7r-reload" });
+}
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;

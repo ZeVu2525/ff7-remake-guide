@@ -107,6 +107,9 @@ h1 span{display:block;margin-top:2px;color:#a9bfd0;font-size:13px;font-weight:60
 .dash.ok .big2{color:var(--green)}
 .dash.danger .big2{color:var(--red)}
 .dash .hint{margin-left:auto;color:var(--fg3);font-size:14px}
+.boot-error{margin:0;padding:16px;background:var(--redbg);color:var(--fg);border-bottom:1px solid var(--redline)}
+.boot-error p{margin:0 0 10px;font-weight:700}
+.boot-error button{min-height:44px;padding:8px 14px;border:0;border-radius:8px;background:var(--nav);color:#fff;font:inherit;font-weight:700;cursor:pointer}
 main{padding:22px 16px 88px}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
 .track-switch,.flag-switch{display:flex;flex-wrap:wrap;gap:8px;width:100%}
@@ -484,6 +487,50 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
   <button type="button" id="edit-redo" class="edit-hist" aria-label="やり直す" hidden disabled>↷</button>
 </div>
 <button class="dash ok" id="dash" type="button">読み込み中</button>
+<div id="boot-error" class="boot-error" hidden>
+  <p id="boot-error-text">画面を開けませんでした。進行と編集はこのブラウザに残したまま、表示用のキャッシュだけ消して読み直します。</p>
+  <button type="button" id="boot-reset">キャッシュを消して読み直す</button>
+</div>
+<script>
+(function () {
+  function showBootError(message) {
+    var dash = document.getElementById("dash");
+    if (dash) dash.hidden = true;
+    var box = document.getElementById("boot-error");
+    if (!box) return;
+    box.hidden = false;
+    var text = document.getElementById("boot-error-text");
+    if (text && message) text.textContent = message;
+  }
+  window.ff7rShowBootError = showBootError;
+  window.addEventListener("error", function () {
+    var dash = document.getElementById("dash");
+    if (dash && !dash.hidden && dash.textContent.indexOf("読み込み中") >= 0) showBootError();
+  });
+  window.setTimeout(function () {
+    var dash = document.getElementById("dash");
+    if (dash && !dash.hidden && dash.textContent.replace(/\s/g, "") === "読み込み中") showBootError();
+  }, 12000);
+  document.addEventListener("click", function (event) {
+    var button = event.target && event.target.closest && event.target.closest("#boot-reset");
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    var done = function () { location.reload(); };
+    var jobs = [];
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      jobs.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+        return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+      }));
+    }
+    if (window.caches && caches.keys) {
+      jobs.push(caches.keys().then(function (keys) {
+        return Promise.all(keys.filter(function (key) { return key.indexOf("ff7r-") === 0; }).map(function (key) { return caches.delete(key); }));
+      }));
+    }
+    Promise.all(jobs).then(done, done);
+  });
+})();
+</script>
 <div id="howto" class="howto" hidden>
   <div class="howto-card" role="dialog" aria-modal="true" aria-labelledby="howto-title">
     <div class="howto-bar"><h2 id="howto-title">使い方</h2><button type="button" id="howto-close" class="ghost">閉じる</button></div>
@@ -524,19 +571,19 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <footer>
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v43"></script>
-<script src="data/route.js?v=ff7r-guide-v43"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v43"></script>
-<script src="data/maps.js?v=ff7r-guide-v43"></script>
-<script src="data/templates.js?v=ff7r-guide-v43"></script>
-<script src="data/settings.js?v=ff7r-guide-v43"></script>
-<script src="data/images.js?v=ff7r-guide-v43"></script>
-<script src="data/enemies.js?v=ff7r-guide-v43"></script>
-<script src="zip-store.js?v=ff7r-guide-v43"></script>
-<script src="progress.js?v=ff7r-guide-v43"></script>
-<script src="image-library.js?v=ff7r-guide-v43"></script>
-<script src="app.js?v=ff7r-guide-v43"></script>
-<script src="edit-mode.js?v=ff7r-guide-v43"></script>
-<script src="card-edit.js?v=ff7r-guide-v43"></script>
+<script src="data/game.js?v=ff7r-guide-v44"></script>
+<script src="data/route.js?v=ff7r-guide-v44"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v44"></script>
+<script src="data/maps.js?v=ff7r-guide-v44"></script>
+<script src="data/templates.js?v=ff7r-guide-v44"></script>
+<script src="data/settings.js?v=ff7r-guide-v44"></script>
+<script src="data/images.js?v=ff7r-guide-v44"></script>
+<script src="data/enemies.js?v=ff7r-guide-v44"></script>
+<script src="zip-store.js?v=ff7r-guide-v44"></script>
+<script src="progress.js?v=ff7r-guide-v44"></script>
+<script src="image-library.js?v=ff7r-guide-v44"></script>
+<script src="app.js?v=ff7r-guide-v44"></script>
+<script src="edit-mode.js?v=ff7r-guide-v44"></script>
+<script src="card-edit.js?v=ff7r-guide-v44"></script>
 </body>
 </html>
