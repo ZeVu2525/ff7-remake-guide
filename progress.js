@@ -2010,7 +2010,7 @@
     const librarySrc = normalizeLibraryKey(block.src);
     const library = isLibraryKey(librarySrc);
     const image = library
-      ? '<button type="button" class="blk-zoom" data-zoom-src="' + escapeRichText(librarySrc) + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img data-lib="' + escapeRichText(librarySrc) + '" alt="' + (caption || "画像が未登録") + '" decoding="async"></button>'
+      ? '<button type="button" class="blk-zoom" data-zoom-src="' + escapeRichText(librarySrc) + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img data-lib="' + escapeRichText(librarySrc) + '" alt="' + (caption || "画像が未登録") + '" loading="lazy" decoding="async"></button>'
       : '<button type="button" class="blk-zoom" data-zoom-src="' + src + '" data-zoom-label="' + (caption || escapeRichText(block.label || "")) + '"><img src="' + src + '" alt="' + (caption || escapeRichText(block.label || "")) + '" loading="lazy" decoding="async"></button>';
     if (bare) return image;
     return '<figure class="blk-img w-' + width + " align-" + align + '" data-bpath="' + path + '"' + pct + ">" + image + '<i class="blk-resize" data-bpath="' + path + '"></i>' + (caption ? "<figcaption>" + caption + "</figcaption>" : "") + "</figure>";

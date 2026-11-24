@@ -151,6 +151,7 @@ section.ch.closed .chb{display:none}
 .cnt.done{color:var(--green);font-weight:800}
 .chb{border-top:1px solid var(--line)}
 .it{position:relative;display:flex;gap:12px;align-items:flex-start;padding:14px;border-bottom:1px solid var(--line)}
+body:not(.is-card-edit) .it{content-visibility:auto;contain-intrinsic-size:auto 148px}
 .it.flag-tips{background:#e5f4ff}
 html[data-theme="dark"] .it.flag-tips,html[data-theme="accent"] .it.flag-tips{background:#14384a}
 .hint-mark{display:inline-flex;align-items:center;margin-right:4px;padding:1px 6px;border-radius:99px;background:#1677a8;color:#fff;font-size:12px;font-weight:700}
@@ -571,19 +572,23 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <footer>
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v44"></script>
-<script src="data/route.js?v=ff7r-guide-v44"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v44"></script>
-<script src="data/maps.js?v=ff7r-guide-v44"></script>
-<script src="data/templates.js?v=ff7r-guide-v44"></script>
-<script src="data/settings.js?v=ff7r-guide-v44"></script>
-<script src="data/images.js?v=ff7r-guide-v44"></script>
-<script src="data/enemies.js?v=ff7r-guide-v44"></script>
-<script src="zip-store.js?v=ff7r-guide-v44"></script>
-<script src="progress.js?v=ff7r-guide-v44"></script>
-<script src="image-library.js?v=ff7r-guide-v44"></script>
-<script src="app.js?v=ff7r-guide-v44"></script>
-<script src="edit-mode.js?v=ff7r-guide-v44"></script>
-<script src="card-edit.js?v=ff7r-guide-v44"></script>
+<script src="data/game.js?v=ff7r-guide-v45"></script>
+<script src="data/route.js?v=ff7r-guide-v45"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v45"></script>
+<script src="data/maps.js?v=ff7r-guide-v45"></script>
+<script src="data/templates.js?v=ff7r-guide-v45"></script>
+<script src="data/settings.js?v=ff7r-guide-v45"></script>
+<script src="data/images.js?v=ff7r-guide-v45"></script>
+<script src="zip-store.js?v=ff7r-guide-v45"></script>
+<script src="progress.js?v=ff7r-guide-v45"></script>
+<script src="image-library.js?v=ff7r-guide-v45"></script>
+<script>
+window.FF7R_LAZY = {
+  enemies: "data/enemies.js?v=ff7r-guide-v45",
+  edit: "edit-mode.js?v=ff7r-guide-v45",
+  cards: "card-edit.js?v=ff7r-guide-v45"
+};
+</script>
+<script src="app.js?v=ff7r-guide-v45"></script>
 </body>
 </html>

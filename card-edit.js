@@ -77,6 +77,8 @@
     ".blk-sheet-edit [data-sheet-cell]{min-height:1.4em;outline:none}",
     ".blk-sheet-tools{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0}",
     ".blk-sheet-tools button,.blk-sheet-tools label{min-height:24px;padding:0 6px;font-size:11px}",
+    ".blk-size{display:inline-flex;gap:4px;align-items:center;margin-left:6px;font-size:12px}",
+    ".blk-size input{width:3.2em;min-height:24px;padding:0 4px}",
     ".blk-tools{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
     ".blk-handle{touch-action:none;cursor:grab}",
     ".blk-tools button,.blk-add button,.rt-bar button{min-height:28px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:inherit;font-size:12px;line-height:1.3;cursor:pointer}",
@@ -553,7 +555,7 @@
   }
 
   function addButtons(path) {
-    const kinds = [["text", "文章"], ["image", "画像"], ["list", "リスト"], ["column", "縦並び"], ["row2", "横2列"], ["table3", "表（3列）"], ["table", "表"], ["callout", "囲み文"], ["divider", "区切り"], ["spacer", "余白"]];
+    const kinds = [["text", "文章"], ["image", "画像"], ["list", "リスト"], ["column", "縦並び"], ["row", "横並び"], ["table", "表"], ["callout", "囲み文"], ["divider", "区切り"], ["spacer", "余白"]];
     return kinds.map(item => `<button type="button" data-add-block="${item[0]}" data-add-path="${escapeAttr(path)}">${item[1]}</button>`).join("");
   }
 
@@ -724,7 +726,7 @@
     if (type === "column") return { type: "column", gap: 8, children: [{ type: "text", html: "" }] };
     if (type === "row") return { type: "row", gap: 12, align: "start", justify: "start", wrap: true, children: [{ type: "text", html: "" }, { type: "text", html: "" }] };
     if (type === "container") return { type: "container", bg: "#fff6d8", border: "#e0b000", pad: 12, children: [{ type: "text", html: "" }] };
-    if (type === "table") return { type: "table", header: false, widths: [50, 50], rows: [{ cells: [{ text: "" }, { text: "" }] }, { cells: [{ text: "" }, { text: "" }] }] };
+    if (type === "table") return makeTable(3, 3);
     if (type === "table3") return { type: "table", header: true, widths: [34, 46, 20], rows: [{ cells: [{ text: "回" }, { text: "敵" }, { text: "数" }] }, { cells: [{ text: "1回戦", rowspan: 2 }, { text: "" }, { text: "" }] }, { cells: [{ skip: true }, { text: "" }, { text: "" }] }] };
     if (type === "row2") return { type: "row", gap: 12, align: "start", justify: "start", wrap: true, children: [{ type: "column", gap: 8, children: [{ type: "text", html: "" }] }, { type: "column", gap: 8, children: [{ type: "text", html: "" }] }] };
     if (type === "callout") return { type: "container", bg: "#fff6d8", border: "#e0b000", pad: 12, children: [{ type: "text", html: "" }] };
@@ -733,7 +735,34 @@
     return { type: "text", html: "" };
   }
 
+  function makeTable(rows, cols) {
+    const height = Math.max(1, Math.min(12, rows || 3));
+    const width = Math.max(1, Math.min(8, cols || 3));
+    return {
+      type: "table",
+      header: false,
+      widths: Array.from({ length: width }, () => Math.round(100 / width)),
+      rows: Array.from({ length: height }, () => ({ cells: Array.from({ length: width }, () => ({ text: "" })) }))
+    };
+  }
+
+  function showTablePrompt(path) {
+    const button = document.querySelector('[data-add-block="table"][data-add-path="' + path + '"]');
+    const bar = button && button.parentElement;
+    if (!bar || bar.querySelector("[data-make-table]")) return;
+    const line = document.createElement("span");
+    line.className = "blk-size";
+    line.innerHTML = '行 <input type="number" min="1" max="12" value="3" data-table-rows> 列 <input type="number" min="1" max="8" value="3" data-table-cols> <button type="button" data-make-table="' + escapeAttr(path) + '">作る</button>';
+    bar.appendChild(line);
+    const field = line.querySelector("[data-table-rows]");
+    if (field) field.focus();
+  }
+
   function insertBlock(type, path) {
+    if (type === "table") {
+      showTablePrompt(path);
+      return;
+    }
     syncBlocks();
     const block = makeBlock(type);
     if (!path) editing.blocks.push(block);
@@ -1008,6 +1037,23 @@
       event.preventDefault();
       applyRich(rt.closest(".rt-wrap").querySelector(".rt-edit"), rt.getAttribute("data-rt"), rt.getAttribute("data-rt-value") || "");
       closeRichMenus(fields);
+      return;
+    }
+    const makeTableButton = event.target.closest("[data-make-table]");
+    if (makeTableButton) {
+      const box = makeTableButton.parentElement;
+      const rows = Math.round(Number(box.querySelector("[data-table-rows]").value) || 3);
+      const cols = Math.round(Number(box.querySelector("[data-table-cols]").value) || 3);
+      syncBlocks();
+      const block = makeTable(rows, cols);
+      const path = makeTableButton.getAttribute("data-make-table");
+      if (!path) editing.blocks.push(block);
+      else {
+        const parent = blockAt(path);
+        if (!parent || !Array.isArray(parent.children)) return;
+        parent.children.push(block);
+      }
+      paintBlocks();
       return;
     }
     const add = event.target.closest("[data-add-block]");
@@ -3854,6 +3900,7 @@
     const params = new URL(location.href).searchParams;
     if (params.get("cards") === "1" || params.get("edit") === "1") start = true;
   } catch (e) {}
+  if (footerToggle && footerToggle.checked) start = true;
   paintToggle();
   if (start) setOn(true);
 })();

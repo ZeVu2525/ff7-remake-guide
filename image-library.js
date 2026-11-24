@@ -295,6 +295,17 @@
     urls.clear();
   }
 
+  function releaseUnused() {
+    const live = new Set();
+    document.querySelectorAll("[data-lib]").forEach(node => {
+      const key = resolve(node.getAttribute("data-lib"));
+      if (key) live.add(key);
+    });
+    Array.from(urls.keys()).forEach(key => {
+      if (!live.has(key)) revoke(key);
+    });
+  }
+
   async function remove(id) {
     const key = resolve(id);
     await withStore(FILES, "readwrite", store => store.delete(key));
@@ -392,7 +403,7 @@
   }
 
   globalThis.GuideImages = {
-    putFile, getRecord, objectUrl, revoke, revokeAll, remove, rename, move, list, usage, allBlobs, isKey, hydrate, safeName,
+    putFile, getRecord, objectUrl, revoke, revokeAll, releaseUnused, remove, rename, move, list, usage, allBlobs, isKey, hydrate, safeName,
     folders, createFolder, renameFolder, deleteFolder, moveFolder, ensurePath, ensureFolders, resolve, makeKey
   };
 })();
