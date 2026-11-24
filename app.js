@@ -326,6 +326,9 @@
     const track = GAME.tracks.find(item => item.id === ui.trackId);
     const trackLabel = track ? track.label : "";
     const dash = document.getElementById("dash");
+    const bootError = document.getElementById("boot-error");
+    if (bootError) bootError.hidden = true;
+    dash.hidden = false;
     dash.className = "dash " + (summary.openBand ? "danger" : "ok");
     dash.innerHTML = summary.openBand
       ? `<span class="big2">${summary.openBand}</span><span><b>期限・取り逃し</b>が${esc(trackLabel)}に残っている</span><span class="hint">帯を押すと、そのカードだけを表示</span>`
@@ -456,8 +459,13 @@
     const collapsed = ui.collapsed[item.id] === true;
     const kids = ((kidsMap && kidsMap[item.id]) || []).filter(child => child && !guard.has(child.id));
     const kidsOpen = ui.collapsed["kids:" + item.id] !== true;
-    const childOpen = (function walk(list) {
-      return (list || []).some(child => ui.collapsed[child.id] !== true || walk((kidsMap && kidsMap[child.id]) || []));
+    const childOpen = (function walk(list, seen) {
+      const guardWalk = seen || new Set();
+      return (list || []).some(child => {
+        if (!child || guardWalk.has(child.id)) return false;
+        guardWalk.add(child.id);
+        return ui.collapsed[child.id] !== true || walk((kidsMap && kidsMap[child.id]) || [], guardWalk);
+      });
     })(kids);
     const questLink = item.quest ? `<button type="button" class="linkish" data-open-quest="${esc(item.quest)}">依頼の詳細</button>` : "";
     const flags = GuideProgress.cardFlags(item);
@@ -483,7 +491,7 @@
           ${sourceLine(item.source)}
           ${cardTools(item)}
         </div>
-        ${kids.length ? `<div class="kids-wrap"><div class="kids-bar"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）"><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><button type="button" class="kids-fold" data-fold-kids="${esc(item.id)}" title="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}" aria-label="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}">${childOpen ? "⊟" : "⊞"}</button></div><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard)).join("")}</div></div></div>` : ""}
+        ${kids.length ? `<div class="kids-wrap"><div class="kids-bar"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）"><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><button type="button" class="kids-fold" data-fold-kids="${esc(item.id)}" title="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}" aria-label="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}">${childOpen ? "⊟" : "⊞"}</button></div><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => { try { return routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard); } catch (error) { return brokenCard(child); } }).join("")}</div></div></div>` : ""}
       </div>
     </article>`;
   }
@@ -531,10 +539,18 @@
     return { html, visible, numbers: {} };
   }
 
+  function brokenCard(item) {
+    return `<article class="it is-broken" data-id="${esc(item && item.id || "")}"><div class="ibody"><p class="card-broken">このカードを表示できません。</p></div></article>`;
+  }
+
   function cardBody(item) {
-    const blocks = item.blocks && item.blocks.length ? item.blocks : GuideProgress.blocksFromDetail(item.detail);
-    const html = GuideProgress.blockHtml(blocks);
-    return html ? `<div class="blocks">${html}</div>` : "";
+    try {
+      const blocks = item.blocks && item.blocks.length ? item.blocks : GuideProgress.blocksFromDetail(item.detail);
+      const html = GuideProgress.blockHtml(blocks);
+      return html ? `<div class="blocks">${html}</div>` : "";
+    } catch (error) {
+      return '<p class="card-broken">このカードを表示できません。</p>';
+    }
   }
 
   function shownMap(item, section) {
@@ -581,7 +597,13 @@
       walk(node);
       return routeCard(node.item, numbers[node.item.id], numbers, headings, section, nested, new Set());
     };
-    const html = tops.map(branch).filter(Boolean).map(paint).join("");
+    const html = tops.map(branch).filter(Boolean).map(node => {
+      try {
+        return paint(node);
+      } catch (error) {
+        return brokenCard(node && node.item);
+      }
+    }).join("");
     return { html, visible, numbers };
   }
 
@@ -668,7 +690,12 @@
   }
 
   function chapterBodyHtml(chapter) {
-    const built = chapterBlocks(chapter.items, chapter.sections, chapter.id);
+    let built;
+    try {
+      built = chapterBlocks(chapter.items, chapter.sections, chapter.id);
+    } catch (error) {
+      return { html: '<p class="card-broken">この章を表示できません。</p>', visible: 0 };
+    }
     const tools = cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">${esc(L("addCard"))}</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">${esc(L("addSection"))}</button><button type="button" data-move-selected="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}"${GuideSelect.size ? "" : " disabled"}>${esc(L("moveSelected"))}</button></p>` : "";
     return { html: tools + (built.html || '<p class="empty-chapter">項目はまだありません。</p>'), visible: built.visible };
   }
@@ -720,6 +747,17 @@
   }
 
   function renderRoute() {
+    try {
+      renderRouteBody();
+    } catch (error) {
+      const host = document.getElementById("route");
+      const dash = document.getElementById("dash");
+      if (host && (!dash || dash.textContent.indexOf("読み込み中") >= 0)) host.innerHTML = '<p class="card-broken">この進行を表示できません。</p>';
+      if (dash && dash.textContent.indexOf("読み込み中") >= 0 && window.ff7rShowBootError) window.ff7rShowBootError();
+    }
+  }
+
+  function renderRouteBody() {
     const chapters = chaptersFor(ui.trackId);
     if (ui.chapterId && !chapters.some(chapter => chapter.id === ui.chapterId)) ui.chapterId = "";
     const shown = ui.chapterId ? chapters.filter(chapter => chapter.id === ui.chapterId) : chapters;
@@ -2660,6 +2698,7 @@
     }
   });
 
+  try {
   state.checks = GuideProgress.reconcileChecks(state.checks, trophyMeta());
   renderHeader();
   let savedTheme = GAME.themes[0].id;
@@ -2681,6 +2720,9 @@
     document.getElementById("progress-toast").hidden = true;
   });
   showHub(ui.hub);
+  } catch (error) {
+    if (window.ff7rShowBootError) window.ff7rShowBootError();
+  }
   window.addEventListener("pagehide", () => {
     tabScroll[ui.hub] = window.scrollY || document.documentElement.scrollTop || 0;
     rememberTabScroll();

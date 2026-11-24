@@ -256,6 +256,7 @@
       if (src.deleted[id] === true) book.deleted[id] = true;
     }
     for (const id of Object.keys(asObject(src.patches))) {
+      try {
       const patch = {};
       const raw = asObject(src.patches[id]);
       for (const key of ["title", "detail", "flag", "deadline", "source", "trophy", "name", "area", "map", "parent", "quest", "section", "template", "location"]) {
@@ -271,8 +272,10 @@
       if (typeof raw.enemyNote === "string") patch.enemyNote = raw.enemyNote;
       if (typeof raw.enemyImage === "string") patch.enemyImage = raw.enemyImage;
       if (Object.keys(patch).length) book.patches[id] = patch;
+      } catch (error) {}
     }
     for (const id of Object.keys(asObject(src.custom))) {
+      try {
       const raw = asObject(src.custom[id]);
       if (raw.kind !== "route" && raw.kind !== "catalog") continue;
       const card = { kind: raw.kind, id };
@@ -302,6 +305,21 @@
         if (raw.auto === "rest") card.auto = "rest";
       }
       book.custom[id] = card;
+      } catch (error) {
+        const failed = asObject(src.custom[id]);
+        book.custom[id] = {
+          kind: failed.kind === "catalog" ? "catalog" : "route",
+          id: id,
+          trackId: typeof failed.trackId === "string" ? failed.trackId : "",
+          chapterId: typeof failed.chapterId === "string" ? failed.chapterId : "",
+          catalogId: typeof failed.catalogId === "string" ? failed.catalogId : "",
+          title: "このカードを表示できません。",
+          name: "このカードを表示できません。",
+          detail: "",
+          flag: "story",
+          flags: ["story"]
+        };
+      }
     }
     for (const key of Object.keys(asObject(src.chapters))) {
       const raw = asObject(src.chapters[key]);
@@ -644,7 +662,13 @@
         chapterId: chapter.id,
         title: chapter.title || "",
         sections: resolveSections(baseRow, safeBook, trackId, chapter.id),
-        items: ids.map(id => resolveRouteCard(id, routeIndex, safeBook)).filter(Boolean)
+        items: ids.map(id => {
+          try {
+            return resolveRouteCard(id, routeIndex, safeBook);
+          } catch (error) {
+            return { id: id, flag: "story", title: "このカードを表示できません。", detail: "", source: "" };
+          }
+        }).filter(Boolean)
       };
     });
   }
@@ -1108,7 +1132,8 @@
       if (!start || !end) break;
       const low = Math.min(start, end);
       const high = Math.max(start, end);
-      for (let n = low; n <= high; n += 1) nums.push(n);
+      for (let n = low; n <= high && nums.length < 24; n += 1) nums.push(n);
+      if (!match[0]) break;
       rest = rest.slice(match[0].length);
     }
     return nums;
@@ -1133,7 +1158,7 @@
       for (const template of list) {
         const nums = numbersFromTitle(title, template.label);
         if (!nums.length) continue;
-        used[template.label] = Math.max(used[template.label] || 0, Math.max.apply(null, nums));
+        used[template.label] = Math.max(used[template.label] || 0, nums.reduce((max, n) => Math.max(max, n), 0));
         break;
       }
     }
@@ -1634,7 +1659,7 @@
     }
     const rows = (source || []).map(row => ({ cells: (row.cells || []).map(tableCell).slice(0, 8) })).filter(row => row.cells.length).slice(0, 24);
     const safeRows = rows.length ? rows : [{ cells: [{ text: "" }, { text: "" }] }];
-    const widthCount = Math.max.apply(null, safeRows.map(row => row.cells.length));
+    const widthCount = safeRows.reduce((max, row) => Math.max(max, row.cells.length), 1);
     let widths = Array.isArray(block.widths) ? block.widths.map(n => Number(n)).filter(n => n > 0).slice(0, widthCount) : [];
     if (widths.length !== widthCount) widths = Array.from({ length: widthCount }, () => Math.round(100 / widthCount));
     return { type: "table", header: block.header === true, widths: widths, rows: safeRows };
@@ -1659,6 +1684,14 @@
   }
 
   function normalizeBlock(block, depth) {
+    try {
+      return normalizeOneBlock(block, depth);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function normalizeOneBlock(block, depth) {
     if (!block || typeof block !== "object") return null;
     const level = depth || 0;
     if (level > 8) return null;
@@ -1912,7 +1945,13 @@
   }
 
   function blockHtml(blocks) {
-    return normalizeBlocks(blocks).map((block, index) => renderBlock(block, String(index))).join("");
+    return normalizeBlocks(blocks).map((block, index) => {
+      try {
+        return renderBlock(block, String(index));
+      } catch (error) {
+        return '<p class="card-broken">この部分を表示できません。</p>';
+      }
+    }).join("");
   }
 
   function listColumns(items, count) {
