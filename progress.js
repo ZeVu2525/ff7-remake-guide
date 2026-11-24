@@ -1662,7 +1662,287 @@
     const widthCount = safeRows.reduce((max, row) => Math.max(max, row.cells.length), 1);
     let widths = Array.isArray(block.widths) ? block.widths.map(n => Number(n)).filter(n => n > 0).slice(0, widthCount) : [];
     if (widths.length !== widthCount) widths = Array.from({ length: widthCount }, () => Math.round(100 / widthCount));
-    return { type: "table", header: block.header === true, widths: widths, rows: safeRows };
+    const heights = safeRows.map((_, index) => {
+      const value = Math.round(Number(block.heights && block.heights[index]) || 0);
+      return value >= 18 ? Math.min(280, value) : 0;
+    });
+    return { type: "table", header: block.header === true, widths: widths, heights: heights, rows: safeRows };
+  }
+
+  function sheetColumnCount(table) {
+    return (table.rows || []).reduce((max, row) => Math.max(max, (row.cells || []).length), 0);
+  }
+
+  function sheetMergeCovering(table, r, c) {
+    const rows = table.rows || [];
+    for (let rr = 0; rr < rows.length; rr += 1) {
+      const cells = (rows[rr] && rows[rr].cells) || [];
+      for (let cc = 0; cc < cells.length; cc += 1) {
+        const cell = cells[cc];
+        if (!cell || cell.skip) continue;
+        const rs = cell.rowspan || 1;
+        const cs = cell.colspan || 1;
+        if (r >= rr && r < rr + rs && c >= cc && c < cc + cs) return { r: rr, c: cc, rs: rs, cs: cs, cell: cell };
+      }
+    }
+    return null;
+  }
+
+  function expandSheetRange(table, r0, c0, r1, c1) {
+    let top = Math.min(r0, r1);
+    let bottom = Math.max(r0, r1);
+    let left = Math.min(c0, c1);
+    let right = Math.max(c0, c1);
+    const rows = (table.rows || []).length;
+    const cols = sheetColumnCount(table);
+    top = Math.max(0, Math.min(top, rows - 1));
+    bottom = Math.max(0, Math.min(bottom, rows - 1));
+    left = Math.max(0, Math.min(left, cols - 1));
+    right = Math.max(0, Math.min(right, cols - 1));
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (let r = top; r <= bottom; r += 1) {
+        for (let c = left; c <= right; c += 1) {
+          const hit = sheetMergeCovering(table, r, c);
+          if (!hit) continue;
+          const nextTop = Math.min(top, hit.r);
+          const nextBottom = Math.max(bottom, hit.r + hit.rs - 1);
+          const nextLeft = Math.min(left, hit.c);
+          const nextRight = Math.max(right, hit.c + hit.cs - 1);
+          if (nextTop !== top || nextBottom !== bottom || nextLeft !== left || nextRight !== right) {
+            top = nextTop;
+            bottom = nextBottom;
+            left = nextLeft;
+            right = nextRight;
+            grew = true;
+          }
+        }
+      }
+    }
+    return { r0: top, c0: left, r1: bottom, c1: right };
+  }
+
+  function mergeSheetRange(table, r0, c0, r1, c1) {
+    const box = expandSheetRange(table, r0, c0, r1, c1);
+    if (box.r0 === box.r1 && box.c0 === box.c1) return table;
+    const texts = [];
+    for (let r = box.r0; r <= box.r1; r += 1) {
+      for (let c = box.c0; c <= box.c1; c += 1) {
+        const cell = table.rows[r] && table.rows[r].cells[c];
+        if (cell && !cell.skip && cell.text) texts.push(String(cell.text));
+      }
+    }
+    const origin = { text: texts.join(" ") };
+    if (box.r1 > box.r0) origin.rowspan = box.r1 - box.r0 + 1;
+    if (box.c1 > box.c0) origin.colspan = box.c1 - box.c0 + 1;
+    for (let r = box.r0; r <= box.r1; r += 1) {
+      for (let c = box.c0; c <= box.c1; c += 1) {
+        table.rows[r].cells[c] = r === box.r0 && c === box.c0 ? origin : { skip: true };
+      }
+    }
+    return table;
+  }
+
+  function unmergeSheetCell(table, r, c) {
+    const hit = sheetMergeCovering(table, r, c);
+    if (!hit || (hit.rs === 1 && hit.cs === 1)) return table;
+    delete hit.cell.rowspan;
+    delete hit.cell.colspan;
+    for (let rr = hit.r; rr < hit.r + hit.rs; rr += 1) {
+      for (let cc = hit.c; cc < hit.c + hit.cs; cc += 1) {
+        if (rr === hit.r && cc === hit.c) continue;
+        if (table.rows[rr] && table.rows[rr].cells) table.rows[rr].cells[cc] = { text: "" };
+      }
+    }
+    return table;
+  }
+
+  function sheetRowGroup(table, index) {
+    const set = new Set([index]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      (table.rows || []).forEach((row, r) => {
+        (row.cells || []).forEach(cell => {
+          if (!cell || cell.skip) return;
+          const rs = cell.rowspan || 1;
+          if (rs <= 1) return;
+          let touches = false;
+          for (let i = r; i < r + rs; i += 1) if (set.has(i)) touches = true;
+          if (!touches) return;
+          for (let i = r; i < r + rs; i += 1) {
+            if (!set.has(i)) { set.add(i); grew = true; }
+          }
+        });
+      });
+    }
+    return [...set].sort((a, b) => a - b);
+  }
+
+  function sheetColGroup(table, index) {
+    const set = new Set([index]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      (table.rows || []).forEach(row => {
+        (row.cells || []).forEach((cell, c) => {
+          if (!cell || cell.skip) return;
+          const cs = cell.colspan || 1;
+          if (cs <= 1) return;
+          let touches = false;
+          for (let i = c; i < c + cs; i += 1) if (set.has(i)) touches = true;
+          if (!touches) return;
+          for (let i = c; i < c + cs; i += 1) {
+            if (!set.has(i)) { set.add(i); grew = true; }
+          }
+        });
+      });
+    }
+    return [...set].sort((a, b) => a - b);
+  }
+
+  function sheetInsertAt(group, to) {
+    if (group.indexOf(to) >= 0) return -1;
+    if (to > group[group.length - 1]) return to - group.length + 1;
+    return to;
+  }
+
+  function moveSheetRow(table, from, to) {
+    const group = sheetRowGroup(table, from);
+    const insert = sheetInsertAt(group, to);
+    if (insert < 0) return table;
+    const heights = (table.heights || []).slice();
+    while (heights.length < table.rows.length) heights.push(0);
+    const moving = group.map(index => ({ row: table.rows[index], height: heights[index] || 0 }));
+    const rest = [];
+    table.rows.forEach((row, index) => {
+      if (group.indexOf(index) < 0) rest.push({ row: row, height: heights[index] || 0 });
+    });
+    rest.splice(Math.max(0, Math.min(rest.length, insert)), 0, ...moving);
+    table.rows = rest.map(item => item.row);
+    table.heights = rest.map(item => item.height);
+    return table;
+  }
+
+  function moveSheetColumn(table, from, to) {
+    const group = sheetColGroup(table, from);
+    const insert = sheetInsertAt(group, to);
+    if (insert < 0) return table;
+    const count = sheetColumnCount(table);
+    const widths = (table.widths || []).slice();
+    while (widths.length < count) widths.push(Math.round(100 / count));
+    table.rows.forEach(row => {
+      const cells = row.cells || [];
+      const moving = group.map(index => cells[index]);
+      const rest = cells.filter((_, index) => group.indexOf(index) < 0);
+      rest.splice(Math.max(0, Math.min(rest.length, insert)), 0, ...moving);
+      row.cells = rest;
+    });
+    const movingW = group.map(index => widths[index]);
+    const restW = widths.filter((_, index) => group.indexOf(index) < 0);
+    restW.splice(Math.max(0, Math.min(restW.length, insert)), 0, ...movingW);
+    table.widths = restW;
+    return table;
+  }
+
+  function insertSheetRow(table, at) {
+    const cols = sheetColumnCount(table) || 1;
+    const crossings = [];
+    (table.rows || []).forEach((row, r) => {
+      (row.cells || []).forEach((cell, c) => {
+        if (!cell || cell.skip) return;
+        const rs = cell.rowspan || 1;
+        if (r < at && r + rs > at) crossings.push({ r: r, c: c, cs: cell.colspan || 1 });
+      });
+    });
+    table.rows.splice(at, 0, { cells: Array.from({ length: cols }, () => ({ text: "" })) });
+    const heights = table.heights || [];
+    heights.splice(at, 0, 0);
+    table.heights = heights;
+    crossings.forEach(item => {
+      const cell = table.rows[item.r].cells[item.c];
+      cell.rowspan = (cell.rowspan || 1) + 1;
+      for (let c = item.c; c < item.c + item.cs; c += 1) table.rows[at].cells[c] = { skip: true };
+    });
+    return table;
+  }
+
+  function deleteSheetRow(table, at) {
+    if (!table.rows || table.rows.length <= 1 || at < 0 || at >= table.rows.length) return table;
+    table.rows.forEach((row, r) => {
+      (row.cells || []).forEach((cell, c) => {
+        if (!cell || cell.skip) return;
+        const rs = cell.rowspan || 1;
+        const cs = cell.colspan || 1;
+        if (at < r || at >= r + rs || rs === 1) return;
+        if (r === at) {
+          const next = table.rows[at + 1];
+          if (!next) return;
+          const moved = Object.assign({}, cell);
+          if (rs - 1 > 1) moved.rowspan = rs - 1;
+          else delete moved.rowspan;
+          next.cells[c] = moved;
+          for (let k = 1; k < cs; k += 1) next.cells[c + k] = { skip: true };
+        } else {
+          cell.rowspan = rs - 1;
+          if (cell.rowspan <= 1) delete cell.rowspan;
+        }
+      });
+    });
+    table.rows.splice(at, 1);
+    if (table.heights) table.heights.splice(at, 1);
+    return table;
+  }
+
+  function insertSheetColumn(table, at) {
+    const crossings = [];
+    (table.rows || []).forEach((row, r) => {
+      (row.cells || []).forEach((cell, c) => {
+        if (!cell || cell.skip) return;
+        const cs = cell.colspan || 1;
+        if (c < at && c + cs > at) crossings.push({ r: r, c: c, rs: cell.rowspan || 1 });
+      });
+    });
+    table.rows.forEach(row => row.cells.splice(at, 0, { text: "" }));
+    const widths = table.widths || [];
+    widths.splice(at, 0, Math.round(100 / ((widths.length || 1) + 1)));
+    table.widths = widths;
+    crossings.forEach(item => {
+      const cell = table.rows[item.r].cells[item.c];
+      cell.colspan = (cell.colspan || 1) + 1;
+      for (let r = item.r; r < item.r + item.rs; r += 1) table.rows[r].cells[at] = { skip: true };
+    });
+    return table;
+  }
+
+  function deleteSheetColumn(table, at) {
+    const count = sheetColumnCount(table);
+    if (count <= 1 || at < 0 || at >= count) return table;
+    table.rows.forEach(row => {
+      (row.cells || []).forEach((cell, c) => {
+        if (!cell || cell.skip) return;
+        const rs = cell.rowspan || 1;
+        const cs = cell.colspan || 1;
+        if (at < c || at >= c + cs || cs === 1) return;
+        if (c === at) {
+          const moved = Object.assign({}, cell);
+          if (cs - 1 > 1) moved.colspan = cs - 1;
+          else delete moved.colspan;
+          row.cells[at + 1] = moved;
+          for (let k = 1; k < rs; k += 1) {
+            const below = table.rows[table.rows.indexOf(row) + k];
+            if (below) below.cells[at + 1] = { skip: true };
+          }
+        } else {
+          cell.colspan = cs - 1;
+          if (cell.colspan <= 1) delete cell.colspan;
+        }
+      });
+    });
+    table.rows.forEach(row => row.cells.splice(at, 1));
+    if (table.widths) table.widths.splice(at, 1);
+    return table;
   }
 
   function renderTable(block, path) {
@@ -1670,11 +1950,12 @@
     const cols = widths.length ? '<colgroup>' + widths.map(n => '<col style="width:' + n + '%">').join("") + "</colgroup>" : "";
     const body = (block.rows || []).map((row, index) => {
       const tag = block.header && index === 0 ? "th" : "td";
+      const height = block.heights && Number(block.heights[index]);
       const cells = (row.cells || []).filter(cell => cell && !cell.skip).map(cell => {
         const span = (cell.rowspan > 1 ? ' rowspan="' + cell.rowspan + '"' : "") + (cell.colspan > 1 ? ' colspan="' + cell.colspan + '"' : "");
         return "<" + tag + span + ">" + escapeRichText(cell.text || "") + "</" + tag + ">";
       }).join("");
-      return "<tr>" + cells + "</tr>";
+      return "<tr" + (height >= 18 ? ' style="height:' + height + 'px"' : "") + ">" + cells + "</tr>";
     }).join("");
     return '<div class="table-scroll" data-bpath="' + path + '"><table class="sheet blk-sheet">' + cols + "<tbody>" + body + "</tbody></table></div>";
   }
@@ -2502,6 +2783,15 @@
     assignImageFile,
     sanitizeRich,
     normalizeBlocks,
+    mergeSheetRange,
+    expandSheetRange,
+    unmergeSheetCell,
+    moveSheetRow,
+    moveSheetColumn,
+    insertSheetRow,
+    deleteSheetRow,
+    insertSheetColumn,
+    deleteSheetColumn,
     blocksFromDetail,
     plainFromBlocks,
     blockHtml,

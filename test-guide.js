@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v45");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v46");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -974,6 +974,67 @@ const routeApp = fs.readFileSync("app.js", "utf8");
 assert.ok(routeApp.includes("ensureEditors"));
 assert.ok(routeApp.includes("flushBook"));
 assert.ok(routeApp.includes("else if (narrowScreen()) releaseLazyChapter"));
+const grid = {
+  type: "table",
+  widths: [34, 33, 33],
+  heights: [0, 0, 0],
+  rows: [
+    { cells: [{ text: "A" }, { text: "B" }, { text: "C" }] },
+    { cells: [{ text: "D" }, { text: "E" }, { text: "F" }] },
+    { cells: [{ text: "G" }, { text: "H" }, { text: "I" }] }
+  ]
+};
+progress.mergeSheetRange(grid, 0, 0, 1, 1);
+assert.strictEqual(grid.rows[0].cells[0].rowspan, 2);
+assert.strictEqual(grid.rows[0].cells[0].colspan, 2);
+assert.ok(grid.rows[0].cells[0].text.includes("A") && grid.rows[0].cells[0].text.includes("E"));
+assert.strictEqual(grid.rows[1].cells[0].skip, true);
+assert.strictEqual(grid.rows[1].cells[1].skip, true);
+assert.strictEqual(grid.rows[0].cells[2].text, "C");
+const overlap = {
+  rows: [
+    { cells: [{ text: "1回戦", rowspan: 2 }, { text: "警備兵" }, { text: "2" }] },
+    { cells: [{ skip: true }, { text: "ガードハウンド" }, { text: "1" }] }
+  ]
+};
+progress.mergeSheetRange(overlap, 1, 0, 1, 1);
+assert.strictEqual(overlap.rows[0].cells[0].rowspan, 2);
+assert.strictEqual(overlap.rows[0].cells[0].colspan, 2);
+assert.ok(overlap.rows[0].cells[0].text.includes("1回戦"));
+assert.ok(overlap.rows[0].cells[0].text.includes("警備兵"));
+assert.strictEqual(overlap.rows[0].cells[1].skip, true);
+assert.strictEqual(overlap.rows[1].cells[1].skip, true);
+const movedRows = {
+  widths: [40, 30, 30],
+  heights: [20, 30, 40],
+  rows: [
+    { cells: [{ text: "A", rowspan: 2 }, { text: "B" }] },
+    { cells: [{ skip: true }, { text: "E" }] },
+    { cells: [{ text: "G" }, { text: "H" }] }
+  ]
+};
+progress.moveSheetRow(movedRows, 0, 2);
+assert.strictEqual(movedRows.rows[0].cells[0].text, "G");
+assert.strictEqual(movedRows.rows[1].cells[0].text, "A");
+assert.strictEqual(movedRows.rows[1].cells[0].rowspan, 2);
+assert.strictEqual(movedRows.rows[2].cells[0].skip, true);
+assert.deepStrictEqual(movedRows.heights, [40, 20, 30]);
+const movedCols = {
+  widths: [50, 30, 20],
+  rows: [
+    { cells: [{ text: "A", colspan: 2 }, { skip: true }, { text: "C" }] },
+    { cells: [{ text: "D" }, { text: "E" }, { text: "F" }] }
+  ]
+};
+progress.moveSheetColumn(movedCols, 0, 2);
+assert.strictEqual(movedCols.rows[0].cells[0].text, "C");
+assert.strictEqual(movedCols.rows[0].cells[1].colspan, 2);
+assert.strictEqual(movedCols.rows[0].cells[1].text, "A");
+assert.strictEqual(movedCols.rows[0].cells[2].skip, true);
+assert.deepStrictEqual(movedCols.widths, [20, 50, 30]);
+const sheetSized = progress.normalizeBlocks([{ type: "table", heights: [0, 36], widths: [50, 50], rows: [{ cells: [{ text: "上" }, { text: "右" }] }, { cells: [{ text: "下" }, { text: "端" }] }] }]);
+assert.strictEqual(sheetSized[0].heights[1], 36);
+assert.ok(progress.blockHtml(sheetSized).includes("height:36px"));
 
 (async () => {
   const denied = await progress.githubTest(mockFetch(async () => ({ status: 200, body: { permissions: { push: false }, full_name: "ZeVu2525/ff7-remake-guide" } })), "secret-token", "ZeVu2525", "ff7-remake-guide");
