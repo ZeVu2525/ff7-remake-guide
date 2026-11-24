@@ -1687,6 +1687,20 @@
     return { type: "table", header: block.header === true, widths: widths, heights: heights, rows: safeRows };
   }
 
+  function sheetCoveredHeight(heights, start, span) {
+    let total = 0;
+    let any = false;
+    const count = Math.max(1, span || 1);
+    for (let i = 0; i < count; i += 1) {
+      const value = Math.round(Number(heights && heights[start + i]) || 0);
+      if (value >= 18) {
+        total += value;
+        any = true;
+      }
+    }
+    return any ? total : 0;
+  }
+
   function sheetColumnCount(table) {
     return (table.rows || []).reduce((max, row) => Math.max(max, (row.cells || []).length), 0);
   }
@@ -2804,6 +2818,7 @@
     assignImageFile,
     sanitizeRich,
     normalizeBlocks,
+    sheetCoveredHeight,
     mergeSheetRange,
     expandSheetRange,
     unmergeSheetCell,

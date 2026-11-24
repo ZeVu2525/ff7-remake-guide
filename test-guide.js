@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v47");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v48");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -1045,6 +1045,16 @@ assert.deepStrictEqual(progress.itemLinks([{ name: "ポーション", qty: 1 }, 
 assert.strictEqual(progress.itemQtySuffix(1), "");
 assert.strictEqual(progress.itemQtySuffix(""), "");
 assert.strictEqual(progress.itemQtySuffix(2), " ×2");
+assert.strictEqual(progress.sheetCoveredHeight([20, 30, 40, 24], 1, 3), 94);
+assert.strictEqual(progress.sheetCoveredHeight([0, 0, 0], 0, 3), 0);
+const sheetSource = fs.readFileSync("card-edit.js", "utf8");
+assert.ok(sheetSource.includes('data-row-index="${r}"'));
+assert.ok(!sheetSource.includes('data-sheet-row="${r}"'));
+assert.ok(sheetSource.includes("compositionstart"));
+assert.ok(sheetSource.includes('event.key === "F2"'));
+assert.ok(sheetSource.includes("th.sheet-rowhead{position:relative}"));
+assert.ok(sheetSource.includes("sheetCellNode"));
+assert.ok(sheetSource.includes("caretRangeFromPoint"));
 assert.deepStrictEqual(progress.stripBakedQty("手榴弾 ×2 ×2"), { name: "手榴弾", baked: 2 });
 const pageCss = fs.readFileSync("index.html", "utf8");
 assert.ok(pageCss.includes("table.sheet.blk-sheet{min-width:0;width:100%;border:1px solid var(--line);border-collapse:collapse}"));

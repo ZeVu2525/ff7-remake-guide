@@ -79,10 +79,14 @@
     ".blk-sheet-edit table.sheet{min-width:0}",
     ".blk-sheet-edit table.sheet th:first-child,.blk-sheet-edit table.sheet td:first-child{position:static;min-width:0;background:var(--bg3)}",
     ".sheet-colhead,.sheet-rowhead{position:relative;min-width:2.4em;padding:2px 8px;font-size:11px;text-align:center;user-select:none;touch-action:none}",
+    ".blk-sheet-edit table.sheet th.sheet-rowhead{position:relative}",
     ".sheet-grip{min-height:18px;padding:0 2px;border:0;background:transparent;color:inherit;cursor:grab;font-size:11px}",
     ".sheet-resize{position:absolute;z-index:2;touch-action:none}",
-    ".sheet-resize-col{top:0;right:-3px;width:6px;height:100%;cursor:col-resize}",
-    ".sheet-resize-row{left:0;bottom:-3px;width:100%;height:6px;cursor:row-resize}",
+    ".sheet-resize-col{top:0;right:0;width:6px;height:100%;cursor:col-resize}",
+    ".sheet-resize-row{left:0;bottom:0;width:100%;height:6px;cursor:row-resize}",
+    ".blk-sheet-edit td > [data-sheet-cell],.blk-sheet-edit th > [data-sheet-cell]{display:block;box-sizing:border-box;min-height:100%;height:100%}",
+    ".blk-sheet-edit [data-sheet-cell]:not(.is-editing){caret-color:transparent;user-select:none}",
+    ".blk-sheet-edit [data-sheet-cell].is-editing{caret-color:auto;user-select:text}",
     ".blk-sheet-edit td.on,.blk-sheet-edit th.on{box-shadow:inset 0 0 0 2px var(--accent);background:color-mix(in srgb,var(--accent) 22%,transparent)}",
     ".is-sheet-drop{outline:2px solid var(--accent)}",
     "#sheet-menu{position:fixed;z-index:320;display:grid;min-width:148px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);box-shadow:0 8px 24px rgba(0,0,0,.28)}",
@@ -466,8 +470,8 @@
           block.widths[index] = Math.max(4, Math.min(90, Number(input.value) || 0));
         });
         block.heights = block.heights || [];
-        node.querySelectorAll(":scope > .blk-sheet-edit tr[data-sheet-row]").forEach(tr => {
-          const index = Number(tr.getAttribute("data-sheet-row"));
+        node.querySelectorAll(":scope > .blk-sheet-edit tr[data-row-index]").forEach(tr => {
+          const index = Number(tr.getAttribute("data-row-index"));
           const height = Math.round(parseFloat(tr.style.height) || Number(tr.getAttribute("data-row-height")) || 0);
           block.heights[index] = height >= 18 ? Math.min(280, height) : 0;
         });
@@ -709,10 +713,12 @@
       const cells = (row.cells || []).map((cell, c) => {
         if (!cell || cell.skip) return "";
         const span = (cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : "") + (cell.colspan > 1 ? ` colspan="${cell.colspan}"` : "");
+        const covered = GuideProgress.sheetCoveredHeight(heights, r, cell.rowspan || 1);
+        const boxStyle = covered >= 18 ? ` style="height:${covered}px"` : "";
         const tag = block.header && r === 0 ? "th" : "td";
-        return `<${tag}${span}><div contenteditable="true" data-sheet-cell="${r},${c}">${escapeText(cell.text || "")}</div></${tag}>`;
+        return `<${tag}${span}${boxStyle}><div contenteditable="true" data-sheet-cell="${r},${c}">${escapeText(cell.text || "")}</div></${tag}>`;
       }).join("");
-      return `<tr data-sheet-row="${r}" data-row-height="${height || ""}"${height >= 18 ? ` style="height:${height}px"` : ""}><th class="sheet-rowhead"><button type="button" class="sheet-grip" data-row-grip="${r}" aria-label="行${r + 1}を移動">⋮</button><span>${r + 1}</span><button type="button" class="sheet-grip" data-sheet-open="row:${r}" aria-label="行の操作">▾</button><span class="sheet-resize sheet-resize-row" data-resize-row="${r}"></span></th>${cells}</tr>`;
+      return `<tr data-row-index="${r}" data-row-height="${height || ""}"${height >= 18 ? ` style="height:${height}px"` : ""}><th class="sheet-rowhead"><button type="button" class="sheet-grip" data-row-grip="${r}" aria-label="行${r + 1}を移動">⋮</button><span>${r + 1}</span><button type="button" class="sheet-grip" data-sheet-open="row:${r}" aria-label="行の操作">▾</button><span class="sheet-resize sheet-resize-row" data-resize-row="${r}"></span></th>${cells}</tr>`;
     }).join("");
     return `<div class="blk-sheet-edit" data-sheet-path="${escapeAttr(path)}"><div class="blk-sheet-tools"><button type="button" data-sheet-undo="${escapeAttr(path)}" aria-label="表を元に戻す">↶</button><button type="button" data-sheet-redo="${escapeAttr(path)}" aria-label="表をやり直す">↷</button><button type="button" data-sheet-row="${escapeAttr(path)}">行+</button><button type="button" data-sheet-col="${escapeAttr(path)}">列+</button><button type="button" data-sheet-del-row="${escapeAttr(path)}">行-</button><button type="button" data-sheet-del-col="${escapeAttr(path)}">列-</button><button type="button" data-sheet-merge="${escapeAttr(path)}">結合</button><button type="button" data-sheet-unmerge="${escapeAttr(path)}">解除</button><label><input type="checkbox" data-sheet-header${block.header ? " checked" : ""}>見出し行</label></div><div class="blk-sheet-tools">${widthInputs}</div><div class="table-scroll"><table class="sheet sheet-grid"><colgroup><col style="width:2.6em">${cols}</colgroup><thead>${head}</thead><tbody>${body}</tbody></table></div></div>`;
   }
@@ -1127,7 +1133,7 @@
       openSheetMenu(opener, opener.getAttribute("data-sheet-open"));
       return;
     }
-    if (event.target.closest("[data-sheet-cell], .sheet-grip, .sheet-resize")) return;
+    if (event.target.closest(".blk-sheet-edit td, [data-sheet-cell], .sheet-grip, .sheet-resize")) return;
     const collapse = event.target.closest("[data-collapse-block]");
     if (collapse) {
       const key = collapse.getAttribute("data-collapse-block");
@@ -1238,13 +1244,67 @@
     syncBlocks();
   }
 
-  fields.addEventListener("keydown", event => {
+  function sheetHostFromKey(event) {
     const host = event.target.closest && event.target.closest(".blk-sheet-edit");
-    if (!host || event.isComposing || event.keyCode === 229) return;
-    const path = host.getAttribute("data-sheet-path");
+    if (host) return host;
+    if (!sheetRange) return null;
+    return document.querySelector('.blk-sheet-edit[data-sheet-path="' + sheetRange.path + '"]');
+  }
+
+  function moveSheetSelection(host, dr, dc) {
+    if (!sheetRange || !host) return;
+    const table = blockAt(host.getAttribute("data-sheet-path"));
+    if (!table) return;
+    const rows = table.rows.length;
+    const cols = (table.rows[0] && table.rows[0].cells.length) || 1;
+    let r = Math.max(0, Math.min(rows - 1, sheetRange.aR + dr));
+    let c = Math.max(0, Math.min(cols - 1, sheetRange.aC + dc));
+    const covered = table.rows[r] && table.rows[r].cells[c];
+    if (covered && covered.skip) {
+      let found = false;
+      for (let rr = 0; rr < rows && !found; rr += 1) {
+        for (let cc = 0; cc < cols; cc += 1) {
+          const origin = table.rows[rr].cells[cc];
+          if (!origin || origin.skip) continue;
+          const rs = origin.rowspan || 1;
+          const cs = origin.colspan || 1;
+          if (r >= rr && r < rr + rs && c >= cc && c < cc + cs) {
+            r = rr;
+            c = cc;
+            found = true;
+            break;
+          }
+        }
+      }
+    }
+    sheetRange = { path: sheetRange.path, aR: r, aC: c, fR: r, fC: c };
+    markSheet();
+    focusSheetCell(host, r, c, false);
+  }
+
+  fields.addEventListener("compositionstart", event => {
+    const node = event.target.closest && event.target.closest("[data-sheet-cell]");
+    if (!node) return;
+    if (node.dataset.sheetBefore == null) node.dataset.sheetBefore = node.textContent;
+    node.classList.add("is-editing");
+  });
+  fields.addEventListener("compositionend", event => {
+    const node = event.target.closest && event.target.closest("[data-sheet-cell]");
+    if (node) commitSheetCell(node);
+  });
+  fields.addEventListener("keydown", event => {
+    if (event.isComposing || event.keyCode === 229 || event.key === "Process" || event.key === "Unidentified") {
+      const node = event.target.closest && event.target.closest("[data-sheet-cell]");
+      if (node) node.classList.add("is-editing");
+      return;
+    }
+    const host = sheetHostFromKey(event);
+    if (!host || !sheetRange || host.getAttribute("data-sheet-path") !== sheetRange.path) return;
+    const path = sheetRange.path;
     const table = blockAt(path);
+    const editingNode = event.target.closest && event.target.closest("[data-sheet-cell].is-editing");
     if ((event.ctrlKey || event.metaKey) && !event.altKey && (event.key === "z" || event.key === "Z" || event.key === "y" || event.key === "Y")) {
-      if (event.target.closest("[data-sheet-cell]")) return;
+      if (editingNode) return;
       event.preventDefault();
       event.stopPropagation();
       if (!table) return;
@@ -1252,14 +1312,42 @@
       if (sheetRestore(path, table, redo ? 1 : -1)) paintBlocks();
       return;
     }
-    if (!sheetRange || sheetRange.path !== path || event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
-    if (event.target.closest("[data-sheet-cell], input, textarea")) return;
-    const node = host.querySelector('[data-sheet-cell="' + sheetRange.aR + "," + sheetRange.aC + '"]');
-    if (!node) return;
+    if (event.key === "Escape" && editingNode) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (editingNode.dataset.sheetBefore != null) editingNode.textContent = editingNode.dataset.sheetBefore;
+      delete editingNode.dataset.sheetBefore;
+      editingNode.classList.remove("is-editing");
+      commitSheetCell(editingNode);
+      clearSheetCaret();
+      return;
+    }
+    if ((event.key === "Enter" || event.key === "F2") && !editingNode) {
+      event.preventDefault();
+      focusSheetCell(host, sheetRange.aR, sheetRange.aC, true);
+      return;
+    }
+    if (event.key === "Enter" && editingNode) {
+      event.preventDefault();
+      delete editingNode.dataset.sheetBefore;
+      editingNode.classList.remove("is-editing");
+      commitSheetCell(editingNode);
+      moveSheetSelection(host, 1, 0);
+      return;
+    }
+    if (event.key === "Tab") {
+      event.preventDefault();
+      if (editingNode) {
+        delete editingNode.dataset.sheetBefore;
+        editingNode.classList.remove("is-editing");
+        commitSheetCell(editingNode);
+      }
+      moveSheetSelection(host, 0, event.shiftKey ? -1 : 1);
+      return;
+    }
+    if (editingNode || event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
     event.preventDefault();
-    sheetPush(path, table);
-    node.textContent = event.key;
-    focusSheetCell(host, sheetRange.aR, sheetRange.aC);
+    focusSheetCell(host, sheetRange.aR, sheetRange.aC, true, { replace: event.key });
   });
 
   fields.addEventListener("click", event => {
@@ -1393,17 +1481,72 @@
     return { r: r, c: c };
   }
 
-  function focusSheetCell(host, r, c) {
-    const node = host.querySelector('[data-sheet-cell="' + r + "," + c + '"]');
+  function sheetCellNode(target) {
+    if (!target || !target.closest) return null;
+    const direct = target.closest("[data-sheet-cell]");
+    if (direct) return direct;
+    const box = target.closest(".blk-sheet-edit td");
+    if (!box || box.classList.contains("sheet-rowhead")) return null;
+    return box.querySelector("[data-sheet-cell]");
+  }
+
+  function sheetCellAt(host, r, c) {
+    return host && host.querySelector('[data-sheet-cell="' + r + "," + c + '"]');
+  }
+
+  function clearSheetCaret() {
+    const sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+  }
+
+  function placeSheetCaret(node, x, y) {
     if (!node) return;
+    node.classList.add("is-editing");
     node.focus();
+    const doc = node.ownerDocument;
+    let range = null;
+    if (x != null && doc.caretRangeFromPoint) range = doc.caretRangeFromPoint(x, y);
+    if (!range) {
+      range = doc.createRange();
+      range.selectNodeContents(node);
+      range.collapse(false);
+    }
+    if (range.startContainer && !node.contains(range.startContainer) && range.startContainer !== node) {
+      range = doc.createRange();
+      range.selectNodeContents(node);
+      range.collapse(false);
+    }
     const sel = window.getSelection();
     if (!sel) return;
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    range.collapse(false);
     sel.removeAllRanges();
     sel.addRange(range);
+  }
+
+  function commitSheetCell(node) {
+    if (!node) return;
+    const host = sheetHostOf(node);
+    const table = host && blockAt(host.getAttribute("data-sheet-path"));
+    const parts = (node.getAttribute("data-sheet-cell") || "").split(",").map(Number);
+    const cell = table && table.rows[parts[0]] && table.rows[parts[0]].cells[parts[1]];
+    if (cell && !cell.skip) cell.text = node.innerText.replace(/\s+/g, " ").trim();
+  }
+
+  function focusSheetCell(host, r, c, editing, point) {
+    const node = sheetCellAt(host, r, c);
+    if (!node) return null;
+    host.querySelectorAll("[data-sheet-cell].is-editing").forEach(item => {
+      if (item !== node) item.classList.remove("is-editing");
+    });
+    if (editing) {
+      if (node.dataset.sheetBefore == null) node.dataset.sheetBefore = node.textContent;
+      if (point && point.replace != null) node.textContent = point.replace;
+      placeSheetCaret(node, point && point.x, point && point.y);
+    } else {
+      node.classList.remove("is-editing");
+      node.focus();
+      clearSheetCaret();
+    }
+    return node;
   }
 
   function scaleSheetWidths(widths) {
@@ -1485,10 +1628,10 @@
     const resizeRow = event.target.closest("[data-resize-row]");
     const rowGrip = event.target.closest("[data-row-grip]");
     const colGrip = event.target.closest("[data-col-grip]");
-    const cell = event.target.closest("[data-sheet-cell]");
+    const cell = sheetCellNode(event.target);
     if (!resizeCol && !resizeRow && !rowGrip && !colGrip && !cell) return;
-    if (cell && document.activeElement === cell && event.detail < 2 && !event.shiftKey) return;
-    event.preventDefault();
+    if (cell && cell.classList.contains("is-editing") && event.detail < 2 && !event.shiftKey) return;
+    if (!(cell && event.detail >= 2)) event.preventDefault();
     try { (event.target.closest(".sheet-resize, .sheet-grip, [data-sheet-cell]") || host).setPointerCapture(event.pointerId); } catch (error) {}
     sheetPointer = {
       id: event.pointerId,
@@ -1542,7 +1685,7 @@
       const height = Math.max(18, Math.min(280, (sheetPointer.heights[index] || 28) + (event.clientY - sheetPointer.y)));
       table.heights = table.heights || [];
       table.heights[index] = height;
-      const row = host.querySelector('tr[data-sheet-row="' + index + '"]');
+      const row = host.querySelector('tr[data-row-index="' + index + '"]');
       if (row) {
         row.style.height = height + "px";
         row.setAttribute("data-row-height", String(height));
@@ -1551,7 +1694,7 @@
       const point = sheetPoint(host, event.clientX, event.clientY);
       sheetPointer.drop = sheetPointer.kind === "row-move" ? point.r : point.c;
       host.querySelectorAll(".is-sheet-drop").forEach(node => node.classList.remove("is-sheet-drop"));
-      const mark = host.querySelector(sheetPointer.kind === "row-move" ? 'tr[data-sheet-row="' + point.r + '"]' : '[data-col-head="' + point.c + '"]');
+      const mark = host.querySelector(sheetPointer.kind === "row-move" ? 'tr[data-row-index="' + point.r + '"]' : '[data-col-head="' + point.c + '"]');
       if (mark) mark.classList.add("is-sheet-drop");
     }
   });
@@ -1564,18 +1707,13 @@
     const table = blockAt(current.path);
     if (!host || !table) return;
     if (current.kind === "select") {
-      if (current.detail >= 2 && !current.moved) {
-        sheetRange = { path: current.path, aR: current.r, aC: current.c, fR: current.r, fC: current.c };
-        markSheet();
-        focusSheetCell(host, current.r, current.c);
-        sheetPush(current.path, table);
-        return;
-      }
       const point = current.moved ? sheetPoint(host, event.clientX, event.clientY) : { r: current.r, c: current.c };
       const anchorR = current.shift && sheetRange && sheetRange.path === current.path ? sheetRange.aR : current.r;
       const anchorC = current.shift && sheetRange && sheetRange.path === current.path ? sheetRange.aC : current.c;
       sheetRange = { path: current.path, aR: anchorR, aC: anchorC, fR: point.r, fC: point.c };
       markSheet();
+      if (current.detail >= 2 && !current.moved) focusSheetCell(host, current.r, current.c, true, { x: event.clientX, y: event.clientY });
+      else focusSheetCell(host, sheetRange.aR, sheetRange.aC, false);
       return;
     }
     if (current.kind === "col-size" && !current.moved && current.detail >= 2) {
@@ -1591,7 +1729,16 @@
       if (current.kind === "row-move") GuideProgress.moveSheetRow(table, current.index, current.drop);
       else GuideProgress.moveSheetColumn(table, current.index, current.drop);
     }
-    if (current.kind !== "select") paintBlocks();
+    if (current.moved || (current.kind === "col-size" && current.detail >= 2)) paintBlocks();
+  });
+
+  fields.addEventListener("dblclick", event => {
+    const cell = sheetCellNode(event.target);
+    const host = cell && sheetHostOf(cell);
+    if (!cell || !host) return;
+    event.preventDefault();
+    const parts = cell.getAttribute("data-sheet-cell").split(",").map(Number);
+    focusSheetCell(host, parts[0], parts[1], true, { x: event.clientX, y: event.clientY });
   });
 
   fields.addEventListener("pointerdown", event => {
@@ -2213,6 +2360,16 @@
   }, true);
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape" || dialog.hidden) return;
+    const editingNode = event.target.closest && event.target.closest("[data-sheet-cell].is-editing");
+    if (editingNode) {
+      event.preventDefault();
+      if (editingNode.dataset.sheetBefore != null) editingNode.textContent = editingNode.dataset.sheetBefore;
+      delete editingNode.dataset.sheetBefore;
+      editingNode.classList.remove("is-editing");
+      commitSheetCell(editingNode);
+      clearSheetCaret();
+      return;
+    }
     if (dialog.querySelector(".rt-menu:not([hidden])")) closeRichMenus(dialog);
     event.preventDefault();
     event.stopPropagation();
