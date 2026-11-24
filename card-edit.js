@@ -74,7 +74,19 @@
     ".blk-sheet-edit table{width:100%;border-collapse:collapse;font-size:13px}",
     ".blk-sheet-edit td,.blk-sheet-edit th{min-width:3em;padding:2px 4px;border:1px solid var(--line);background:var(--bg)}",
     ".blk-sheet-edit td.on,.blk-sheet-edit th.on{outline:2px solid var(--accent)}",
-    ".blk-sheet-edit [data-sheet-cell]{min-height:1.4em;outline:none}",
+    ".blk-sheet-edit [data-sheet-cell]{min-height:1.2em;outline:none}",
+    ".blk-sheet-edit table.sheet{min-width:0}",
+    ".blk-sheet-edit table.sheet th:first-child,.blk-sheet-edit table.sheet td:first-child{position:static;min-width:0;background:var(--bg3)}",
+    ".sheet-colhead,.sheet-rowhead{position:relative;min-width:2.4em;padding:2px 8px;font-size:11px;text-align:center;user-select:none;touch-action:none}",
+    ".sheet-grip{min-height:18px;padding:0 2px;border:0;background:transparent;color:inherit;cursor:grab;font-size:11px}",
+    ".sheet-resize{position:absolute;z-index:2;touch-action:none}",
+    ".sheet-resize-col{top:0;right:-3px;width:6px;height:100%;cursor:col-resize}",
+    ".sheet-resize-row{left:0;bottom:-3px;width:100%;height:6px;cursor:row-resize}",
+    ".blk-sheet-edit td.on,.blk-sheet-edit th.on{box-shadow:inset 0 0 0 2px var(--accent);background:color-mix(in srgb,var(--accent) 22%,transparent)}",
+    ".is-sheet-drop{outline:2px solid var(--accent)}",
+    "#sheet-menu{position:fixed;z-index:320;display:grid;min-width:148px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);box-shadow:0 8px 24px rgba(0,0,0,.28)}",
+    "#sheet-menu[hidden]{display:none}",
+    "#sheet-menu button{min-height:32px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}",
     ".blk-sheet-tools{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0}",
     ".blk-sheet-tools button,.blk-sheet-tools label{min-height:24px;padding:0 6px;font-size:11px}",
     ".blk-size{display:inline-flex;gap:4px;align-items:center;margin-left:6px;font-size:12px}",
@@ -450,7 +462,13 @@
         node.querySelectorAll(":scope > .blk-sheet-edit [data-sheet-width]").forEach(input => {
           const index = Number(input.getAttribute("data-sheet-width"));
           block.widths = block.widths || [];
-          block.widths[index] = Math.max(8, Math.min(80, Number(input.value) || 0));
+          block.widths[index] = Math.max(4, Math.min(90, Number(input.value) || 0));
+        });
+        block.heights = block.heights || [];
+        node.querySelectorAll(":scope > .blk-sheet-edit tr[data-sheet-row]").forEach(tr => {
+          const index = Number(tr.getAttribute("data-sheet-row"));
+          const height = Math.round(parseFloat(tr.style.height) || Number(tr.getAttribute("data-row-height")) || 0);
+          block.heights[index] = height >= 18 ? Math.min(280, height) : 0;
         });
         node.querySelectorAll(":scope > .blk-sheet-edit [data-sheet-cell]").forEach(cell => {
           const parts = cell.getAttribute("data-sheet-cell").split(",").map(Number);
@@ -569,62 +587,98 @@
   }
 
   const collapsedBlocks = {};
-  let sheetSelection = [];
+  let sheetRange = null;
+  let sheetPointer = null;
+  const sheetHist = {};
+
+  function sheetColName(index) {
+    return String.fromCharCode(65 + (index % 26));
+  }
+
+  function sheetSnapshot(table) {
+    return JSON.stringify({ rows: table.rows, widths: table.widths, heights: table.heights, header: table.header === true });
+  }
+
+  function sheetPush(path, table) {
+    const slot = sheetHist[path] || (sheetHist[path] = { undo: [], redo: [] });
+    const snap = sheetSnapshot(table);
+    if (slot.undo[slot.undo.length - 1] === snap) return;
+    slot.undo.push(snap);
+    if (slot.undo.length > 30) slot.undo.shift();
+    slot.redo = [];
+  }
+
+  function sheetRestore(path, table, dir) {
+    const slot = sheetHist[path];
+    if (!slot) return false;
+    const pile = dir < 0 ? slot.undo : slot.redo;
+    const other = dir < 0 ? slot.redo : slot.undo;
+    if (!pile.length) return false;
+    other.push(sheetSnapshot(table));
+    const data = JSON.parse(pile.pop());
+    table.rows = data.rows;
+    table.widths = data.widths;
+    table.heights = data.heights;
+    table.header = data.header;
+    return true;
+  }
+
+  function sheetBounds() {
+    if (!sheetRange) return null;
+    return {
+      path: sheetRange.path,
+      r0: Math.min(sheetRange.aR, sheetRange.fR),
+      c0: Math.min(sheetRange.aC, sheetRange.fC),
+      r1: Math.max(sheetRange.aR, sheetRange.fR),
+      c1: Math.max(sheetRange.aC, sheetRange.fC)
+    };
+  }
+
+  function markSheet() {
+    document.querySelectorAll(".blk-sheet-edit td.on, .blk-sheet-edit th.on").forEach(node => node.classList.remove("on"));
+    const box = sheetBounds();
+    if (!box) return;
+    const host = document.querySelector('.blk-sheet-edit[data-sheet-path="' + box.path + '"]');
+    if (!host) return;
+    host.querySelectorAll("[data-sheet-cell]").forEach(node => {
+      const parts = node.getAttribute("data-sheet-cell").split(",").map(Number);
+      const cell = node.closest("td,th");
+      const rs = Number((cell && cell.getAttribute("rowspan")) || 1);
+      const cs = Number((cell && cell.getAttribute("colspan")) || 1);
+      const hit = parts[0] <= box.r1 && parts[0] + rs - 1 >= box.r0 && parts[1] <= box.c1 && parts[1] + cs - 1 >= box.c0;
+      if (hit && cell) cell.classList.add("on");
+    });
+  }
 
   function editSheet(path, button) {
     const table = blockAt(path);
     if (!table || table.type !== "table") return;
     const cols = ((table.rows[0] && table.rows[0].cells) || []).length || 1;
+    const box = sheetBounds();
+    const row = box && box.path === path ? box.r0 : table.rows.length - 1;
+    const col = box && box.path === path ? box.c0 : cols - 1;
     if (button.hasAttribute("data-sheet-row")) {
-      table.rows.push({ cells: Array.from({ length: cols }, () => ({ text: "" })) });
+      sheetPush(path, table);
+      GuideProgress.insertSheetRow(table, table.rows.length);
     } else if (button.hasAttribute("data-sheet-col")) {
-      table.rows.forEach(row => row.cells.push({ text: "" }));
-      table.widths = (table.widths || []).concat(Math.round(100 / (cols + 1)));
-    } else if (button.hasAttribute("data-sheet-del-row") && table.rows.length > 1) {
-      table.rows.pop();
-    } else if (button.hasAttribute("data-sheet-del-col") && cols > 1) {
-      table.rows.forEach(row => row.cells.pop());
-      table.widths = (table.widths || []).slice(0, cols - 1);
+      sheetPush(path, table);
+      GuideProgress.insertSheetColumn(table, cols);
+    } else if (button.hasAttribute("data-sheet-del-row")) {
+      sheetPush(path, table);
+      GuideProgress.deleteSheetRow(table, row);
+    } else if (button.hasAttribute("data-sheet-del-col")) {
+      sheetPush(path, table);
+      GuideProgress.deleteSheetColumn(table, col);
     } else if (button.hasAttribute("data-sheet-merge")) {
-      const coords = sheetSelection.map(key => key.split(",").map(Number));
-      if (coords.length < 2) return;
-      const r0 = Math.min.apply(null, coords.map(item => item[0]));
-      const r1 = Math.max.apply(null, coords.map(item => item[0]));
-      const c0 = Math.min.apply(null, coords.map(item => item[1]));
-      const c1 = Math.max.apply(null, coords.map(item => item[1]));
-      for (let r = r0; r <= r1; r += 1) {
-        for (let c = c0; c <= c1; c += 1) {
-          const cell = table.rows[r] && table.rows[r].cells[c];
-          if (!cell || cell.skip || cell.rowspan > 1 || cell.colspan > 1) return;
-        }
-      }
-      const origin = table.rows[r0].cells[c0];
-      if (r1 > r0) origin.rowspan = r1 - r0 + 1;
-      if (c1 > c0) origin.colspan = c1 - c0 + 1;
-      for (let r = r0; r <= r1; r += 1) {
-        for (let c = c0; c <= c1; c += 1) {
-          if (r === r0 && c === c0) continue;
-          table.rows[r].cells[c] = { skip: true };
-        }
-      }
-      sheetSelection = [];
+      if (!box || box.path !== path) return;
+      sheetPush(path, table);
+      GuideProgress.mergeSheetRange(table, box.r0, box.c0, box.r1, box.c1);
     } else if (button.hasAttribute("data-sheet-unmerge")) {
-      sheetSelection.forEach(key => {
-        const parts = key.split(",").map(Number);
-        const cell = table.rows[parts[0]] && table.rows[parts[0]].cells[parts[1]];
-        if (!cell || cell.skip) return;
-        const rs = cell.rowspan || 1;
-        const cs = cell.colspan || 1;
-        delete cell.rowspan;
-        delete cell.colspan;
-        for (let r = parts[0]; r < parts[0] + rs; r += 1) {
-          for (let c = parts[1]; c < parts[1] + cs; c += 1) {
-            if (r === parts[0] && c === parts[1]) continue;
-            if (table.rows[r] && table.rows[r].cells[c]) table.rows[r].cells[c] = { text: "" };
-          }
-        }
-      });
-      sheetSelection = [];
+      if (!box || box.path !== path) return;
+      sheetPush(path, table);
+      GuideProgress.unmergeSheetCell(table, box.r0, box.c0);
+    } else if (button.hasAttribute("data-sheet-undo") || button.hasAttribute("data-sheet-redo")) {
+      sheetRestore(path, table, button.hasAttribute("data-sheet-undo") ? -1 : 1);
     }
   }
 
@@ -644,14 +698,22 @@
 
   function sheetEditor(block, path) {
     const rows = block.rows || [];
-    const widthInputs = (block.widths || []).map((width, index) => `<input data-sheet-width="${index}" type="number" min="8" max="80" value="${width}" aria-label="列${index + 1}の幅">`).join("");
-    const body = rows.map((row, r) => "<tr>" + (row.cells || []).map((cell, c) => {
-      if (!cell || cell.skip) return "";
-      const span = (cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : "") + (cell.colspan > 1 ? ` colspan="${cell.colspan}"` : "");
-      const tag = block.header && r === 0 ? "th" : "td";
-      return `<${tag}${span}><div contenteditable="true" data-sheet-cell="${r},${c}">${escapeText(cell.text || "")}</div></${tag}>`;
-    }).join("") + "</tr>").join("");
-    return `<div class="blk-sheet-edit"><div class="blk-sheet-tools"><button type="button" data-sheet-row="${escapeAttr(path)}">行+</button><button type="button" data-sheet-col="${escapeAttr(path)}">列+</button><button type="button" data-sheet-del-row="${escapeAttr(path)}">行-</button><button type="button" data-sheet-del-col="${escapeAttr(path)}">列-</button><button type="button" data-sheet-merge="${escapeAttr(path)}">結合</button><button type="button" data-sheet-unmerge="${escapeAttr(path)}">解除</button><label><input type="checkbox" data-sheet-header${block.header ? " checked" : ""}>見出し行</label></div><div class="blk-sheet-tools">${widthInputs}</div><div class="table-scroll"><table class="sheet"><tbody>${body}</tbody></table></div></div>`;
+    const widths = block.widths || [];
+    const heights = block.heights || [];
+    const widthInputs = widths.map((width, index) => `<input data-sheet-width="${index}" type="number" min="4" max="90" value="${width}" aria-label="列${index + 1}の幅">`).join("");
+    const cols = widths.map((width, index) => `<col style="width:${width}%">`).join("");
+    const head = `<tr><th class="sheet-corner"></th>${widths.map((_, c) => `<th class="sheet-colhead" data-col-head="${c}"><button type="button" class="sheet-grip" data-col-grip="${c}" aria-label="列${sheetColName(c)}を移動">⋮⋮</button><span>${sheetColName(c)}</span><button type="button" class="sheet-grip" data-sheet-open="col:${c}" aria-label="列の操作">▾</button><span class="sheet-resize sheet-resize-col" data-resize-col="${c}"></span></th>`).join("")}</tr>`;
+    const body = rows.map((row, r) => {
+      const height = Number(heights[r]) || 0;
+      const cells = (row.cells || []).map((cell, c) => {
+        if (!cell || cell.skip) return "";
+        const span = (cell.rowspan > 1 ? ` rowspan="${cell.rowspan}"` : "") + (cell.colspan > 1 ? ` colspan="${cell.colspan}"` : "");
+        const tag = block.header && r === 0 ? "th" : "td";
+        return `<${tag}${span}><div contenteditable="true" data-sheet-cell="${r},${c}">${escapeText(cell.text || "")}</div></${tag}>`;
+      }).join("");
+      return `<tr data-sheet-row="${r}" data-row-height="${height || ""}"${height >= 18 ? ` style="height:${height}px"` : ""}><th class="sheet-rowhead"><button type="button" class="sheet-grip" data-row-grip="${r}" aria-label="行${r + 1}を移動">⋮</button><span>${r + 1}</span><button type="button" class="sheet-grip" data-sheet-open="row:${r}" aria-label="行の操作">▾</button><span class="sheet-resize sheet-resize-row" data-resize-row="${r}"></span></th>${cells}</tr>`;
+    }).join("");
+    return `<div class="blk-sheet-edit" data-sheet-path="${escapeAttr(path)}"><div class="blk-sheet-tools"><button type="button" data-sheet-undo="${escapeAttr(path)}" aria-label="表を元に戻す">↶</button><button type="button" data-sheet-redo="${escapeAttr(path)}" aria-label="表をやり直す">↷</button><button type="button" data-sheet-row="${escapeAttr(path)}">行+</button><button type="button" data-sheet-col="${escapeAttr(path)}">列+</button><button type="button" data-sheet-del-row="${escapeAttr(path)}">行-</button><button type="button" data-sheet-del-col="${escapeAttr(path)}">列-</button><button type="button" data-sheet-merge="${escapeAttr(path)}">結合</button><button type="button" data-sheet-unmerge="${escapeAttr(path)}">解除</button><label><input type="checkbox" data-sheet-header${block.header ? " checked" : ""}>見出し行</label></div><div class="blk-sheet-tools">${widthInputs}</div><div class="table-scroll"><table class="sheet sheet-grid"><colgroup><col style="width:2.6em">${cols}</colgroup><thead>${head}</thead><tbody>${body}</tbody></table></div></div>`;
   }
 
   function blockRow(block, path) {
@@ -681,6 +743,7 @@
     syncBlocks();
     fillLibrarySelects(host);
     if (globalThis.GuideImages) GuideImages.hydrate(host);
+    markSheet();
   }
 
   async function fillLibrarySelects(root) {
@@ -1058,14 +1121,12 @@
     }
     const add = event.target.closest("[data-add-block]");
     if (add) { insertBlock(add.getAttribute("data-add-block"), add.getAttribute("data-add-path")); return; }
-    const sheetCell = event.target.closest("[data-sheet-cell]");
-    if (sheetCell) {
-      const key = sheetCell.getAttribute("data-sheet-cell");
-      const box = sheetCell.closest(".blk-sheet-edit");
-      sheetSelection = event.shiftKey ? sheetSelection.concat(key) : [key];
-      if (box) box.querySelectorAll("[data-sheet-cell]").forEach(node => node.parentElement.classList.toggle("on", sheetSelection.indexOf(node.getAttribute("data-sheet-cell")) >= 0));
+    const opener = event.target.closest("[data-sheet-open]");
+    if (opener) {
+      openSheetMenu(opener, opener.getAttribute("data-sheet-open"));
       return;
     }
+    if (event.target.closest("[data-sheet-cell], .sheet-grip, .sheet-resize")) return;
     const collapse = event.target.closest("[data-collapse-block]");
     if (collapse) {
       const key = collapse.getAttribute("data-collapse-block");
@@ -1074,10 +1135,10 @@
       paintBlocks();
       return;
     }
-    const sheet = event.target.closest("[data-sheet-row], [data-sheet-col], [data-sheet-del-row], [data-sheet-del-col], [data-sheet-merge], [data-sheet-unmerge]");
+    const sheet = event.target.closest("[data-sheet-row], [data-sheet-col], [data-sheet-del-row], [data-sheet-del-col], [data-sheet-merge], [data-sheet-unmerge], [data-sheet-undo], [data-sheet-redo]");
     if (sheet && editing) {
       syncBlocks();
-      const path = sheet.getAttribute("data-sheet-row") || sheet.getAttribute("data-sheet-col") || sheet.getAttribute("data-sheet-del-row") || sheet.getAttribute("data-sheet-del-col") || sheet.getAttribute("data-sheet-merge") || sheet.getAttribute("data-sheet-unmerge");
+      const path = sheet.getAttribute("data-sheet-row") || sheet.getAttribute("data-sheet-col") || sheet.getAttribute("data-sheet-del-row") || sheet.getAttribute("data-sheet-del-col") || sheet.getAttribute("data-sheet-merge") || sheet.getAttribute("data-sheet-unmerge") || sheet.getAttribute("data-sheet-undo") || sheet.getAttribute("data-sheet-redo");
       editSheet(path, sheet);
       paintBlocks();
       return;
@@ -1176,7 +1237,33 @@
     syncBlocks();
   }
 
+  fields.addEventListener("keydown", event => {
+    const host = event.target.closest && event.target.closest(".blk-sheet-edit");
+    if (!host || event.isComposing || event.keyCode === 229) return;
+    const path = host.getAttribute("data-sheet-path");
+    const table = blockAt(path);
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && (event.key === "z" || event.key === "Z" || event.key === "y" || event.key === "Y")) {
+      if (event.target.closest("[data-sheet-cell]")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!table) return;
+      const redo = event.key === "y" || event.key === "Y" || (event.shiftKey && event.key.toLowerCase() === "z");
+      if (sheetRestore(path, table, redo ? 1 : -1)) paintBlocks();
+      return;
+    }
+    if (!sheetRange || sheetRange.path !== path || event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
+    if (event.target.closest("[data-sheet-cell], input, textarea")) return;
+    const node = host.querySelector('[data-sheet-cell="' + sheetRange.aR + "," + sheetRange.aC + '"]');
+    if (!node) return;
+    event.preventDefault();
+    sheetPush(path, table);
+    node.textContent = event.key;
+    focusSheetCell(host, sheetRange.aR, sheetRange.aC);
+  });
+
   fields.addEventListener("click", event => {
+    const menu = document.getElementById("sheet-menu");
+    if (menu && !event.target.closest("#sheet-menu")) menu.hidden = true;
     const tab = event.target.closest && event.target.closest("[data-card-tab]");
     if (tab) {
       syncBlocks();
@@ -1284,6 +1371,227 @@
     blockDrag.to = path;
     blockDrag.before = before;
   }
+
+  function sheetHostOf(node) {
+    return node && node.closest && node.closest(".blk-sheet-edit");
+  }
+
+  function sheetPoint(host, x, y) {
+    const rows = [...host.querySelectorAll("tbody tr")];
+    let r = Math.max(0, rows.length - 1);
+    rows.forEach((row, index) => {
+      const rect = row.getBoundingClientRect();
+      if (y >= rect.top && y < rect.bottom) r = index;
+    });
+    const heads = [...host.querySelectorAll("[data-col-head]")];
+    let c = Math.max(0, heads.length - 1);
+    heads.forEach((head, index) => {
+      const rect = head.getBoundingClientRect();
+      if (x >= rect.left && x < rect.right) c = index;
+    });
+    return { r: r, c: c };
+  }
+
+  function focusSheetCell(host, r, c) {
+    const node = host.querySelector('[data-sheet-cell="' + r + "," + c + '"]');
+    if (!node) return;
+    node.focus();
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function scaleSheetWidths(widths) {
+    const sum = widths.reduce((total, n) => total + n, 0) || 1;
+    return widths.map(n => Math.max(4, Math.round(n / sum * 100)));
+  }
+
+  function openSheetMenu(anchor, spec) {
+    let menu = document.getElementById("sheet-menu");
+    if (!menu) {
+      menu = document.createElement("div");
+      menu.id = "sheet-menu";
+      menu.hidden = true;
+      document.body.appendChild(menu);
+      menu.addEventListener("click", event => {
+        const act = event.target.closest("[data-sheet-act]");
+        if (!act) return;
+        applySheetAction(menu.dataset.path, menu.dataset.axis, Number(menu.dataset.index), act.getAttribute("data-sheet-act"));
+        menu.hidden = true;
+      });
+    }
+    const parts = String(spec || "").split(":");
+    menu.dataset.axis = parts[0];
+    menu.dataset.index = parts[1];
+    menu.dataset.path = sheetHostOf(anchor).getAttribute("data-sheet-path");
+    const row = parts[0] === "row";
+    menu.innerHTML = [
+      row ? '<button type="button" data-sheet-act="prev">上へ</button><button type="button" data-sheet-act="next">下へ</button><button type="button" data-sheet-act="before">上に挿入</button><button type="button" data-sheet-act="after">下に挿入</button>' : '<button type="button" data-sheet-act="prev">左へ</button><button type="button" data-sheet-act="next">右へ</button><button type="button" data-sheet-act="before">左に挿入</button><button type="button" data-sheet-act="after">右に挿入</button>',
+      '<button type="button" data-sheet-act="delete">削除</button>'
+    ].join("");
+    const rect = anchor.getBoundingClientRect();
+    menu.hidden = false;
+    menu.style.left = Math.min(rect.left, window.innerWidth - 160) + "px";
+    menu.style.top = Math.min(rect.bottom + 4, window.innerHeight - 180) + "px";
+  }
+
+  function applySheetAction(path, axis, index, act) {
+    const table = blockAt(path);
+    if (!table) return;
+    syncBlocks();
+    sheetPush(path, table);
+    const nudge = delta => {
+      const step = delta < 0 ? -1 : 1;
+      let dest = index + step;
+      const limit = axis === "row" ? table.rows.length : (table.rows[0] && table.rows[0].cells.length) || 0;
+      while (dest >= 0 && dest <= limit) {
+        const before = JSON.stringify(axis === "row" ? table.rows : table.widths);
+        if (axis === "row") GuideProgress.moveSheetRow(table, index, dest);
+        else GuideProgress.moveSheetColumn(table, index, dest);
+        const after = JSON.stringify(axis === "row" ? table.rows : table.widths);
+        if (after !== before) return;
+        dest += step;
+      }
+    };
+    if (axis === "row") {
+      if (act === "prev") nudge(-1);
+      else if (act === "next") nudge(1);
+      else if (act === "before") GuideProgress.insertSheetRow(table, index);
+      else if (act === "after") GuideProgress.insertSheetRow(table, index + 1);
+      else if (act === "delete") GuideProgress.deleteSheetRow(table, index);
+    } else {
+      if (act === "prev") nudge(-1);
+      else if (act === "next") nudge(1);
+      else if (act === "before") GuideProgress.insertSheetColumn(table, index);
+      else if (act === "after") GuideProgress.insertSheetColumn(table, index + 1);
+      else if (act === "delete") GuideProgress.deleteSheetColumn(table, index);
+    }
+    paintBlocks();
+  }
+
+  fields.addEventListener("pointerdown", event => {
+    if (!event.target.closest || event.button > 0) return;
+    const host = sheetHostOf(event.target);
+    if (!host || event.target.closest("[data-drag-block]")) return;
+    const path = host.getAttribute("data-sheet-path");
+    const table = blockAt(path);
+    if (!table) return;
+    const resizeCol = event.target.closest("[data-resize-col]");
+    const resizeRow = event.target.closest("[data-resize-row]");
+    const rowGrip = event.target.closest("[data-row-grip]");
+    const colGrip = event.target.closest("[data-col-grip]");
+    const cell = event.target.closest("[data-sheet-cell]");
+    if (!resizeCol && !resizeRow && !rowGrip && !colGrip && !cell) return;
+    if (cell && document.activeElement === cell && event.detail < 2 && !event.shiftKey) return;
+    event.preventDefault();
+    try { (event.target.closest(".sheet-resize, .sheet-grip, [data-sheet-cell]") || host).setPointerCapture(event.pointerId); } catch (error) {}
+    sheetPointer = {
+      id: event.pointerId,
+      path: path,
+      x: event.clientX,
+      y: event.clientY,
+      kind: resizeCol ? "col-size" : resizeRow ? "row-size" : rowGrip ? "row-move" : colGrip ? "col-move" : "select",
+      index: Number((resizeCol || resizeRow || rowGrip || colGrip || {}).getAttribute && ((resizeCol && resizeCol.getAttribute("data-resize-col")) || (resizeRow && resizeRow.getAttribute("data-resize-row")) || (rowGrip && rowGrip.getAttribute("data-row-grip")) || (colGrip && colGrip.getAttribute("data-col-grip"))) || 0),
+      moved: false,
+      shift: event.shiftKey,
+      detail: event.detail,
+      widths: (table.widths || []).slice(),
+      heights: (table.heights || []).slice(),
+      cell: cell
+    };
+    if (sheetPointer.kind === "select") {
+      const parts = cell.getAttribute("data-sheet-cell").split(",").map(Number);
+      sheetPointer.r = parts[0];
+      sheetPointer.c = parts[1];
+      if (!sheetRange || sheetRange.path !== path || !event.shiftKey) sheetRange = { path: path, aR: parts[0], aC: parts[1], fR: parts[0], fC: parts[1] };
+    } else sheetPush(path, table);
+  });
+
+  fields.addEventListener("pointermove", event => {
+    if (!sheetPointer || event.pointerId !== sheetPointer.id) return;
+    const host = document.querySelector('.blk-sheet-edit[data-sheet-path="' + sheetPointer.path + '"]');
+    const table = blockAt(sheetPointer.path);
+    if (!host || !table) return;
+    if (Math.hypot(event.clientX - sheetPointer.x, event.clientY - sheetPointer.y) > 4) sheetPointer.moved = true;
+    if (sheetPointer.kind === "select" && sheetPointer.moved) {
+      const point = sheetPoint(host, event.clientX, event.clientY);
+      sheetRange = { path: sheetPointer.path, aR: sheetPointer.shift && sheetRange ? sheetRange.aR : sheetPointer.r, aC: sheetPointer.shift && sheetRange ? sheetRange.aC : sheetPointer.c, fR: point.r, fC: point.c };
+      markSheet();
+    } else if (sheetPointer.kind === "col-size" && sheetPointer.moved) {
+      const total = host.getBoundingClientRect().width || 1;
+      const delta = (event.clientX - sheetPointer.x) / total * 100;
+      const next = sheetPointer.widths.slice();
+      const index = sheetPointer.index;
+      next[index] = Math.max(4, (sheetPointer.widths[index] || 10) + delta);
+      table.widths = scaleSheetWidths(next);
+      host.querySelectorAll("[data-sheet-width]").forEach(input => {
+        const at = Number(input.getAttribute("data-sheet-width"));
+        if (table.widths[at] != null) input.value = String(table.widths[at]);
+      });
+      host.querySelectorAll("colgroup col").forEach((col, at) => {
+        if (at === 0) return;
+        if (table.widths[at - 1] != null) col.style.width = table.widths[at - 1] + "%";
+      });
+    } else if (sheetPointer.kind === "row-size" && sheetPointer.moved) {
+      const index = sheetPointer.index;
+      const height = Math.max(18, Math.min(280, (sheetPointer.heights[index] || 28) + (event.clientY - sheetPointer.y)));
+      table.heights = table.heights || [];
+      table.heights[index] = height;
+      const row = host.querySelector('tr[data-sheet-row="' + index + '"]');
+      if (row) {
+        row.style.height = height + "px";
+        row.setAttribute("data-row-height", String(height));
+      }
+    } else if ((sheetPointer.kind === "row-move" || sheetPointer.kind === "col-move") && sheetPointer.moved) {
+      const point = sheetPoint(host, event.clientX, event.clientY);
+      sheetPointer.drop = sheetPointer.kind === "row-move" ? point.r : point.c;
+      host.querySelectorAll(".is-sheet-drop").forEach(node => node.classList.remove("is-sheet-drop"));
+      const mark = host.querySelector(sheetPointer.kind === "row-move" ? 'tr[data-sheet-row="' + point.r + '"]' : '[data-col-head="' + point.c + '"]');
+      if (mark) mark.classList.add("is-sheet-drop");
+    }
+  });
+
+  fields.addEventListener("pointerup", event => {
+    if (!sheetPointer || event.pointerId !== sheetPointer.id) return;
+    const current = sheetPointer;
+    sheetPointer = null;
+    const host = document.querySelector('.blk-sheet-edit[data-sheet-path="' + current.path + '"]');
+    const table = blockAt(current.path);
+    if (!host || !table) return;
+    if (current.kind === "select") {
+      if (current.detail >= 2 && !current.moved) {
+        sheetRange = { path: current.path, aR: current.r, aC: current.c, fR: current.r, fC: current.c };
+        markSheet();
+        focusSheetCell(host, current.r, current.c);
+        sheetPush(current.path, table);
+        return;
+      }
+      const point = current.moved ? sheetPoint(host, event.clientX, event.clientY) : { r: current.r, c: current.c };
+      const anchorR = current.shift && sheetRange && sheetRange.path === current.path ? sheetRange.aR : current.r;
+      const anchorC = current.shift && sheetRange && sheetRange.path === current.path ? sheetRange.aC : current.c;
+      sheetRange = { path: current.path, aR: anchorR, aC: anchorC, fR: point.r, fC: point.c };
+      markSheet();
+      return;
+    }
+    if (current.kind === "col-size" && !current.moved && current.detail >= 2) {
+      const lens = table.rows.map(row => {
+        const cell = row.cells[current.index];
+        return cell && !cell.skip ? String(cell.text || "").length : 0;
+      });
+      const next = (table.widths || []).slice();
+      next[current.index] = Math.max(8, Math.max.apply(null, lens.concat(2)) * 4);
+      table.widths = scaleSheetWidths(next);
+    }
+    if ((current.kind === "row-move" || current.kind === "col-move") && current.moved && current.drop != null) {
+      if (current.kind === "row-move") GuideProgress.moveSheetRow(table, current.index, current.drop);
+      else GuideProgress.moveSheetColumn(table, current.index, current.drop);
+    }
+    if (current.kind !== "select") paintBlocks();
+  });
 
   fields.addEventListener("pointerdown", event => {
     const handle = event.target.closest && event.target.closest("[data-drag-block]");
