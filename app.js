@@ -395,14 +395,11 @@
   function itemLine(item) {
     if (!hasFlag(item, "item") || !item.items || !item.items.length) return "";
     const links = item.items.map(link => {
-      const qty = esc(String(link.qty || 1));
-      if (link.name && !link.id) {
-        const extra = Number(link.qty) > 1 ? " ×" + esc(String(link.qty)) : "";
-        return `<span class="item-free">${esc(link.name)}${extra}</span>`;
-      }
+      const extra = GuideProgress.itemQtySuffix(link.qty);
+      if (link.name && !link.id) return `<span class="item-free">${esc(link.name)}${esc(extra)}</span>`;
       const found = catalogRecordById(link.id);
       const name = found ? found.name : link.id;
-      return `<button type="button" class="linkish${found ? "" : " is-missing-item"}" data-open-item="${esc(link.id)}">${esc(name)} ×${qty}</button>`;
+      return `<button type="button" class="linkish${found ? "" : " is-missing-item"}" data-open-item="${esc(link.id)}">${esc(name)}${esc(extra)}</button>`;
     }).join("");
     return `<p class="item-links">${links}</p>`;
   }

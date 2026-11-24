@@ -227,14 +227,32 @@
     return out.slice(0, 8);
   }
 
+  function itemQtySuffix(qty) {
+    const n = Math.round(Number(qty));
+    return n > 1 ? " ×" + n : "";
+  }
+
+  function stripBakedQty(name) {
+    let current = String(name || "").trim();
+    let baked = 0;
+    let match;
+    while ((match = /^(.*?)(?:\s*×\s*(\d+))\s*$/.exec(current)) && match[1].trim()) {
+      baked = Math.max(baked, Number(match[2]) || 0);
+      current = match[1].trim();
+    }
+    return { name: current, baked: baked };
+  }
+
   function itemLinks(value) {
     if (!Array.isArray(value)) return [];
     const out = [];
     const seen = new Set();
     for (const entry of value) {
       if (!entry || typeof entry !== "object") continue;
-      const qty = Math.max(1, Math.min(99, Math.round(Number(entry.qty) || 1)));
-      const named = toHalfWidth(entry.name || "").trim().replace(/\s+/g, " ");
+      let qty = Math.max(1, Math.min(99, Math.round(Number(entry.qty) || 1)));
+      const split = stripBakedQty(toHalfWidth(entry.name || "").trim().replace(/\s+/g, " "));
+      const named = split.name;
+      if (split.baked > 1 && !(Number(entry.qty) > 1)) qty = Math.max(1, Math.min(99, split.baked));
       if (named && typeof entry.id !== "string") {
         const key = "name:" + named;
         if (seen.has(key)) continue;
@@ -2714,6 +2732,9 @@
     githubReadFiles,
     GITHUB_STORE,
     enemyLinks,
+    itemLinks,
+    itemQtySuffix,
+    stripBakedQty,
     numberCards,
     foldCards,
     foldChildDetails,

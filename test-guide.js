@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v46");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v47");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -1035,6 +1035,24 @@ assert.deepStrictEqual(movedCols.widths, [20, 50, 30]);
 const sheetSized = progress.normalizeBlocks([{ type: "table", heights: [0, 36], widths: [50, 50], rows: [{ cells: [{ text: "上" }, { text: "右" }] }, { cells: [{ text: "下" }, { text: "端" }] }] }]);
 assert.strictEqual(sheetSized[0].heights[1], 36);
 assert.ok(progress.blockHtml(sheetSized).includes("height:36px"));
+assert.ok(progress.blockHtml(sheetSized).includes("blk-sheet"));
+assert.deepStrictEqual(progress.itemLinks([{ name: "手榴弾×2×2", qty: 2 }]), [{ name: "手榴弾", qty: 2 }]);
+assert.deepStrictEqual(progress.itemLinks([{ name: "手榴弾×2" }]), [{ name: "手榴弾", qty: 2 }]);
+assert.deepStrictEqual(progress.itemLinks([{ name: "ポーション", qty: 1 }, { id: "cons-001", qty: 2 }]), [
+  { name: "ポーション", qty: 1 },
+  { id: "cons-001", qty: 2 }
+]);
+assert.strictEqual(progress.itemQtySuffix(1), "");
+assert.strictEqual(progress.itemQtySuffix(""), "");
+assert.strictEqual(progress.itemQtySuffix(2), " ×2");
+assert.deepStrictEqual(progress.stripBakedQty("手榴弾 ×2 ×2"), { name: "手榴弾", baked: 2 });
+const pageCss = fs.readFileSync("index.html", "utf8");
+assert.ok(pageCss.includes("table.sheet.blk-sheet{min-width:0;width:100%;border:1px solid var(--line);border-collapse:collapse}"));
+assert.ok(pageCss.includes("table.sheet.blk-sheet th,table.sheet.blk-sheet td{border:1px solid var(--line)"));
+const editorCss = fs.readFileSync("card-edit.js", "utf8");
+assert.ok(editorCss.includes(".blk-sheet-edit table.sheet td,.blk-sheet-edit table.sheet th{min-width:3em;padding:4px 6px;border:1px solid var(--line)"));
+assert.ok(editorCss.includes("GuideProgress.itemQtySuffix"));
+assert.ok(!editorCss.includes('label + " ×" + link.qty'));
 
 (async () => {
   const denied = await progress.githubTest(mockFetch(async () => ({ status: 200, body: { permissions: { push: false }, full_name: "ZeVu2525/ff7-remake-guide" } })), "secret-token", "ZeVu2525", "ff7-remake-guide");
