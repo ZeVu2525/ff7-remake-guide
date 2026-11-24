@@ -956,25 +956,30 @@ const ROUTE = {
         },
         {
           id: "ch02-sec-mwt47ehg",
-          title: "迂回路を進む"
+          title: "迂回路を進む",
+          map: "maps/jun-ch02-02.png"
         },
         {
           id: "ch02-sec-mwt47lcj",
           title: "追跡をかわす",
+          map: "maps/jun-ch02-02.png",
           note: "治安維持部隊の追跡を振り切り、駅を目指そう"
         },
         {
           id: "ch02-sec-mwt49mqd",
           title: "市街地の逃走",
+          map: "maps/jun-ch02-03.png",
           note: "駅周辺を避け、逃走経路を確保しよう。"
         },
         {
           id: "ch02-sec-mwt49w7h",
-          title: "包囲網を突破"
+          title: "包囲網を突破",
+          map: "maps/jun-ch02-05.png"
         },
         {
           id: "ch02-sec-mwt4a2az",
           title: "最終列車",
+          map: "maps/jun-ch02-06.png",
           note: "先頭車両でバレット達と交流しよう。"
         }
       ],
@@ -1039,7 +1044,60 @@ const ROUTE = {
           section: "ch02-sec-mwt41bex",
           blocks: [
             {
-              type: "text"
+              type: "text",
+              html: "ジェシーからお礼の品をもらう"
+            }
+          ],
+          detail: "ジェシーからお礼の品をもらう",
+          location: "駅前通り",
+          flags: [
+            "story",
+            "item"
+          ],
+          items: [
+            {
+              id: "mat-ma-001",
+              qty: 1
+            }
+          ]
+        },
+        {
+          id: "user-mwt6mjte-csz6",
+          flag: "item",
+          detail: "左側にあるバスの左の宝箱",
+          parent: "ch02-s03",
+          section: "ch02-sec-mwt41bex",
+          template: "tpl-chest",
+          items: [
+            {
+              name: "50ギル",
+              qty: 1
+            }
+          ],
+          blocks: [
+            {
+              type: "text",
+              html: "左側にあるバスの左の宝箱"
+            }
+          ]
+        },
+        {
+          id: "user-mwt6rwd9-o1d4",
+          flag: "item",
+          detail: "階段を上った道中に宝箱",
+          parent: "ch02-s03",
+          section: "ch02-sec-mwt41bex",
+          template: "tpl-chest",
+          items: [
+            {
+              id: "cons-016",
+              qty: 3
+            }
+          ],
+          blocks: [
+            {
+              type: "text",
+              html: "階段を上った道中に宝箱"
             }
           ]
         },
@@ -1054,25 +1112,277 @@ const ROUTE = {
             {
               type: "text"
             }
-          ]
+          ],
+          location: "駅前通り"
         },
         {
           id: "ch02-s05",
           flag: "story",
           step: 11,
           title: "神羅の包囲網を突破",
-          detail: "包囲網を突破。次の手順は、神羅の包囲網を突破。",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter02.html",
           section: "ch02-sec-mwt49w7h"
+        },
+        {
+          id: "user-mwv8suxh-8yoa",
+          flag: "item",
+          detail: "まっすぐ進んで、左の路地にある",
+          parent: "ch02-s05",
+          section: "ch02-sec-mwt49w7h",
+          template: "tpl-shinra",
+          location: "噴水広場 裏門",
+          blocks: [
+            {
+              type: "text",
+              html: "まっすぐ進んで、左の路地にある"
+            }
+          ]
+        },
+        {
+          id: "user-mwv8tsqo-kb3v",
+          flag: "item",
+          detail: "突き当り左にある宝箱",
+          parent: "ch02-s05",
+          section: "ch02-sec-mwt49w7h",
+          template: "tpl-chest",
+          items: [
+            {
+              id: "cons-002",
+              qty: 1
+            }
+          ],
+          blocks: [
+            {
+              type: "text",
+              html: "突き当り左にある宝箱"
+            }
+          ]
+        },
+        {
+          id: "user-mwv8unec-24jf",
+          flag: "item",
+          title: "神羅ボックス⑤⑥",
+          detail: "右沿いに2つある",
+          parent: "ch02-s05",
+          section: "ch02-sec-mwt49w7h",
+          blocks: [
+            {
+              type: "text",
+              html: "右沿いに2つある"
+            }
+          ]
+        },
+        {
+          id: "user-mwv8v1qn-n5ar",
+          flag: "item",
+          detail: "左沿いに宝箱",
+          parent: "ch02-s05",
+          section: "ch02-sec-mwt49w7h",
+          template: "tpl-chest",
+          items: [
+            {
+              id: "cons-002",
+              qty: 1
+            }
+          ],
+          blocks: [
+            {
+              type: "text",
+              html: "左沿いに宝箱"
+            }
+          ]
+        },
+        {
+          id: "user-mwv8vkzx-523m",
+          flag: "item",
+          detail: "右沿いにある",
+          parent: "ch02-s05",
+          section: "ch02-sec-mwt49w7h",
+          template: "tpl-shinra",
+          blocks: [
+            {
+              type: "text",
+              html: "右沿いにある"
+            }
+          ]
         },
         {
           id: "ch02-s06",
           flag: "story",
           step: 12,
           title: "次々と現れる敵との戦闘を終えて進む",
-          detail: "包囲網を突破。次々と現れる敵との戦闘を終えて進む。",
+          detail: "住宅地区に出現する敵\n1回戦 警備兵 3\n擲弾兵 2\n鎮圧兵 1\n2回戦 警備兵 3\n鎮圧兵 1\n3回戦 部隊長ゴンガ 1",
           source: "https://finalfantasy-jun-site.com/ff7_remake/story/chapter02.html",
-          section: "ch02-sec-mwt49w7h"
+          section: "ch02-sec-mwt49w7h",
+          blocks: [
+            {
+              type: "table",
+              header: true,
+              widths: [
+                10,
+                45,
+                45
+              ],
+              heights: [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              rows: [
+                {
+                  cells: [
+                    {
+                      text: "住宅地区に出現する敵",
+                      colspan: 3
+                    },
+                    {
+                      skip: true
+                    },
+                    {
+                      skip: true
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      text: "1回戦",
+                      rowspan: 3
+                    },
+                    {
+                      text: "警備兵"
+                    },
+                    {
+                      text: "3"
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      skip: true
+                    },
+                    {
+                      text: "擲弾兵"
+                    },
+                    {
+                      text: "2"
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      skip: true
+                    },
+                    {
+                      text: "鎮圧兵"
+                    },
+                    {
+                      text: "1"
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      text: "2回戦",
+                      rowspan: 2
+                    },
+                    {
+                      text: "警備兵"
+                    },
+                    {
+                      text: "3"
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      skip: true
+                    },
+                    {
+                      text: "鎮圧兵"
+                    },
+                    {
+                      text: "1"
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      text: "3回戦"
+                    },
+                    {
+                      text: "部隊長ゴンガ"
+                    },
+                    {
+                      text: "1"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          flags: [
+            "story",
+            "battle"
+          ],
+          enemies: [
+            "e005",
+            "e075"
+          ]
+        },
+        {
+          id: "user-mwv9aw7p-unbk",
+          flag: "tips",
+          title: "盾持ちの敵について",
+          detail: "盾を持っている敵についてはファイアで攻撃、またはブレイブモードでのガードからカウンターを狙うと敵を怯ませることができます。",
+          parent: "ch02-s06",
+          section: "ch02-sec-mwt49w7h",
+          blocks: [
+            {
+              type: "text",
+              html: "盾を持っている敵についてはファイアで攻撃、またはブレイブモードでのガードからカウンターを狙うと敵を怯ませることができます。"
+            }
+          ]
+        },
+        {
+          id: "user-mwv9bogp-87kq",
+          flag: "story",
+          title: "ジェシーに話しかける",
+          section: "ch02-sec-mwt4a2az",
+          blocks: [
+            {
+              type: "text"
+            }
+          ]
+        },
+        {
+          id: "user-mwv9cdbr-ji2g",
+          flag: "item",
+          detail: "列車の中の道中に宝箱",
+          parent: "user-mwv9bogp-87kq",
+          section: "ch02-sec-mwt4a2az",
+          template: "tpl-chest",
+          items: [
+            {
+              name: "100ギル",
+              qty: 1
+            }
+          ],
+          blocks: [
+            {
+              type: "text",
+              html: "列車の中の道中に宝箱"
+            }
+          ]
         },
         {
           id: "ch02-05",
@@ -1081,7 +1391,422 @@ const ROUTE = {
           title: "この章を終える",
           detail: "列車の先頭の会話のあと、八番街の逃走が付く。",
           source: "https://blog.rebosoku.com/archives/ff7remake_chapter2.html",
-          section: "ch02-sec-mwt4a2az"
+          section: "ch02-sec-mwt4a2az",
+          parent: "user-mwv9bogp-87kq"
+        },
+        {
+          id: "user-mwt63jrh-wlnw",
+          flag: "story",
+          title: "謎の男を追いかけよう",
+          section: "ch02-sec-mwt479ss",
+          blocks: [
+            {
+              type: "text"
+            }
+          ]
+        },
+        {
+          id: "user-mwt6424a-slch",
+          flag: "story",
+          title: "駅へ繋がる道を探そう",
+          section: "ch02-sec-mwt47ehg",
+          blocks: [
+            {
+              type: "text"
+            }
+          ]
+        },
+        {
+          id: "user-mwt65qqg-c2a5",
+          flag: "item",
+          detail: "建物の屋上にある宝箱",
+          parent: "user-mwt6424a-slch",
+          section: "ch02-sec-mwt47ehg",
+          template: "tpl-chest",
+          location: "駅前通り",
+          items: [
+            {
+              id: "cons-001",
+              qty: 3
+            }
+          ],
+          blocks: [
+            {
+              type: "text",
+              html: "建物の屋上にある宝箱"
+            }
+          ]
+        },
+        {
+          id: "user-mwt6znbm-r6xg",
+          flag: "story",
+          title: "エアリスと会話する",
+          section: "ch02-sec-mwt47lcj",
+          location: "LOVELESS通り",
+          items: [
+            {
+              id: "key-002",
+              qty: 1
+            }
+          ],
+          blocks: [
+            {
+              type: "text"
+            }
+          ],
+          flags: [
+            "story",
+            "item"
+          ]
+        },
+        {
+          id: "user-mwt7060k-fa3q",
+          flag: "tips",
+          title: "エアリスとの会話",
+          detail: "エアリスとの会話には選択肢がありますが、どちらを選んでもSTORY進行に変化はありません。",
+          parent: "user-mwt6znbm-r6xg",
+          section: "ch02-sec-mwt47lcj",
+          blocks: [
+            {
+              type: "text",
+              html: "エアリスとの会話には選択肢がありますが、どちらを選んでもSTORY進行に変化はありません。"
+            }
+          ]
+        },
+        {
+          id: "user-mwtuhkmo-kqv0",
+          flag: "story",
+          title: "警備兵×5との戦闘",
+          section: "ch02-sec-mwt49mqd",
+          blocks: [
+            {
+              type: "text"
+            }
+          ],
+          flags: [
+            "story",
+            "battle"
+          ],
+          enemies: [
+            "e001"
+          ]
+        },
+        {
+          id: "user-mwv5i3x5-ikla",
+          flag: "story",
+          title: "次々に出現する敵を全滅させます",
+          detail: "噴水広場に出現する敵\n1回戦 警備兵 2\nガードハウンド 1\n2回戦 警備兵 2\n擲弾兵 2\n3回戦 戦闘員 2\n4回戦 警備兵 2\n擲弾兵 2",
+          section: "ch02-sec-mwt49mqd",
+          blocks: [
+            {
+              type: "table",
+              header: true,
+              widths: [
+                31,
+                40,
+                29
+              ],
+              heights: [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              rows: [
+                {
+                  cells: [
+                    {
+                      text: "噴水広場に出現する敵",
+                      colspan: 3
+                    },
+                    {
+                      skip: true
+                    },
+                    {
+                      skip: true
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      text: "1回戦",
+                      rowspan: 2
+                    },
+                    {
+                      text: "警備兵"
+                    },
+                    {
+                      text: "2"
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      skip: true
+                    },
+                    {
+                      text: "ガードハウンド"
+                    },
+                    {
+                      text: "1"
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      text: "2回戦",
+                      rowspan: 2
+                    },
+                    {
+                      text: "警備兵"
+                    },
+                    {
+                      text: "2"
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      skip: true
+                    },
+                    {
+                      text: "擲弾兵"
+                    },
+                    {
+                      text: "2"
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      text: "3回戦"
+                    },
+                    {
+                      text: "戦闘員"
+                    },
+                    {
+                      text: "2"
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      text: "4回戦",
+                      rowspan: 2
+                    },
+                    {
+                      text: "警備兵"
+                    },
+                    {
+                      text: "2"
+                    }
+                  ]
+                },
+                {
+                  cells: [
+                    {
+                      skip: true
+                    },
+                    {
+                      text: "擲弾兵"
+                    },
+                    {
+                      text: "2"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          flags: [
+            "story",
+            "battle"
+          ],
+          enemies: [
+            "e003",
+            "e015"
+          ]
+        },
+        {
+          id: "user-mwv7uh73-g5wr",
+          flag: "item",
+          title: "宝箱⑩⑪",
+          detail: "正面左手と右奥に宝箱",
+          parent: "user-mwv5i3x5-ikla",
+          section: "ch02-sec-mwt49mqd",
+          items: [
+            {
+              id: "cons-016",
+              qty: 2
+            },
+            {
+              id: "arm-002",
+              qty: 1
+            }
+          ],
+          blocks: [
+            {
+              type: "text",
+              html: "正面左手と右奥に宝箱"
+            }
+          ]
+        },
+        {
+          id: "user-mwv7td2q-7atv",
+          flag: "story",
+          title: "建物の外ハシゴを利用して目的地へ向かう",
+          section: "ch02-sec-mwt49mqd",
+          blocks: [
+            {
+              type: "text"
+            }
+          ]
+        },
+        {
+          id: "user-mwv7zxro-80qc",
+          flag: "tips",
+          title: "ハシゴについて",
+          detail: "敵を全滅させないとは現れません。また、登っている途中で攻撃されますが放置で大丈夫です。",
+          parent: "user-mwv7td2q-7atv",
+          section: "ch02-sec-mwt49mqd",
+          blocks: [
+            {
+              type: "text",
+              html: "敵を全滅させないとは現れません。また、登っている途中で攻撃されますが放置で大丈夫です。"
+            }
+          ]
+        },
+        {
+          id: "user-mwul5q2b-mdsq",
+          flag: "item",
+          detail: "後ろに戻り、宝箱",
+          parent: "user-mwtuhkmo-kqv0",
+          section: "ch02-sec-mwt49mqd",
+          template: "tpl-chest",
+          items: [
+            {
+              id: "mat-im-015",
+              qty: 1
+            }
+          ],
+          blocks: [
+            {
+              type: "text",
+              html: "後ろに戻り、宝箱"
+            }
+          ]
+        },
+        {
+          id: "user-mwul6eqt-txe5",
+          flag: "item",
+          detail: "宝箱の近くにある",
+          parent: "user-mwtuhkmo-kqv0",
+          section: "ch02-sec-mwt49mqd",
+          template: "tpl-shinra",
+          blocks: [
+            {
+              type: "text",
+              html: "宝箱の近くにある"
+            }
+          ]
+        },
+        {
+          id: "user-mwul1quj-oudn",
+          flag: "item",
+          detail: "エアリスのいた場所から奥に進み、右の路地を進むと突き当りに宝箱",
+          parent: "user-mwtuhkmo-kqv0",
+          section: "ch02-sec-mwt49mqd",
+          template: "tpl-chest",
+          items: [
+            {
+              id: "cons-002",
+              qty: 1
+            }
+          ],
+          blocks: [
+            {
+              type: "text",
+              html: "エアリスのいた場所から奥に進み、右の路地を進むと突き当りに宝箱"
+            }
+          ]
+        },
+        {
+          id: "user-mwul22rs-wrfu",
+          flag: "item",
+          detail: "宝箱の隣にある",
+          parent: "user-mwtuhkmo-kqv0",
+          section: "ch02-sec-mwt49mqd",
+          template: "tpl-shinra",
+          blocks: [
+            {
+              type: "text",
+              html: "宝箱の隣にある"
+            }
+          ]
+        },
+        {
+          id: "user-mwul7im6-wuyw",
+          flag: "item",
+          detail: "エアリスがいた場所を左に進み、まっすぐ行くと道中に宝箱",
+          parent: "user-mwtuhkmo-kqv0",
+          section: "ch02-sec-mwt49mqd",
+          template: "tpl-chest",
+          items: [
+            {
+              id: "mat-im-021",
+              qty: 1
+            }
+          ],
+          blocks: [
+            {
+              type: "text",
+              html: "エアリスがいた場所を左に進み、まっすぐ行くと道中に宝箱"
+            }
+          ]
+        },
+        {
+          id: "user-mwul8dpu-ub7x",
+          flag: "item",
+          detail: "「かいひぎり」があった場所を左に曲がった先にある宝箱",
+          parent: "user-mwtuhkmo-kqv0",
+          section: "ch02-sec-mwt49mqd",
+          template: "tpl-chest",
+          items: [
+            {
+              id: "acc-001",
+              qty: 1
+            }
+          ],
+          blocks: [
+            {
+              type: "text",
+              html: "「かいひぎり」があった場所を左に曲がった先にある宝箱"
+            }
+          ]
+        },
+        {
+          id: "user-mwul9ax8-m6f9",
+          flag: "item",
+          detail: "パワーリストの宝箱の隣にある",
+          parent: "user-mwtuhkmo-kqv0",
+          section: "ch02-sec-mwt49mqd",
+          template: "tpl-shinra",
+          blocks: [
+            {
+              type: "text",
+              html: "パワーリストの宝箱の隣にある"
+            }
+          ]
         }
       ]
     },
