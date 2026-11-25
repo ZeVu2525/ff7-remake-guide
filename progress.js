@@ -400,7 +400,27 @@
     const border = colorValue(item.border);
     if (bg) section.bg = bg;
     if (border) section.border = border;
+    if (item.parent) section.parent = String(item.parent);
     return section;
+  }
+
+  function cleanSections(sections) {
+    const list = (sections || []).map(item => {
+      const section = sectionRecord(item);
+      section.title = sectionName(section.title || "");
+      return section;
+    });
+    const ids = new Set(list.map(section => section.id));
+    list.forEach(section => {
+      if (!section.parent || section.parent === section.id || !ids.has(section.parent)) delete section.parent;
+    });
+    const byId = {};
+    list.forEach(section => { byId[section.id] = section; });
+    list.forEach(section => {
+      const parent = section.parent && byId[section.parent];
+      if (parent && parent.parent) delete section.parent;
+    });
+    return list;
   }
 
   function normalizeEnemyEdits(value) {
@@ -444,13 +464,7 @@
     const saved = book.chapters[chapterKey(trackId, chapterId)];
     const base = row && Array.isArray(row.sections) ? row.sections : [];
     const list = saved && saved.sections && saved.sections.length ? saved.sections : base;
-    if (list.length) {
-      return list.map(item => {
-        const section = sectionRecord(item);
-        section.title = sectionName(section.title || "");
-        return section;
-      });
-    }
+    if (list.length) return cleanSections(list);
     return [{ id: chapterId + "-sec-1", title: "本章", map: "", note: "" }];
   }
 
@@ -820,11 +834,7 @@
   function saveSections(book, key, sections) {
     const prev = book.chapters[key] || { order: [], known: [] };
     book.chapters[key] = Object.assign({}, prev, {
-      sections: (sections || []).map(item => {
-        const section = sectionRecord(item);
-        section.title = sectionName(section.title || "");
-        return section;
-      })
+      sections: cleanSections(sections)
     });
     return book;
   }
@@ -1334,6 +1344,8 @@
     "kids": "中のカード",
     "addCard": "カードを追加",
     "addSection": "子チャプターを追加",
+    "addGrandSection": "孫チャプターを追加",
+    "addGrandCard": "孫カード",
     "rename": "名前",
     "hint": "ヒント",
     "save": "保存",
@@ -1715,7 +1727,50 @@
       const value = Math.round(Number(block.heights && block.heights[index]) || 0);
       return value >= 18 ? Math.min(280, value) : 0;
     });
-    return { type: "table", header: block.header === true, widths: widths, heights: heights, rows: safeRows };
+    const table = { type: "table", header: block.header === true, widths: widths, heights: heights, rows: safeRows };
+    const width = sheetTableWidth(block);
+    if (width < 100) table.width = width;
+    return table;
+  }
+
+  function sheetTableWidth(block) {
+    const value = Math.round(Number(block && block.width) || 100);
+    if (value >= 100) return 100;
+    return Math.max(20, value);
+  }
+
+  function absorbSheetEdge(widths, tableWidth, containerPx, deltaPx) {
+    const cols = (widths || []).map(n => Number(n) || 0);
+    if (!cols.length) return { width: 100, widths: [] };
+    const container = Math.max(1, Number(containerPx) || 1);
+    const startPct = sheetTableWidth({ width: tableWidth });
+    const startPx = container * startPct / 100;
+    const pixels = cols.map(n => startPx * n / 100);
+    const minCol = 24;
+    pixels[pixels.length - 1] = Math.max(minCol, pixels[pixels.length - 1] + (Number(deltaPx) || 0));
+    let sum = pixels.reduce((total, n) => total + n, 0);
+    if (sum > container) {
+      pixels[pixels.length - 1] = Math.max(minCol, pixels[pixels.length - 1] - (sum - container));
+      sum = pixels.reduce((total, n) => total + n, 0);
+    }
+    const width = Math.max(20, Math.min(100, Math.round(sum / container * 100)));
+    const actual = container * width / 100;
+    const next = pixels.map(px => Math.max(4, Math.round(px / actual * 100)));
+    const drift = 100 - next.reduce((total, n) => total + n, 0);
+    next[next.length - 1] = Math.max(4, next[next.length - 1] + drift);
+    return { width: width, widths: next };
+  }
+
+  function fitSheetEdge(widths, tableWidth, containerPx, fitPercent) {
+    const cols = (widths || []).map(n => Number(n) || 0);
+    if (cols.length < 2) return absorbSheetEdge(cols.length ? cols : [100], tableWidth, containerPx, 0);
+    const share = Math.max(8, Math.min(80, Math.round(Number(fitPercent) || 8)));
+    const container = Math.max(1, Number(containerPx) || 1);
+    const startPx = container * sheetTableWidth({ width: tableWidth }) / 100;
+    const pixels = cols.map(n => startPx * n / 100);
+    const others = pixels.slice(0, -1).reduce((total, n) => total + n, 0);
+    const lastPx = others * share / Math.max(10, 100 - share);
+    return absorbSheetEdge(cols, tableWidth, container, lastPx - pixels[pixels.length - 1]);
   }
 
   function sheetCoveredHeight(heights, start, span) {
@@ -2020,7 +2075,9 @@
       }).join("");
       return "<tr" + (height >= 18 ? ' style="height:' + height + 'px"' : "") + ">" + cells + "</tr>";
     }).join("");
-    return '<div class="table-scroll" data-bpath="' + path + '"><table class="sheet blk-sheet">' + cols + "<tbody>" + body + "</tbody></table></div>";
+    const width = sheetTableWidth(block);
+    const box = width < 100 ? ' style="width:' + width + '%"' : "";
+    return '<div class="table-scroll"' + box + ' data-bpath="' + path + '"><table class="sheet blk-sheet">' + cols + "<tbody>" + body + "</tbody></table></div>";
   }
 
   function layoutChildren(list, depth) {
@@ -2177,6 +2234,32 @@
     };
   }
 
+  function cardDepth(items, id) {
+    const byId = {};
+    (items || []).forEach(item => { if (item && item.id) byId[item.id] = item; });
+    let depth = 0;
+    let cursor = id;
+    const seen = new Set();
+    while (cursor && !seen.has(cursor)) {
+      seen.add(cursor);
+      const item = byId[cursor];
+      if (!item || !item.parent || item.parent === cursor || !byId[item.parent]) break;
+      depth += 1;
+      cursor = item.parent;
+      if (depth > 4) break;
+    }
+    return depth;
+  }
+
+  function cardSpan(items, id, guard) {
+    const seen = guard || new Set();
+    if (!id || seen.has(id)) return 0;
+    seen.add(id);
+    const kids = (items || []).filter(item => item && item.parent === id);
+    if (!kids.length) return 0;
+    return 1 + kids.reduce((max, kid) => Math.max(max, cardSpan(items, kid.id, seen)), 0);
+  }
+
   function descendantIds(items, rootId) {
     const byParent = {};
     (items || []).forEach(item => {
@@ -2229,8 +2312,10 @@
     const list = (items || []).filter(item => item && item.id);
     const target = list.find(item => item.id === targetId);
     const moving = (ids || []).filter(id => id && id !== targetId);
-    if (!target || target.parent || !moving.length) return null;
-    if (moving.some(id => list.some(item => item.parent === id))) return null;
+    if (!target || !moving.length) return null;
+    const depth = cardDepth(list, targetId);
+    if (depth >= 2) return null;
+    if (moving.some(id => depth + 1 + cardSpan(list, id) > 2)) return null;
     const order = list.map(item => item.id).filter(id => moving.indexOf(id) < 0);
     let insertAt = order.indexOf(targetId);
     insertAt = insertAt < 0 ? order.length : insertAt + 1;
@@ -2629,6 +2714,7 @@
           };
           if (section.bg) copy.bg = section.bg;
           if (section.border) copy.border = section.border;
+          if (section.parent) copy.parent = section.parent;
           return copy;
         }),
         items: (row.items || []).map(item => {
@@ -2817,6 +2903,11 @@
     circledNumber,
     templateHeadings,
     routeTemplateHeadings,
+    sheetTableWidth,
+    absorbSheetEdge,
+    fitSheetEdge,
+    cardDepth,
+    cardSpan,
     UI_LABELS,
     labelText,
     sectionName,
