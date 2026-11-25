@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v51");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v52");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -756,6 +756,24 @@ const savedList = savedSections.chapters["main:ch01"].sections;
 assert.strictEqual(savedList[1].parent, "a");
 assert.strictEqual(savedList[2].parent, undefined);
 assert.strictEqual(savedList[3].parent, undefined);
+const sectionRows = [
+  { id: "a", title: "A" },
+  { id: "a1", title: "A1", parent: "a" },
+  { id: "b", title: "B" },
+  { id: "c", title: "C" }
+];
+const sectionNest = progress.planSectionMove(sectionRows, sectionRows, "c", { same: true, targetId: "b", mode: "nest" });
+assert.strictEqual(sectionNest.dest.find(item => item.id === "c").parent, "b");
+assert.ok(sectionNest.dest.findIndex(item => item.id === "c") > sectionNest.dest.findIndex(item => item.id === "b"));
+assert.strictEqual(progress.planSectionMove(sectionRows, sectionRows, "a", { same: true, targetId: "b", mode: "nest" }), null);
+assert.strictEqual(progress.planSectionMove(sectionRows, sectionRows, "c", { same: true, targetId: "a1", mode: "nest" }), null);
+const sectionOut = progress.planSectionMove(sectionNest.dest, sectionNest.dest, "c", { same: true, targetId: "b", mode: "insert", after: true, unnest: true });
+assert.strictEqual(sectionOut.dest.find(item => item.id === "c").parent, undefined);
+const sectionShift = progress.planSectionMove(sectionRows, sectionRows, "c", { same: true, targetId: "a", mode: "insert", after: false });
+assert.strictEqual(sectionShift.dest[0].id, "c");
+assert.ok(!appSource.includes("data-section-grand"));
+assert.ok(!appSource.includes("data-card-add-child"));
+assert.ok(appSource.includes("data-section-drag"));
 const childClosed = progress.foldChildDetails({ p: false, "kids:p": false }, "p", { p: ["c"], c: ["g"] });
 assert.strictEqual(childClosed.p, false);
 assert.strictEqual(childClosed["kids:p"], false);

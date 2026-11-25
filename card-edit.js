@@ -2482,13 +2482,6 @@
       if (place) addSection(place.trackId, place.chapterId, sectionId);
       return;
     }
-    const sectionGrand = event.target.closest("[data-section-grand]");
-    if (sectionGrand) {
-      const sectionId = sectionGrand.getAttribute("data-section-grand");
-      const place = sectionPlace(sectionId);
-      if (place) addSection(place.trackId, place.chapterId, sectionId, sectionId);
-      return;
-    }
     const sectionAdd = event.target.closest("[data-section-add]");
     if (sectionAdd) { addSection(sectionAdd.getAttribute("data-card-track"), sectionAdd.getAttribute("data-section-add")); return; }
     const moveHere = event.target.closest("[data-move-here]");
@@ -2510,30 +2503,6 @@
     const chapterEdit = event.target.closest("[data-chapter-edit]");
     if (chapterEdit) {
       openChapterEdit(chapterEdit.getAttribute("data-card-track"), chapterEdit.getAttribute("data-chapter-edit"));
-      return;
-    }
-    const addGrand = event.target.closest("[data-card-add-child]");
-    if (addGrand) {
-      const id = addGrand.getAttribute("data-card-add-child");
-      const place = locate(id);
-      const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
-      const rows = place && (GuideProgress.mergeTrack(ROUTE, GAME.chapters[place.trackId] || [], book(), place.trackId) || []);
-      const row = rows && rows.find(entry => entry.chapterId === place.chapterId);
-      if (!place || !item || GuideProgress.cardDepth(row && row.items, id) !== 1) return;
-      openRouteForm({
-        kind: "route",
-        trackId: place.trackId,
-        chapterId: place.chapterId,
-        flag: item.flag || "story",
-        parent: id,
-        section: item.section || "",
-        insertAfter: id,
-        title: "",
-        detail: "",
-        deadline: "",
-        source: "",
-        trophy: ""
-      });
       return;
     }
     const addAfter = event.target.closest("[data-card-add-after]");
@@ -3243,7 +3212,7 @@
   }
 
   function paintDrop(target) {
-    document.querySelectorAll("section.ch.is-chapter-drop, .subch.is-section-drop, article.it.is-nest-drop, article.it.is-nest-blocked").forEach(node => node.classList.remove("is-chapter-drop", "is-section-drop", "is-nest-drop", "is-nest-blocked"));
+    document.querySelectorAll("section.ch.is-chapter-drop, .subch.is-section-drop, .subch.is-nest-drop, .subch.is-nest-blocked, article.it.is-nest-drop, article.it.is-nest-blocked").forEach(node => node.classList.remove("is-chapter-drop", "is-section-drop", "is-nest-drop", "is-nest-blocked"));
     let line = document.getElementById("card-drop-line");
     let label = document.getElementById("card-drop-label");
     if (!target) {
@@ -3251,16 +3220,16 @@
       if (label) label.remove();
       return;
     }
-    const anchor = target.type === "chapter"
+    const anchor = target.bar || (target.type === "chapter"
       ? (target.element.querySelector(".chh") || target.element)
-      : target.element;
+      : target.element);
     if (target.type === "chapter") target.element.classList.add("is-chapter-drop");
     if (target.type === "section") target.element.classList.add("is-section-drop");
-    if (target.type === "nest") target.element.classList.add("is-nest-drop");
-    if (target.type === "blocked") target.element.classList.add("is-nest-blocked");
+    if (target.type === "nest" || target.type === "section-nest") target.element.classList.add("is-nest-drop");
+    if (target.type === "blocked" || target.type === "section-blocked") target.element.classList.add("is-nest-blocked");
     const rect = anchor.getBoundingClientRect();
-    const indented = target.type === "nest" || target.type === "blocked";
-    const top = target.type === "chapter" || target.after ? rect.bottom : (indented ? rect.bottom - 4 : rect.top);
+    const indented = target.type === "nest" || target.type === "blocked" || target.type === "section-nest" || target.type === "section-blocked";
+    const top = indented ? rect.top + rect.height / 2 : (target.type === "chapter" || target.after ? rect.bottom : rect.top);
     if (!line) {
       line = document.createElement("div");
       line.id = "card-drop-line";
@@ -3272,11 +3241,14 @@
       document.body.appendChild(label);
     }
     const inset = indented ? 36 : 0;
-    line.className = target.type === "blocked" ? "is-blocked" : (target.type === "nest" ? "is-nest" : "");
+    const nest = target.type === "nest" || target.type === "section-nest";
+    const blocked = target.type === "blocked" || target.type === "section-blocked";
+    line.className = blocked ? "is-blocked" : (nest ? "is-nest" : "");
     line.style.top = top + "px";
     line.style.left = (rect.left + inset) + "px";
     line.style.width = Math.max(48, rect.width - inset) + "px";
-    label.textContent = target.type === "nest" ? "このカードの中へ" : target.type === "blocked" ? "入れ子にできません" : target.type === "section" ? "この区分へ" : target.type === "chapter" ? "この章の末尾へ" : (target.unnest ? "外に出す" : "ここに置く");
+    const nestLabel = target.type === "section-nest" ? "孫チャプターにする" : (target.depth >= 1 ? "孫カードにする" : "子カードにする");
+    label.textContent = nest ? nestLabel : blocked ? "入れ子にできません" : target.type === "section" ? "この区分へ" : target.type === "chapter" ? "この章の末尾へ" : (target.unnest || target.lift ? "外に出す" : "ここに置く");
     label.style.left = (rect.left + 12) + "px";
     label.style.top = Math.max(8, top - 22) + "px";
   }
@@ -3298,26 +3270,26 @@
         if (from.kind !== "route") {
           return { type: "card", id: targetId, after: ratio >= 0.5, element: card };
         }
-        const edge = ratio < 0.22 || ratio > 0.78;
-        const draggedRight = drag.x - drag.startX > 28;
+        const edge = ratio < 0.28 || ratio > 0.72;
         const draggedLeft = drag.startX - drag.x > 28;
-        const indented = !draggedLeft && (draggedRight || x >= rect.left + 48);
         const sectionNode = card.closest(".subch[data-section]");
         const sectionId = sectionNode ? sectionNode.getAttribute("data-section") || "" : "";
         const movingIds = drag.ids && drag.ids.length ? drag.ids : [drag.id];
+        const items = chapterItemsOf(to.trackId, to.chapterId).concat(chapterItemsOf(from.trackId, from.chapterId));
+        const depth = GuideProgress.cardDepth(items, targetId);
         const nestOk = canNestCards(from.trackId, from.chapterId, to.trackId, to.chapterId, targetId, movingIds);
-        if (drag.ids && drag.ids.length > 1) {
-          if (!edge && indented) {
-            if (!nestOk || drag.ids.indexOf(targetId) >= 0) return { type: "blocked", id: targetId, element: card };
-            return { type: "nest", id: targetId, sectionId, element: card };
-          }
-          return { type: "card", id: targetId, after: ratio >= 0.5, unnest: draggedLeft, sectionId, element: card };
+        if (!edge) {
+          if (!nestOk || movingIds.indexOf(targetId) >= 0) return { type: "blocked", id: targetId, element: card, depth: depth };
+          return { type: "nest", id: targetId, sectionId, element: card, depth: depth };
         }
-        if (!edge && indented) {
-          if (!nestOk || targetId === drag.id) return { type: "blocked", id: targetId, element: card };
-          return { type: "nest", id: targetId, sectionId, element: card };
-        }
-        return { type: "card", id: targetId, after: ratio >= 0.5, unnest: draggedLeft, sectionId, element: card };
+        const neighbor = routeRecord(to.trackId, to.chapterId, targetId);
+        const neighborDepth = GuideProgress.cardDepth(items, targetId);
+        const tooDeep = movingIds.some(itemId => neighborDepth + GuideProgress.cardSpan(items, itemId) > 2);
+        if (tooDeep) return { type: "blocked", id: targetId, element: card, depth: depth };
+        const moving = routeRecord(from.trackId, from.chapterId, drag.id);
+        const nextParent = draggedLeft ? "" : (neighbor && neighbor.parent || "");
+        const lift = !!(moving && moving.parent) && nextParent !== (moving.parent || "") && GuideProgress.cardDepth(items, moving.parent) >= neighborDepth;
+        return { type: "card", id: targetId, after: ratio >= 0.5, unnest: draggedLeft, lift: lift, sectionId, element: card };
       }
     }
     if (from.kind !== "route") return null;
@@ -3736,6 +3708,151 @@
     clearDragVisuals();
     if (current && current.moved) suppressClick = true;
   }
+
+  let sectionDrag = null;
+
+  function sectionUnderPoint(x, y) {
+    const stack = document.elementsFromPoint(x, y);
+    for (let i = 0; i < stack.length; i += 1) {
+      const sub = stack[i].closest && stack[i].closest(".subch[data-section]");
+      if (sub && !sub.classList.contains("is-dragging")) return sub;
+    }
+    return null;
+  }
+
+  function sectionDropAt(x, y) {
+    if (!sectionDrag) return null;
+    const sub = sectionUnderPoint(x, y);
+    if (!sub) return null;
+    const host = sub.closest("section.ch[data-chapter]");
+    const trackNode = host && host.querySelector("[data-card-track]");
+    if (!host || !trackNode) return null;
+    const id = sub.getAttribute("data-section");
+    if (id === sectionDrag.id) return null;
+    const bar = sub.querySelector(".subch-bar") || sub;
+    const rect = bar.getBoundingClientRect();
+    const onBar = y >= rect.top && y <= rect.bottom;
+    const ratio = rect.height ? (y - rect.top) / Math.max(rect.height, 1) : 0.5;
+    const edge = !onBar || ratio < 0.3 || ratio > 0.7;
+    const place = sectionPlace(id);
+    const targetSections = place ? chapterSections(place.trackId, place.chapterId) : [];
+    const target = targetSections.find(section => section.id === id);
+    const source = chapterSections(sectionDrag.trackId, sectionDrag.chapterId);
+    const hasKids = source.some(section => section.parent === sectionDrag.id);
+    const moving = source.find(section => section.id === sectionDrag.id);
+    const targetIsGrand = !!(target && target.parent);
+    const trackId = trackNode.getAttribute("data-card-track");
+    const chapterId = host.getAttribute("data-chapter");
+    const hit = { element: sub, bar: bar, sectionId: id, trackId: trackId, chapterId: chapterId };
+    if (!edge) {
+      if (targetIsGrand || hasKids) return Object.assign({ type: "section-blocked" }, hit);
+      return Object.assign({ type: "section-nest", after: true }, hit);
+    }
+    if (targetIsGrand && hasKids) return Object.assign({ type: "section-blocked" }, hit);
+    return Object.assign({ type: "section-insert", after: ratio >= 0.5, unnest: !targetIsGrand && !!(moving && moving.parent) }, hit);
+  }
+
+  function commitSectionDrag(current) {
+    const target = current.target;
+    if (!target || target.type === "section-blocked") return;
+    const source = chapterSections(current.trackId, current.chapterId);
+    const same = current.trackId === target.trackId && current.chapterId === target.chapterId;
+    const dest = same ? source : chapterSections(target.trackId, target.chapterId);
+    const plan = GuideProgress.planSectionMove(source, dest, current.id, {
+      same: same,
+      targetId: target.sectionId,
+      after: !!target.after,
+      mode: target.type === "section-nest" ? "nest" : "insert",
+      unnest: !!target.unnest
+    });
+    if (!plan) return;
+    let next = JSON.parse(JSON.stringify(book()));
+    if (!same) {
+      const family = new Set(source.filter(section => section.id === current.id || section.parent === current.id).map(section => section.id));
+      const rows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[current.trackId] || [], book(), current.trackId) || [];
+      const row = rows.find(item => item.chapterId === current.chapterId);
+      const movingCards = ((row && row.items) || []).filter(item => family.has(item.section));
+      const sourceOrder = GuideApp.currentIds(current.trackId, current.chapterId).filter(id => !movingCards.some(item => item.id === id));
+      const destOrder = GuideApp.currentIds(target.trackId, target.chapterId).slice();
+      movingCards.forEach(item => { if (destOrder.indexOf(item.id) < 0) destOrder.push(item.id); });
+      next = GuideProgress.saveOrder(next, current.trackId + ":" + current.chapterId, sourceOrder, GuideApp.baseItems(current.trackId, current.chapterId).map(item => item.id));
+      const known = GuideApp.baseItems(target.trackId, target.chapterId).map(item => item.id);
+      movingCards.forEach(item => {
+        if (next.custom[item.id] && next.custom[item.id].kind === "route") {
+          next.custom[item.id].trackId = target.trackId;
+          next.custom[item.id].chapterId = target.chapterId;
+        }
+        const base = GuideApp.findBaseRoute(item.id);
+        next = GuideProgress.upsertRouteCard(next, base && base.item, item.id, cardFields(item, item.parent || ""), target.trackId, target.chapterId, destOrder, known);
+      });
+    }
+    next = GuideProgress.saveSections(next, current.trackId + ":" + current.chapterId, plan.source);
+    if (!same) next = GuideProgress.saveSections(next, target.trackId + ":" + target.chapterId, plan.dest);
+    GuideApp.setCardBook(next, "子チャプターの移動");
+  }
+
+  function endSectionDrag(commit) {
+    const current = sectionDrag;
+    sectionDrag = null;
+    if (current && current.frame) cancelAnimationFrame(current.frame);
+    if (current && commit && current.moved) commitSectionDrag(current);
+    document.querySelectorAll(".subch.is-dragging").forEach(node => node.classList.remove("is-dragging"));
+    clearDragVisuals();
+    if (current && current.moved) suppressClick = true;
+  }
+
+  document.addEventListener("pointerdown", event => {
+    const handle = event.target.closest && event.target.closest("[data-section-drag]");
+    if (!handle || !document.body.classList.contains("is-card-edit") || dialog.hidden === false) return;
+    if (event.button != null && event.button !== 0) return;
+    const sub = handle.closest(".subch[data-section]");
+    const host = sub && sub.closest("section.ch[data-chapter]");
+    const trackNode = host && host.querySelector("[data-card-track]");
+    if (!sub || !host || !trackNode) return;
+    event.preventDefault();
+    try { if (handle.setPointerCapture) handle.setPointerCapture(event.pointerId); } catch (error) {}
+    sectionDrag = {
+      id: sub.getAttribute("data-section"),
+      trackId: trackNode.getAttribute("data-card-track"),
+      chapterId: host.getAttribute("data-chapter"),
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      target: null,
+      frame: 0
+    };
+    sub.classList.add("is-dragging");
+    document.body.classList.add("is-card-dragging");
+    const ghost = document.createElement("div");
+    ghost.id = "card-drag-ghost";
+    const name = sub.querySelector(".subch-name");
+    ghost.textContent = name ? name.textContent : "子チャプター";
+    document.body.appendChild(ghost);
+    placeGhost(event.clientX, event.clientY);
+  });
+
+  document.addEventListener("pointermove", event => {
+    if (!sectionDrag || event.pointerId !== sectionDrag.pointerId) return;
+    event.preventDefault();
+    sectionDrag.x = event.clientX;
+    sectionDrag.y = event.clientY;
+    if (Math.hypot(event.clientX - sectionDrag.startX, event.clientY - sectionDrag.startY) > 8) sectionDrag.moved = true;
+    placeGhost(event.clientX, event.clientY);
+    sectionDrag.target = sectionDropAt(event.clientX, event.clientY);
+    paintDrop(sectionDrag.target);
+  }, { passive: false });
+
+  document.addEventListener("pointerup", event => {
+    if (!sectionDrag || event.pointerId !== sectionDrag.pointerId) return;
+    endSectionDrag(true);
+  });
+  document.addEventListener("pointercancel", event => {
+    if (!sectionDrag || event.pointerId !== sectionDrag.pointerId) return;
+    endSectionDrag(false);
+  });
 
   document.addEventListener("pointerdown", event => {
     const handle = event.target.closest && event.target.closest("[data-card-drag]");
