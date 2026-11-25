@@ -84,7 +84,7 @@ ID はルートのカードと重ならないようにします。
 | 編集モードの文面 | `ff7r-text-edits-v1` |
 | カード編集の差分 | `ff7r-card-edits-v1` |
 | 表示中の章 | `ff7r-guide-chapter-filter` |
-| オフラインキャッシュ | `ff7r-guide-v49` |
+| オフラインキャッシュ | `ff7r-guide-v50` |
 
 テーマと、リセット前の控えは、同じ `ff7r-` の別キーです。定義は `data/game.js` の `storage` と `cache` にまとめてあります。
 
