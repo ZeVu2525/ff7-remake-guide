@@ -1344,8 +1344,6 @@
     "kids": "中のカード",
     "addCard": "カードを追加",
     "addSection": "子チャプターを追加",
-    "addGrandSection": "孫チャプターを追加",
-    "addGrandCard": "孫カード",
     "rename": "名前",
     "hint": "ヒント",
     "save": "保存",
@@ -2251,6 +2249,53 @@
     return depth;
   }
 
+  function planSectionMove(sourceSections, destSections, movingId, options) {
+    const opts = options || {};
+    const source = (sourceSections || []).map(section => Object.assign({}, section));
+    const same = opts.same !== false && sourceSections === destSections;
+    const destBase = same ? source : (destSections || []).map(section => Object.assign({}, section));
+    const moving = source.find(section => section.id === movingId);
+    if (!moving) return null;
+    const familyIds = [movingId].concat(source.filter(section => section.parent === movingId).map(section => section.id));
+    if (opts.targetId && familyIds.indexOf(opts.targetId) >= 0) return null;
+    const family = source.filter(section => familyIds.indexOf(section.id) >= 0);
+    const hasKids = family.length > 1;
+    const target = (same ? source : destBase).find(section => section.id === opts.targetId);
+    let parent = "";
+    if (opts.mode === "nest") {
+      if (!target || target.parent || hasKids) return null;
+      parent = target.id;
+    } else {
+      parent = opts.unnest || !target || !target.parent ? "" : target.parent;
+      if (parent && hasKids) return null;
+      const host = parent && (same ? source : destBase).find(section => section.id === parent);
+      if (host && host.parent) return null;
+    }
+    const dropIds = new Set(familyIds);
+    const sourceLeft = source.filter(section => !dropIds.has(section.id));
+    const dest = (same ? sourceLeft : destBase.filter(section => !dropIds.has(section.id))).slice();
+    const moved = family.map(section => {
+      const copy = Object.assign({}, section);
+      if (section.id === movingId) {
+        if (parent) copy.parent = parent;
+        else delete copy.parent;
+      }
+      return copy;
+    });
+    let at = opts.targetId ? dest.findIndex(section => section.id === opts.targetId) : dest.length;
+    if (at < 0) at = dest.length;
+    if (opts.mode === "nest") {
+      at += 1;
+      while (at < dest.length && dest[at].parent === parent) at += 1;
+    } else if (opts.targetId && opts.after) {
+      at += 1;
+      const hostId = target && !target.parent ? target.id : "";
+      if (hostId) while (at < dest.length && dest[at].parent === hostId) at += 1;
+    }
+    dest.splice(at, 0, ...moved);
+    return { source: same ? dest : sourceLeft, dest: dest, parent: parent };
+  }
+
   function cardSpan(items, id, guard) {
     const seen = guard || new Set();
     if (!id || seen.has(id)) return 0;
@@ -2908,6 +2953,7 @@
     fitSheetEdge,
     cardDepth,
     cardSpan,
+    planSectionMove,
     UI_LABELS,
     labelText,
     sectionName,

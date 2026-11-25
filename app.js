@@ -521,7 +521,7 @@
           ${itemLine(item)}
           ${enemyLine(item)}
           ${sourceLine(item.source)}
-          ${cardTools(item, depth || 0)}
+          ${cardTools(item)}
         </div>
         ${kids.length ? `<div class="kids-wrap"><div class="kids-bar"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）"><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><button type="button" class="kids-fold" data-fold-kids="${esc(item.id)}" title="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}" aria-label="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}">${childOpen ? "⊟" : "⊞"}</button></div><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => { try { return routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard, (depth || 0) + 1); } catch (error) { return brokenCard(child); } }).join("")}</div></div></div>` : ""}
       </div>
@@ -554,8 +554,7 @@
       const badge = grand ? "" : `<span class="subch-num${number >= 10 ? " is-wide" : ""}"><span>${number}</span></span>`;
       const tools = cardEditing() ? `<span class="subch-tools">
         <button type="button" class="icon-edit" data-section-edit="${esc(section.id)}" title="${esc(L("edit"))}" aria-label="${esc(L("edit"))}">✎</button>
-        <button type="button" data-section-insert="${esc(section.id)}">${esc(grand ? L("addGrandSection") : L("addSection"))}</button>
-        ${grand || !section.id ? "" : `<button type="button" data-section-grand="${esc(section.id)}">${esc(L("addGrandSection"))}</button>`}
+        <button type="button" data-section-insert="${esc(section.id)}">${esc(L("addSection"))}</button>
         <button type="button" data-section-up="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "up"))}</button>
         <button type="button" data-section-down="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "down"))}</button>
         <button type="button" data-move-here="${esc(section.id)}"${GuideSelect.size ? "" : " disabled"}>${esc(GuideProgress.labelText(cardBook, "moveSelected"))}</button>
@@ -564,6 +563,7 @@
       const kids = groups.filter(item => item.parent === section.id).map(item => renderSection(item, 0)).join("");
       return `<section class="subch${grand ? " is-grand" : ""}${closed ? " closed" : ""}" data-section="${esc(section.id)}" style="--badge-line:${colors.border}">
         <div class="subch-bar">
+          ${cardEditing() && section.id ? `<button type="button" class="section-drag" data-section-drag="${esc(section.id)}" aria-label="ドラッグして移動" title="ドラッグして移動">⋮⋮</button>` : ""}
           <button type="button" class="subch-toggle" data-toggle-section="${esc(section.id)}" aria-expanded="${closed ? "false" : "true"}"><span class="caret" aria-hidden="true">▼</span><span class="subch-heading">${badge}${name ? `<span class="subch-name">${esc(name)}</span>` : ""}</span></button>
           ${mapButton({ id: section.id, map: section.map }, "section")}
           ${tools}
@@ -707,15 +707,13 @@
     return `<p class="card-edit-chapter"><button type="button" data-catalog-add="${esc(catalogId)}">項目を追加</button></p>`;
   }
 
-  function cardTools(item, depth) {
+  function cardTools(item) {
     if (!cardEditing()) return "";
-    const grand = depth === 1 ? `<button type="button" data-card-add-child="${esc(item.id)}" title="${esc(L("addGrandCard"))}" aria-label="${esc(L("addGrandCard"))}">孫</button>` : "";
     return `<div class="card-edit-tools">
       <button type="button" data-card-up="${esc(item.id)}" title="${esc(L("up"))}" aria-label="${esc(L("up"))}">△</button>
       <button type="button" data-card-down="${esc(item.id)}" title="${esc(L("down"))}" aria-label="${esc(L("down"))}">▽</button>
       <button type="button" data-card-edit="${esc(item.id)}" title="${esc(L("edit"))}" aria-label="${esc(L("edit"))}">✎</button>
       <button type="button" data-card-add-after="${esc(item.id)}" title="${esc(L("add"))}" aria-label="${esc(L("add"))}">＋</button>
-      ${grand}
       <button type="button" data-card-delete="${esc(item.id)}" title="${esc(L("delete"))}" aria-label="${esc(L("delete"))}">✕</button>
     </div>`;
   }

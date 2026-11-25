@@ -157,6 +157,10 @@ html[data-theme="dark"] .it.flag-tips,html[data-theme="accent"] .it.flag-tips{ba
 .hint-mark{display:inline-flex;align-items:center;margin-right:4px;padding:1px 6px;border-radius:99px;background:#1677a8;color:#fff;font-size:12px;font-weight:700}
 .subch{border-top:1px solid var(--line)}
 .subch-kids{margin:0 0 8px 22px;padding-left:10px;border-left:3px solid var(--line)}
+.section-drag{min-height:32px;padding:0 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg2);color:inherit;cursor:grab;touch-action:none}
+.subch.is-dragging{opacity:.45}
+.subch.is-nest-drop{box-shadow:inset 0 0 0 3px #39c9ff}
+.subch.is-nest-blocked{box-shadow:inset 0 0 0 3px #c44949}
 .subch.is-grand{border-top:0}
 .subch-bar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:flex-end;padding:8px 12px;background:var(--bg3)}
 .subch-toggle{display:inline-flex;gap:8px;align-items:flex-end;max-width:100%;min-height:44px;padding:2px 0;border:0;background:transparent;color:inherit;font:inherit;font-weight:750;text-align:left;cursor:pointer}
@@ -580,23 +584,23 @@ html[data-theme="accent"] section.ch{border-color:#3a7da3;box-shadow:inset 3px 0
 <footer>
   <p>進行はこのブラウザだけに残ります。別の端末へは「進行を書き出す」で移します。GitHub には送られません。</p>
 </footer>
-<script src="data/game.js?v=ff7r-guide-v51"></script>
-<script src="data/route.js?v=ff7r-guide-v51"></script>
-<script src="data/catalogs.js?v=ff7r-guide-v51"></script>
-<script src="data/maps.js?v=ff7r-guide-v51"></script>
-<script src="data/templates.js?v=ff7r-guide-v51"></script>
-<script src="data/settings.js?v=ff7r-guide-v51"></script>
-<script src="data/images.js?v=ff7r-guide-v51"></script>
-<script src="zip-store.js?v=ff7r-guide-v51"></script>
-<script src="progress.js?v=ff7r-guide-v51"></script>
-<script src="image-library.js?v=ff7r-guide-v51"></script>
+<script src="data/game.js?v=ff7r-guide-v52"></script>
+<script src="data/route.js?v=ff7r-guide-v52"></script>
+<script src="data/catalogs.js?v=ff7r-guide-v52"></script>
+<script src="data/maps.js?v=ff7r-guide-v52"></script>
+<script src="data/templates.js?v=ff7r-guide-v52"></script>
+<script src="data/settings.js?v=ff7r-guide-v52"></script>
+<script src="data/images.js?v=ff7r-guide-v52"></script>
+<script src="zip-store.js?v=ff7r-guide-v52"></script>
+<script src="progress.js?v=ff7r-guide-v52"></script>
+<script src="image-library.js?v=ff7r-guide-v52"></script>
 <script>
 window.FF7R_LAZY = {
-  enemies: "data/enemies.js?v=ff7r-guide-v51",
-  edit: "edit-mode.js?v=ff7r-guide-v51",
-  cards: "card-edit.js?v=ff7r-guide-v51"
+  enemies: "data/enemies.js?v=ff7r-guide-v52",
+  edit: "edit-mode.js?v=ff7r-guide-v52",
+  cards: "card-edit.js?v=ff7r-guide-v52"
 };
 </script>
-<script src="app.js?v=ff7r-guide-v51"></script>
+<script src="app.js?v=ff7r-guide-v52"></script>
 </body>
 </html>
