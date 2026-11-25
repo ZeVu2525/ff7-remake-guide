@@ -734,8 +734,7 @@
       return { html: '<p class="card-broken">この章を表示できません。</p>', visible: 0 };
     }
     const tools = cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">${esc(L("addCard"))}</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">${esc(L("addSection"))}</button><button type="button" data-move-selected="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}"${GuideSelect.size ? "" : " disabled"}>${esc(L("moveSelected"))}</button></p>` : "";
-    const end = cardEditing() ? `<p class="card-edit-chapter card-edit-chapter-end"><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">${esc(L("addSection"))}</button></p>` : "";
-    return { html: tools + (built.html || '<p class="empty-chapter">項目はまだありません。</p>') + end, visible: built.visible };
+    return { html: tools + (built.html || '<p class="empty-chapter">項目はまだありません。</p>'), visible: built.visible };
   }
 
   let lazyObserver = null;
