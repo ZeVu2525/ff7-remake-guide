@@ -153,6 +153,19 @@
   }
 
   const chapterMemo = new WeakMap();
+  const headingMemo = new WeakMap();
+
+  function headingsFor(trackId) {
+    let memo = headingMemo.get(cardBook);
+    if (!memo) {
+      memo = Object.create(null);
+      try { headingMemo.set(cardBook, memo); } catch (error) { memo = null; }
+    }
+    if (memo && memo[trackId]) return memo[trackId];
+    const headings = GuideProgress.routeTemplateHeadings(chaptersFor(trackId), GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES));
+    if (memo) memo[trackId] = headings;
+    return headings;
+  }
 
   function chaptersFor(trackId) {
     let memo = chapterMemo.get(cardBook);
@@ -525,7 +538,7 @@
     const groups = sections && sections.length ? sections : [{ id: "", title: "本章", map: "", note: "" }];
     const known = new Set(groups.map(section => section.id));
     const sectionOf = item => item.section && known.has(item.section) ? item.section : groups[0].id;
-    const headings = GuideProgress.templateHeadings(GuideProgress.displayItems(items, groups), GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES));
+    const headings = headingsFor(ui.trackId);
     const numbers = GuideProgress.numberChapter(items, groups);
     let visible = 0;
     const html = groups.map((section, index) => {
@@ -721,7 +734,8 @@
       return { html: '<p class="card-broken">この章を表示できません。</p>', visible: 0 };
     }
     const tools = cardEditing() ? `<p class="card-edit-chapter"><button type="button" data-card-add="1" data-card-track="${esc(ui.trackId)}" data-card-chapter="${esc(chapter.id)}">${esc(L("addCard"))}</button><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">${esc(L("addSection"))}</button><button type="button" data-move-selected="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}"${GuideSelect.size ? "" : " disabled"}>${esc(L("moveSelected"))}</button></p>` : "";
-    return { html: tools + (built.html || '<p class="empty-chapter">項目はまだありません。</p>'), visible: built.visible };
+    const end = cardEditing() ? `<p class="card-edit-chapter card-edit-chapter-end"><button type="button" data-section-add="${esc(chapter.id)}" data-card-track="${esc(ui.trackId)}">${esc(L("addSection"))}</button></p>` : "";
+    return { html: tools + (built.html || '<p class="empty-chapter">項目はまだありません。</p>') + end, visible: built.visible };
   }
 
   let lazyObserver = null;
@@ -1704,9 +1718,9 @@
       <h3>難易度</h3><p class="lead">今進めているチャートの難易度です。カードとエネミー頁のHP、経験値、AP、ギルは、この難易度の列を使います。CLASSICは操作の種類で、数値の表はありません。</p><label class="setting-row"><span>難易度</span><select id="settings-difficulty"><option value="easy"${difficulty === "easy" ? " selected" : ""}>EASY</option><option value="normal"${difficulty === "normal" ? " selected" : ""}>NORMAL</option><option value="hard"${difficulty === "hard" ? " selected" : ""}>HARD</option></select></label>
       <h3>ボタンとタブの名前</h3><div class="setting-list">${rows}</div>
       <h3>見出しの定型文</h3>
-      <p class="lead">1行が1つの定型文です。カードの見出しで選ぶと、章の中で 宝箱① のように番号が付きます。</p>
-      <textarea id="settings-templates" rows="6">${esc(templates.map(item => item.label).join("\n"))}</textarea>
-      <p><button type="button" id="settings-templates-save">定型文を保存</button></p>
+      <p class="lead">1行が1つの定型文です。カードの見出しで選ぶと、宝箱① のように番号が付きます。親チャプター内は、その章の中だけで数えます。ルート全体は、進行表の先頭から通し番号です。</p>
+      <div id="settings-templates">${templates.map(item => templateSettingRow(item)).join("")}${templateSettingRow({ id: "", label: "", scope: "chapter" })}</div>
+      <p><button type="button" id="settings-templates-add">行を足す</button> <button type="button" id="settings-templates-save">定型文を保存</button></p>
       <h3>小見出し</h3>
       <p class="lead">子チャプターの小見出しの、背景と枠の初期色です。チャプターの編集で、区分ごとに変えられます。</p>
       <label class="setting-row"><span>背景</span><input id="callout-bg" type="color" value="${esc(callout.bg)}"></label>
@@ -2092,17 +2106,35 @@
         setCardBook(next, "達成表示するタグ");
       });
     });
+    const addTemplate = document.getElementById("settings-templates-add");
+    if (addTemplate) addTemplate.addEventListener("click", () => {
+      const host = document.getElementById("settings-templates");
+      if (host) host.insertAdjacentHTML("beforeend", templateSettingRow({ id: "", label: "", scope: "chapter" }));
+    });
     const saveTemplates = document.getElementById("settings-templates-save");
     if (saveTemplates) saveTemplates.addEventListener("click", () => {
-      const lines = GuideProgress.toHalfWidth(document.getElementById("settings-templates").value || "").split(/\n/).map(line => line.trim()).filter(Boolean);
       const current = GuideProgress.activeTemplates(cardBook, globalThis.TEMPLATES || []);
+      const seen = new Set();
       const next = JSON.parse(JSON.stringify(cardBook));
-      next.templates = lines.map(label => {
-        const found = current.find(item => item.label === label);
-        return { id: found ? found.id : ("tpl-" + Date.now().toString(36) + "-" + label.length), label };
-      });
+      next.templates = [...document.querySelectorAll("#settings-templates .template-row")].map(row => {
+        const input = row.querySelector("[data-template-label]");
+        const scope = row.querySelector("[data-template-scope]");
+        const label = GuideProgress.toHalfWidth(input && input.value || "").trim();
+        if (!label || seen.has(label)) return null;
+        seen.add(label);
+        const id = input.getAttribute("data-template-id");
+        const found = current.find(item => id && item.id === id) || current.find(item => item.label === label);
+        const saved = { id: found ? found.id : ("tpl-" + Date.now().toString(36) + "-" + label.length), label };
+        if (scope && scope.value === "route") saved.scope = "route";
+        return saved;
+      }).filter(Boolean);
       setCardBook(next);
     });
+  }
+
+  function templateSettingRow(item) {
+    const scope = item && item.scope === "route" ? "route" : "chapter";
+    return `<div class="template-row"><input data-template-label data-template-id="${esc(item && item.id || "")}" value="${esc(item && item.label || "")}" placeholder="新しい定型文" aria-label="定型文"><select data-template-scope aria-label="番号の範囲"><option value="chapter"${scope === "chapter" ? " selected" : ""}>親チャプター内</option><option value="route"${scope === "route" ? " selected" : ""}>ルート全体</option></select></div>`;
   }
 
   function exportProgress() {

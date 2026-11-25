@@ -348,10 +348,11 @@
       book.chapters[key] = chapter;
     }
     if (Array.isArray(src.templates)) {
-      book.templates = src.templates.filter(item => item && item.id && item.label).map(item => ({
-        id: String(item.id),
-        label: String(item.label)
-      }));
+      book.templates = src.templates.filter(item => item && item.id && item.label).map(item => {
+        const row = { id: String(item.id), label: String(item.label) };
+        if (item.scope === "route") row.scope = "route";
+        return row;
+      });
     }
     const labels = asObject(src.labels);
     book.labels = {};
@@ -1157,11 +1158,20 @@
     return nums;
   }
 
-  function templateHeadings(items, templates) {
+  function headingPass(items, templates, seed) {
     const list = (templates || []).filter(item => item && item.id && item.label).slice().sort((a, b) => b.label.length - a.label.length);
     const byId = {};
-    list.forEach(item => { byId[item.id] = item.label; });
+    const scopeByLabel = {};
+    list.forEach(item => {
+      byId[item.id] = item.label;
+      scopeByLabel[item.label] = item.scope === "route" ? "route" : "chapter";
+    });
     const used = {};
+    if (seed) {
+      Object.keys(seed).forEach(label => {
+        if (scopeByLabel[label] === "route") used[label] = seed[label];
+      });
+    }
     const headings = {};
     for (const item of items || []) {
       if (!item) continue;
@@ -1180,6 +1190,27 @@
         break;
       }
     }
+    return { headings, used };
+  }
+
+  function templateHeadings(items, templates, seed) {
+    return headingPass(items, templates, seed).headings;
+  }
+
+  function routeTemplateHeadings(chapters, templates) {
+    const headings = {};
+    const list = (templates || []).filter(item => item && item.id && item.label);
+    let carry = {};
+    (chapters || []).forEach(chapter => {
+      if (!chapter) return;
+      const pass = headingPass(displayItems(chapter.items, chapter.sections), templates, carry);
+      Object.assign(headings, pass.headings);
+      const next = {};
+      list.forEach(template => {
+        if (template.scope === "route" && pass.used[template.label]) next[template.label] = pass.used[template.label];
+      });
+      carry = next;
+    });
     return headings;
   }
 
@@ -2785,6 +2816,7 @@
     numberChapter,
     circledNumber,
     templateHeadings,
+    routeTemplateHeadings,
     UI_LABELS,
     labelText,
     sectionName,

@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v48");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v49");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -430,6 +430,67 @@ assert.deepStrictEqual(progress.templateHeadings([
   { id: "child", template: "tpl-chest", parent: "p" },
   { id: "next", template: "tpl-chest" }
 ], progress.DEFAULT_TEMPLATES), { child: "宝箱③", next: "宝箱④" });
+const discTemplates = progress.DEFAULT_TEMPLATES.concat([{ id: "tpl-disc", label: "ミュージックディスク", scope: "route" }]);
+assert.deepStrictEqual(progress.templateHeadings([
+  { id: "b", template: "tpl-disc" }
+], discTemplates, { "ミュージックディスク": 4 }), { b: "ミュージックディスク⑤" });
+assert.deepStrictEqual(progress.templateHeadings([
+  { id: "c", template: "tpl-chest" }
+], discTemplates, { "宝箱": 4 }), { c: "宝箱①" });
+const discChapters = [
+  { id: "c1", sections: [{ id: "a" }], items: [
+    { id: "chest1", section: "a", template: "tpl-chest" },
+    { id: "disc1", section: "a", template: "tpl-disc" }
+  ] },
+  { id: "c2", sections: [{ id: "b" }], items: [
+    { id: "chest2", section: "b", template: "tpl-chest" },
+    { id: "disc2", section: "b", template: "tpl-disc" },
+    { id: "disc3", section: "b", template: "tpl-disc" }
+  ] }
+];
+assert.deepStrictEqual(progress.routeTemplateHeadings(discChapters, discTemplates), {
+  chest1: "宝箱①",
+  disc1: "ミュージックディスク①",
+  chest2: "宝箱①",
+  disc2: "ミュージックディスク②",
+  disc3: "ミュージックディスク③"
+});
+const movedDiscs = [
+  { id: "c1", sections: [{ id: "a" }], items: [
+    { id: "chest1", section: "a", template: "tpl-chest" },
+    { id: "disc1", section: "a", template: "tpl-disc" },
+    { id: "disc2", section: "a", template: "tpl-disc" }
+  ] },
+  { id: "c2", sections: [{ id: "b" }], items: [
+    { id: "chest2", section: "b", template: "tpl-chest" },
+    { id: "disc3", section: "b", template: "tpl-disc" }
+  ] }
+];
+assert.strictEqual(progress.routeTemplateHeadings(movedDiscs, discTemplates).disc2, "ミュージックディスク②");
+assert.strictEqual(progress.routeTemplateHeadings(movedDiscs, discTemplates).disc3, "ミュージックディスク③");
+const droppedDisc = [
+  { id: "c1", sections: [{ id: "a" }], items: [{ id: "disc2", section: "a", template: "tpl-disc" }] },
+  { id: "c2", sections: [{ id: "b" }], items: [{ id: "disc3", section: "b", template: "tpl-disc" }] }
+];
+assert.strictEqual(progress.routeTemplateHeadings(droppedDisc, discTemplates).disc2, "ミュージックディスク①");
+assert.strictEqual(progress.routeTemplateHeadings(droppedDisc, discTemplates).disc3, "ミュージックディスク②");
+assert.strictEqual(progress.routeTemplateHeadings([
+  { id: "c1", items: [{ id: "free", title: "ミュージックディスク①②" }] },
+  { id: "c2", items: [{ id: "next", template: "tpl-disc" }] }
+], discTemplates).next, "ミュージックディスク③");
+const scopedBook = progress.normalizeCardBook({ templates: [
+  { id: "tpl-x", label: "宝箱" },
+  { id: "tpl-y", label: "ディスク", scope: "route" },
+  { id: "tpl-z", label: "無視", scope: "chapter" }
+] });
+assert.strictEqual(scopedBook.templates[0].scope, undefined);
+assert.strictEqual(scopedBook.templates[1].scope, "route");
+assert.strictEqual(scopedBook.templates[2].scope, undefined);
+const chapterBody = appSource.slice(appSource.indexOf("function chapterBodyHtml"), appSource.indexOf("function fillLazyChapter"));
+assert.ok(chapterBody.includes("card-edit-chapter-end"));
+assert.strictEqual(chapterBody.split("data-section-add").length - 1, 2);
+assert.ok(appSource.includes("data-template-scope"));
+assert.ok(appSource.includes("routeTemplateHeadings"));
 assert.strictEqual(progress.visibleMap({ map: "" }, { map: "chapter01" }), "chapter01");
 assert.strictEqual(progress.visibleMap({ map: "chapter01" }, { map: "chapter01" }), "chapter01");
 assert.strictEqual(progress.visibleMap({ map: "maps/01.png" }, { map: "chapter01" }), "maps/01.png");
