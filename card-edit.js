@@ -71,6 +71,9 @@
     ".blk-row.is-collapsed > :not(.blk-tools){display:none}",
     ".blk-summary{margin-left:6px;color:var(--fg3);font-size:11px;font-weight:600}",
     ".blk-sheet-edit{overflow:auto}",
+    ".blk-sheet-edit .table-scroll{position:relative;padding-right:16px}",
+    ".sheet-frame{position:relative;max-width:100%}",
+    ".sheet-edge{position:absolute;z-index:4;top:0;right:-8px;width:14px;height:100%;cursor:col-resize;touch-action:none}",
     ".blk-sheet-edit table{width:100%;border-collapse:collapse;font-size:13px}",
     ".blk-sheet-edit table.sheet{border:1px solid var(--line);border-collapse:collapse}",
     ".blk-sheet-edit table.sheet td,.blk-sheet-edit table.sheet th{min-width:3em;padding:4px 6px;border:1px solid var(--line);background:var(--bg)}",
@@ -475,6 +478,12 @@
           const height = Math.round(parseFloat(tr.style.height) || Number(tr.getAttribute("data-row-height")) || 0);
           block.heights[index] = height >= 18 ? Math.min(280, height) : 0;
         });
+        const frame = node.querySelector(":scope > .blk-sheet-edit [data-sheet-frame]");
+        if (frame) {
+          const width = Math.round(Number(frame.getAttribute("data-table-width")) || 100);
+          if (width >= 100) delete block.width;
+          else block.width = Math.max(20, Math.min(99, width));
+        }
         node.querySelectorAll(":scope > .blk-sheet-edit [data-sheet-cell]").forEach(cell => {
           const parts = cell.getAttribute("data-sheet-cell").split(",").map(Number);
           const row = block.rows && block.rows[parts[0]];
@@ -601,7 +610,7 @@
   }
 
   function sheetSnapshot(table) {
-    return JSON.stringify({ rows: table.rows, widths: table.widths, heights: table.heights, header: table.header === true });
+    return JSON.stringify({ rows: table.rows, widths: table.widths, heights: table.heights, header: table.header === true, width: table.width || 100 });
   }
 
   function sheetPush(path, table) {
@@ -625,6 +634,8 @@
     table.widths = data.widths;
     table.heights = data.heights;
     table.header = data.header;
+    if (!data.width || data.width >= 100) delete table.width;
+    else table.width = data.width;
     return true;
   }
 
@@ -720,7 +731,8 @@
       }).join("");
       return `<tr data-row-index="${r}" data-row-height="${height || ""}"${height >= 18 ? ` style="height:${height}px"` : ""}><th class="sheet-rowhead"><button type="button" class="sheet-grip" data-row-grip="${r}" aria-label="行${r + 1}を移動">⋮</button><span>${r + 1}</span><button type="button" class="sheet-grip" data-sheet-open="row:${r}" aria-label="行の操作">▾</button><span class="sheet-resize sheet-resize-row" data-resize-row="${r}"></span></th>${cells}</tr>`;
     }).join("");
-    return `<div class="blk-sheet-edit" data-sheet-path="${escapeAttr(path)}"><div class="blk-sheet-tools"><button type="button" data-sheet-undo="${escapeAttr(path)}" aria-label="表を元に戻す">↶</button><button type="button" data-sheet-redo="${escapeAttr(path)}" aria-label="表をやり直す">↷</button><button type="button" data-sheet-row="${escapeAttr(path)}">行+</button><button type="button" data-sheet-col="${escapeAttr(path)}">列+</button><button type="button" data-sheet-del-row="${escapeAttr(path)}">行-</button><button type="button" data-sheet-del-col="${escapeAttr(path)}">列-</button><button type="button" data-sheet-merge="${escapeAttr(path)}">結合</button><button type="button" data-sheet-unmerge="${escapeAttr(path)}">解除</button><label><input type="checkbox" data-sheet-header${block.header ? " checked" : ""}>見出し行</label></div><div class="blk-sheet-tools">${widthInputs}</div><div class="table-scroll"><table class="sheet sheet-grid"><colgroup><col style="width:2.6em">${cols}</colgroup><thead>${head}</thead><tbody>${body}</tbody></table></div></div>`;
+    const tableWidth = GuideProgress.sheetTableWidth(block);
+    return `<div class="blk-sheet-edit" data-sheet-path="${escapeAttr(path)}"><div class="blk-sheet-tools"><button type="button" data-sheet-undo="${escapeAttr(path)}" aria-label="表を元に戻す">↶</button><button type="button" data-sheet-redo="${escapeAttr(path)}" aria-label="表をやり直す">↷</button><button type="button" data-sheet-row="${escapeAttr(path)}">行+</button><button type="button" data-sheet-col="${escapeAttr(path)}">列+</button><button type="button" data-sheet-del-row="${escapeAttr(path)}">行-</button><button type="button" data-sheet-del-col="${escapeAttr(path)}">列-</button><button type="button" data-sheet-merge="${escapeAttr(path)}">結合</button><button type="button" data-sheet-unmerge="${escapeAttr(path)}">解除</button><label><input type="checkbox" data-sheet-header${block.header ? " checked" : ""}>見出し行</label></div><div class="blk-sheet-tools">${widthInputs}</div><div class="table-scroll"><div class="sheet-frame" data-sheet-frame data-table-width="${tableWidth}" style="width:${tableWidth}%"><table class="sheet sheet-grid"><colgroup><col style="width:2.6em">${cols}</colgroup><thead>${head}</thead><tbody>${body}</tbody></table><span class="sheet-edge" data-resize-table title="表の幅"></span></div></div></div>`;
   }
 
   function blockRow(block, path) {
@@ -1133,7 +1145,7 @@
       openSheetMenu(opener, opener.getAttribute("data-sheet-open"));
       return;
     }
-    if (event.target.closest(".blk-sheet-edit td, [data-sheet-cell], .sheet-grip, .sheet-resize")) return;
+    if (event.target.closest(".blk-sheet-edit td, [data-sheet-cell], .sheet-grip, .sheet-resize, .sheet-edge")) return;
     const collapse = event.target.closest("[data-collapse-block]");
     if (collapse) {
       const key = collapse.getAttribute("data-collapse-block");
@@ -1624,27 +1636,29 @@
     const path = host.getAttribute("data-sheet-path");
     const table = blockAt(path);
     if (!table) return;
-    const resizeCol = event.target.closest("[data-resize-col]");
+    const resizeTable = event.target.closest("[data-resize-table]");
+    const resizeCol = resizeTable ? null : event.target.closest("[data-resize-col]");
     const resizeRow = event.target.closest("[data-resize-row]");
     const rowGrip = event.target.closest("[data-row-grip]");
     const colGrip = event.target.closest("[data-col-grip]");
     const cell = sheetCellNode(event.target);
-    if (!resizeCol && !resizeRow && !rowGrip && !colGrip && !cell) return;
+    if (!resizeTable && !resizeCol && !resizeRow && !rowGrip && !colGrip && !cell) return;
     if (cell && cell.classList.contains("is-editing") && event.detail < 2 && !event.shiftKey) return;
     if (!(cell && event.detail >= 2)) event.preventDefault();
-    try { (event.target.closest(".sheet-resize, .sheet-grip, [data-sheet-cell]") || host).setPointerCapture(event.pointerId); } catch (error) {}
+    try { (event.target.closest(".sheet-resize, .sheet-edge, .sheet-grip, [data-sheet-cell]") || host).setPointerCapture(event.pointerId); } catch (error) {}
     sheetPointer = {
       id: event.pointerId,
       path: path,
       x: event.clientX,
       y: event.clientY,
-      kind: resizeCol ? "col-size" : resizeRow ? "row-size" : rowGrip ? "row-move" : colGrip ? "col-move" : "select",
+      kind: resizeTable ? "table-size" : resizeCol ? "col-size" : resizeRow ? "row-size" : rowGrip ? "row-move" : colGrip ? "col-move" : "select",
       index: Number((resizeCol || resizeRow || rowGrip || colGrip || {}).getAttribute && ((resizeCol && resizeCol.getAttribute("data-resize-col")) || (resizeRow && resizeRow.getAttribute("data-resize-row")) || (rowGrip && rowGrip.getAttribute("data-row-grip")) || (colGrip && colGrip.getAttribute("data-col-grip"))) || 0),
       moved: false,
       shift: event.shiftKey,
       detail: event.detail,
       widths: (table.widths || []).slice(),
       heights: (table.heights || []).slice(),
+      tableWidth: GuideProgress.sheetTableWidth(table),
       cell: cell
     };
     if (sheetPointer.kind === "select") {
@@ -1665,6 +1679,22 @@
       const point = sheetPoint(host, event.clientX, event.clientY);
       sheetRange = { path: sheetPointer.path, aR: sheetPointer.shift && sheetRange ? sheetRange.aR : sheetPointer.r, aC: sheetPointer.shift && sheetRange ? sheetRange.aC : sheetPointer.c, fR: point.r, fC: point.c };
       markSheet();
+    } else if (sheetPointer.kind === "table-size" && sheetPointer.moved) {
+      const frame = host.querySelector("[data-sheet-frame]");
+      const box = host.querySelector(".table-scroll");
+      const container = Math.max(1, (box && box.clientWidth || host.getBoundingClientRect().width) - 16);
+      const next = GuideProgress.absorbSheetEdge(sheetPointer.widths, sheetPointer.tableWidth, container, event.clientX - sheetPointer.x);
+      table.width = next.width;
+      table.widths = next.widths;
+      if (next.width >= 100) delete table.width;
+      if (frame) {
+        frame.style.width = next.width + "%";
+        frame.setAttribute("data-table-width", String(next.width));
+      }
+      host.querySelectorAll("colgroup col").forEach((col, at) => {
+        if (at === 0) return;
+        if (table.widths[at - 1] != null) col.style.width = table.widths[at - 1] + "%";
+      });
     } else if (sheetPointer.kind === "col-size" && sheetPointer.moved) {
       const total = host.getBoundingClientRect().width || 1;
       const delta = (event.clientX - sheetPointer.x) / total * 100;
@@ -1716,6 +1746,7 @@
       else focusSheetCell(host, sheetRange.aR, sheetRange.aC, false);
       return;
     }
+    if (current.kind === "table-size" && !current.moved && current.detail >= 2) fitTableEdge(host, table);
     if (current.kind === "col-size" && !current.moved && current.detail >= 2) {
       const lens = table.rows.map(row => {
         const cell = row.cells[current.index];
@@ -1729,10 +1760,35 @@
       if (current.kind === "row-move") GuideProgress.moveSheetRow(table, current.index, current.drop);
       else GuideProgress.moveSheetColumn(table, current.index, current.drop);
     }
-    if (current.moved || (current.kind === "col-size" && current.detail >= 2)) paintBlocks();
+    if (current.moved || ((current.kind === "col-size" || current.kind === "table-size") && current.detail >= 2)) paintBlocks();
   });
 
+  function fitTableEdge(host, table) {
+    const box = host.querySelector(".table-scroll");
+    const container = Math.max(1, (box && box.clientWidth || host.getBoundingClientRect().width) - 16);
+    const last = (table.widths || []).length - 1;
+    const lens = (table.rows || []).map(row => {
+      const cell = row.cells && row.cells[last];
+      return cell && !cell.skip ? String(cell.text || "").length : 0;
+    });
+    const fit = Math.max(8, Math.max.apply(null, lens.concat(2)) * 4);
+    const next = GuideProgress.fitSheetEdge(table.widths, GuideProgress.sheetTableWidth(table), container, fit);
+    table.widths = next.widths;
+    if (next.width >= 100) delete table.width;
+    else table.width = next.width;
+  }
+
   fields.addEventListener("dblclick", event => {
+    const edge = event.target.closest && event.target.closest("[data-resize-table]");
+    if (edge) {
+      const host = edge.closest(".blk-sheet-edit");
+      const table = host && blockAt(host.getAttribute("data-sheet-path"));
+      if (!host || !table) return;
+      event.preventDefault();
+      fitTableEdge(host, table);
+      paintBlocks();
+      return;
+    }
     const cell = sheetCellNode(event.target);
     const host = cell && sheetHostOf(cell);
     if (!cell || !host) return;
@@ -2426,6 +2482,13 @@
       if (place) addSection(place.trackId, place.chapterId, sectionId);
       return;
     }
+    const sectionGrand = event.target.closest("[data-section-grand]");
+    if (sectionGrand) {
+      const sectionId = sectionGrand.getAttribute("data-section-grand");
+      const place = sectionPlace(sectionId);
+      if (place) addSection(place.trackId, place.chapterId, sectionId, sectionId);
+      return;
+    }
     const sectionAdd = event.target.closest("[data-section-add]");
     if (sectionAdd) { addSection(sectionAdd.getAttribute("data-card-track"), sectionAdd.getAttribute("data-section-add")); return; }
     const moveHere = event.target.closest("[data-move-here]");
@@ -2447,6 +2510,30 @@
     const chapterEdit = event.target.closest("[data-chapter-edit]");
     if (chapterEdit) {
       openChapterEdit(chapterEdit.getAttribute("data-card-track"), chapterEdit.getAttribute("data-chapter-edit"));
+      return;
+    }
+    const addGrand = event.target.closest("[data-card-add-child]");
+    if (addGrand) {
+      const id = addGrand.getAttribute("data-card-add-child");
+      const place = locate(id);
+      const item = place && place.kind === "route" ? routeRecord(place.trackId, place.chapterId, id) : null;
+      const rows = place && (GuideProgress.mergeTrack(ROUTE, GAME.chapters[place.trackId] || [], book(), place.trackId) || []);
+      const row = rows && rows.find(entry => entry.chapterId === place.chapterId);
+      if (!place || !item || GuideProgress.cardDepth(row && row.items, id) !== 1) return;
+      openRouteForm({
+        kind: "route",
+        trackId: place.trackId,
+        chapterId: place.chapterId,
+        flag: item.flag || "story",
+        parent: id,
+        section: item.section || "",
+        insertAfter: id,
+        title: "",
+        detail: "",
+        deadline: "",
+        source: "",
+        trophy: ""
+      });
       return;
     }
     const addAfter = event.target.closest("[data-card-add-after]");
@@ -2703,11 +2790,25 @@
     ));
   }
 
-  function addSection(trackId, chapterId, afterId) {
+  function addSection(trackId, chapterId, afterId, parentId) {
     const sections = chapterSections(trackId, chapterId);
+    const after = afterId ? sections.find(item => item.id === afterId) : null;
+    let parent = parentId || "";
+    if (!parent && after && after.parent) parent = after.parent;
+    if (parent) {
+      const host = sections.find(item => item.id === parent);
+      if (!host || host.parent) return;
+    }
     const id = chapterId + "-sec-" + Date.now().toString(36);
     const section = { id: id, title: "", map: "", note: "" };
-    const at = afterId ? sections.findIndex(item => item.id === afterId) : -1;
+    if (parent) section.parent = parent;
+    let at = afterId ? sections.findIndex(item => item.id === afterId) : -1;
+    if (at >= 0 && parent && afterId === parent) {
+      sections.forEach((item, index) => { if (item.parent === parent) at = index; });
+    } else if (at >= 0 && !parent) {
+      const hostId = sections[at].id;
+      sections.forEach((item, index) => { if (item.parent === hostId) at = index; });
+    }
     if (at >= 0) sections.splice(at + 1, 0, section);
     else sections.push(section);
     storeSections(trackId, chapterId, sections);
@@ -2726,12 +2827,27 @@
     const place = sectionPlace(sectionId);
     if (!place) return;
     const sections = chapterSections(place.trackId, place.chapterId);
-    const index = sections.findIndex(item => item.id === sectionId);
-    const next = index + delta;
-    if (index < 0 || next < 0 || next >= sections.length) return;
-    const moved = sections.splice(index, 1)[0];
-    sections.splice(next, 0, moved);
-    storeSections(place.trackId, place.chapterId, sections);
+    const current = sections.find(item => item.id === sectionId);
+    if (!current) return;
+    const parent = current.parent || "";
+    const siblings = sections.filter(item => (item.parent || "") === parent);
+    const at = siblings.findIndex(item => item.id === sectionId);
+    const neighbor = siblings[at + delta];
+    if (!neighbor) return;
+    const family = id => {
+      const ids = new Set([id]);
+      sections.forEach(item => { if (item.parent === id) ids.add(item.id); });
+      return sections.filter(item => ids.has(item.id));
+    };
+    const firstId = delta > 0 ? neighbor.id : sectionId;
+    const secondId = delta > 0 ? sectionId : neighbor.id;
+    const skip = new Set(family(sectionId).concat(family(neighbor.id)).map(item => item.id));
+    const next = [];
+    sections.forEach(item => {
+      if (!skip.has(item.id)) next.push(item);
+      else if (item.id === firstId) next.push(...family(firstId), ...family(secondId));
+    });
+    storeSections(place.trackId, place.chapterId, next);
   }
 
   function sectionPlace(sectionId) {
@@ -3186,23 +3302,19 @@
         const draggedRight = drag.x - drag.startX > 28;
         const draggedLeft = drag.startX - drag.x > 28;
         const indented = !draggedLeft && (draggedRight || x >= rect.left + 48);
-        const targetItem = routeRecord(to.trackId, to.chapterId, targetId);
-        const targetIsChild = !!(targetItem && targetItem.parent);
-        const movingHasChildren = cardHasChildren(from.trackId, from.chapterId, drag.id);
         const sectionNode = card.closest(".subch[data-section]");
         const sectionId = sectionNode ? sectionNode.getAttribute("data-section") || "" : "";
+        const movingIds = drag.ids && drag.ids.length ? drag.ids : [drag.id];
+        const nestOk = canNestCards(from.trackId, from.chapterId, to.trackId, to.chapterId, targetId, movingIds);
         if (drag.ids && drag.ids.length > 1) {
           if (!edge && indented) {
-            const anyKids = drag.ids.some(itemId => cardHasChildren(from.trackId, from.chapterId, itemId));
-            if (targetIsChild || anyKids || drag.ids.indexOf(targetId) >= 0) return { type: "blocked", id: targetId, element: card };
+            if (!nestOk || drag.ids.indexOf(targetId) >= 0) return { type: "blocked", id: targetId, element: card };
             return { type: "nest", id: targetId, sectionId, element: card };
           }
           return { type: "card", id: targetId, after: ratio >= 0.5, unnest: draggedLeft, sectionId, element: card };
         }
         if (!edge && indented) {
-          if (targetIsChild || movingHasChildren || targetId === drag.id) {
-            return { type: "blocked", id: targetId, element: card };
-          }
+          if (!nestOk || targetId === drag.id) return { type: "blocked", id: targetId, element: card };
           return { type: "nest", id: targetId, sectionId, element: card };
         }
         return { type: "card", id: targetId, after: ratio >= 0.5, unnest: draggedLeft, sectionId, element: card };
@@ -3300,7 +3412,8 @@
     const from = locate(ids[0]);
     if (!to || !from || to.kind !== "route") return;
     const target = routeRecord(to.trackId, to.chapterId, targetId);
-    if (!target || target.parent || ids.indexOf(targetId) >= 0) return;
+    if (!target || ids.indexOf(targetId) >= 0) return;
+    if (!canNestCards(from.trackId, from.chapterId, to.trackId, to.chapterId, targetId, ids)) return;
     const sourceRow = (GuideProgress.mergeTrack(ROUTE, GAME.chapters[from.trackId] || [], book(), from.trackId) || []).find(item => item.chapterId === from.chapterId);
     const destRow = (GuideProgress.mergeTrack(ROUTE, GAME.chapters[to.trackId] || [], book(), to.trackId) || []).find(item => item.chapterId === to.chapterId);
     const sourceItems = sourceRow && sourceRow.items || [];
@@ -3381,7 +3494,8 @@
     if (!to || to.kind !== "route" || targetId === id) return;
     const moving = routeRecord(from.trackId, from.chapterId, id);
     const target = routeRecord(to.trackId, to.chapterId, targetId);
-    if (!moving || !target || target.parent) return;
+    if (!moving || !target) return;
+    if (!canNestCards(from.trackId, from.chapterId, to.trackId, to.chapterId, targetId, [id])) return;
     const homeRows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[from.trackId] || [], book(), from.trackId) || [];
     const home = homeRows.find(row => row.chapterId === from.chapterId);
     if (home && (home.items || []).some(item => item.parent === id)) return;
@@ -3420,6 +3534,21 @@
     );
     GuideApp.setCardBook(next, "入れ子");
     revealCard(to.trackId, to.chapterId, id);
+  }
+
+  function chapterItemsOf(trackId, chapterId) {
+    const rows = GuideProgress.mergeTrack(ROUTE, GAME.chapters[trackId] || [], book(), trackId) || [];
+    const row = rows.find(item => item.chapterId === chapterId);
+    return row && row.items || [];
+  }
+
+  function canNestCards(fromTrack, fromChapter, toTrack, toChapter, targetId, movingIds) {
+    const source = chapterItemsOf(fromTrack, fromChapter);
+    const dest = fromTrack === toTrack && fromChapter === toChapter ? source : chapterItemsOf(toTrack, toChapter);
+    const items = source.concat(dest);
+    const depth = GuideProgress.cardDepth(dest, targetId);
+    if (depth >= 2) return false;
+    return (movingIds || []).every(id => id !== targetId && depth + 1 + GuideProgress.cardSpan(items, id) <= 2);
   }
 
   function cardHasChildren(trackId, chapterId, id) {

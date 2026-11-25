@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v50");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v51");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -725,7 +725,37 @@ const nest = progress.nestMany(["b", "c"], [
 ], "a");
 assert.deepStrictEqual(nest.order, ["a", "d", "b", "c"]);
 assert.deepStrictEqual(nest.parents, { b: "a", c: "a" });
-assert.strictEqual(progress.nestMany(["p"], [{ id: "p" }, { id: "k", parent: "p" }, { id: "t" }], "t"), null);
+const nestedParent = progress.nestMany(["p"], [{ id: "p" }, { id: "k", parent: "p" }, { id: "t" }], "t");
+assert.strictEqual(nestedParent.parents.p, "t");
+assert.ok(nestedParent.order.indexOf("p") >= 0);
+assert.strictEqual(progress.nestMany(["p"], [{ id: "t" }, { id: "c", parent: "t" }, { id: "p" }, { id: "k", parent: "p" }], "c"), null);
+assert.strictEqual(progress.cardDepth([{ id: "p" }, { id: "c", parent: "p" }, { id: "g", parent: "c" }], "g"), 2);
+assert.strictEqual(progress.cardSpan([{ id: "p" }, { id: "c", parent: "p" }, { id: "g", parent: "c" }], "p"), 2);
+const movedGrand = progress.groupMovePlan(
+  [{ id: "p", section: "s1" }, { id: "c", section: "s1", parent: "p" }, { id: "g", section: "s1", parent: "c" }],
+  ["g"],
+  { same: false, sourceOrder: ["p", "c", "g"], destOrder: ["p2", "c2"], extraItems: [{ id: "p2", section: "s2" }, { id: "c2", section: "s2", parent: "p2" }], beforeId: "c2", after: true, sectionId: "s2", neighborParent: "p2", mode: "card" }
+);
+assert.strictEqual(movedGrand.parents.g, "p2");
+assert.strictEqual(movedGrand.sections.g, "s2");
+assert.deepStrictEqual(movedGrand.order, ["p2", "c2", "g"]);
+const nestGrand = progress.groupMovePlan(
+  [{ id: "g", section: "s1", parent: "c" }],
+  ["g"],
+  { same: false, sourceOrder: ["g"], destOrder: ["p2", "c2"], extraItems: [{ id: "p2", section: "s2" }, { id: "c2", section: "s2", parent: "p2" }], beforeId: "c2", after: true, sectionId: "s2", mode: "nest", nestUnder: "c2" }
+);
+assert.strictEqual(nestGrand.parents.g, "c2");
+assert.strictEqual(nestGrand.sections.g, "s2");
+const savedSections = progress.saveSections(progress.emptyCardBook(), "main:ch01", [
+  { id: "a", title: "子" },
+  { id: "b", title: "孫", parent: "a" },
+  { id: "c", title: "ひ孫", parent: "b" },
+  { id: "d", title: "迷子", parent: "missing" }
+]);
+const savedList = savedSections.chapters["main:ch01"].sections;
+assert.strictEqual(savedList[1].parent, "a");
+assert.strictEqual(savedList[2].parent, undefined);
+assert.strictEqual(savedList[3].parent, undefined);
 const childClosed = progress.foldChildDetails({ p: false, "kids:p": false }, "p", { p: ["c"], c: ["g"] });
 assert.strictEqual(childClosed.p, false);
 assert.strictEqual(childClosed["kids:p"], false);
@@ -1097,6 +1127,14 @@ const sheetSized = progress.normalizeBlocks([{ type: "table", heights: [0, 36], 
 assert.strictEqual(sheetSized[0].heights[1], 36);
 assert.ok(progress.blockHtml(sheetSized).includes("height:36px"));
 assert.ok(progress.blockHtml(sheetSized).includes("blk-sheet"));
+const edged = progress.absorbSheetEdge([50, 50], 100, 200, -40);
+assert.ok(edged.width < 100 && edged.width >= 20);
+assert.strictEqual(edged.widths.reduce((sum, n) => sum + n, 0), 100);
+const wide = progress.normalizeBlocks([{ type: "table", width: 80, widths: [60, 40], rows: [{ cells: [{ text: "あ" }, { text: "い" }] }] }]);
+assert.strictEqual(wide[0].width, 80);
+assert.ok(progress.blockHtml(wide).includes('style="width:80%"'));
+const fullWidth = progress.normalizeBlocks([{ type: "table", width: 140, widths: [50, 50], rows: [{ cells: [{ text: "" }, { text: "" }] }] }]);
+assert.strictEqual(fullWidth[0].width, undefined);
 assert.deepStrictEqual(progress.itemLinks([{ name: "手榴弾×2×2", qty: 2 }]), [{ name: "手榴弾", qty: 2 }]);
 assert.deepStrictEqual(progress.itemLinks([{ name: "手榴弾×2" }]), [{ name: "手榴弾", qty: 2 }]);
 assert.deepStrictEqual(progress.itemLinks([{ name: "ポーション", qty: 1 }, { id: "cons-001", qty: 2 }]), [

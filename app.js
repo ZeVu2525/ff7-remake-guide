@@ -483,7 +483,7 @@
     return `<button type="button" class="map-open" data-map-owner="${esc(owner || "card")}" data-owner-id="${esc(item.id)}" data-map="${esc(parts.key)}" data-map-src="${esc(parts.src)}"${href} data-map-label="${esc(parts.label)}">${esc(GuideProgress.labelText(cardBook, "map"))}</button>`;
   }
 
-  function routeCard(item, ord, numbers, headings, section, kidsMap, seen) {
+  function routeCard(item, ord, numbers, headings, section, kidsMap, seen, depth) {
     const guard = seen || new Set();
     if (!item || guard.has(item.id)) return "";
     guard.add(item.id);
@@ -521,9 +521,9 @@
           ${itemLine(item)}
           ${enemyLine(item)}
           ${sourceLine(item.source)}
-          ${cardTools(item)}
+          ${cardTools(item, depth || 0)}
         </div>
-        ${kids.length ? `<div class="kids-wrap"><div class="kids-bar"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）"><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><button type="button" class="kids-fold" data-fold-kids="${esc(item.id)}" title="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}" aria-label="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}">${childOpen ? "⊟" : "⊞"}</button></div><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => { try { return routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard); } catch (error) { return brokenCard(child); } }).join("")}</div></div></div>` : ""}
+        ${kids.length ? `<div class="kids-wrap"><div class="kids-bar"><button type="button" class="kids-disclosure" data-toggle-kids="${esc(item.id)}" aria-expanded="${kidsOpen ? "true" : "false"}" aria-controls="kids-${esc(item.id)}" aria-label="${esc(GuideProgress.labelText(cardBook, "kids"))}（${kids.length}枚）"><svg class="kids-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4.5 7.5 10 13 15.5 7.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path></svg></button><button type="button" class="kids-fold" data-fold-kids="${esc(item.id)}" title="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}" aria-label="${childOpen ? "子カードの詳細をすべて閉じる" : "子カードの詳細をすべて開く"}">${childOpen ? "⊟" : "⊞"}</button></div><div class="kids-panel${kidsOpen ? "" : " is-shut"}" id="kids-${esc(item.id)}"><div class="kids">${kids.map(child => { try { return routeCard(child, numbers[child.id], numbers, headings, section, kidsMap, guard, (depth || 0) + 1); } catch (error) { return brokenCard(child); } }).join("")}</div></div></div>` : ""}
       </div>
     </article>`;
   }
@@ -541,32 +541,42 @@
     const headings = headingsFor(ui.trackId);
     const numbers = GuideProgress.numberChapter(items, groups);
     let visible = 0;
-    const html = groups.map((section, index) => {
+    const tops = groups.filter(section => !section.parent || !known.has(section.parent));
+    const renderSection = (section, number) => {
       const mine = items.filter(item => sectionOf(item) === section.id);
       const built = blockCards(mine, headings, section, numbers);
       visible += built.visible;
       const closed = ui.collapsed["section:" + ui.trackId + ":" + section.id] === true;
       const name = GuideProgress.sectionName(section.title);
-      const number = index + 1;
+      const grand = !!(section.parent && known.has(section.parent));
       const colors = GuideProgress.calloutColors(cardBook, section);
       const callout = section.note ? `<p class="subhead-callout" style="background:${colors.bg};border-color:${colors.border}">${esc(section.note)}</p>` : "";
+      const badge = grand ? "" : `<span class="subch-num${number >= 10 ? " is-wide" : ""}"><span>${number}</span></span>`;
       const tools = cardEditing() ? `<span class="subch-tools">
         <button type="button" class="icon-edit" data-section-edit="${esc(section.id)}" title="${esc(L("edit"))}" aria-label="${esc(L("edit"))}">✎</button>
-        <button type="button" data-section-insert="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "addSection"))}</button>
+        <button type="button" data-section-insert="${esc(section.id)}">${esc(grand ? L("addGrandSection") : L("addSection"))}</button>
+        ${grand || !section.id ? "" : `<button type="button" data-section-grand="${esc(section.id)}">${esc(L("addGrandSection"))}</button>`}
         <button type="button" data-section-up="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "up"))}</button>
         <button type="button" data-section-down="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "down"))}</button>
         <button type="button" data-move-here="${esc(section.id)}"${GuideSelect.size ? "" : " disabled"}>${esc(GuideProgress.labelText(cardBook, "moveSelected"))}</button>
         <button type="button" data-section-delete="${esc(section.id)}">${esc(GuideProgress.labelText(cardBook, "delete"))}</button>
       </span>` : "";
-      return `<section class="subch${closed ? " closed" : ""}" data-section="${esc(section.id)}" style="--badge-line:${colors.border}">
+      const kids = groups.filter(item => item.parent === section.id).map(item => renderSection(item, 0)).join("");
+      return `<section class="subch${grand ? " is-grand" : ""}${closed ? " closed" : ""}" data-section="${esc(section.id)}" style="--badge-line:${colors.border}">
         <div class="subch-bar">
-          <button type="button" class="subch-toggle" data-toggle-section="${esc(section.id)}" aria-expanded="${closed ? "false" : "true"}"><span class="caret" aria-hidden="true">▼</span><span class="subch-heading"><span class="subch-num${number >= 10 ? " is-wide" : ""}"><span>${number}</span></span>${name ? `<span class="subch-name">${esc(name)}</span>` : ""}</span></button>
+          <button type="button" class="subch-toggle" data-toggle-section="${esc(section.id)}" aria-expanded="${closed ? "false" : "true"}"><span class="caret" aria-hidden="true">▼</span><span class="subch-heading">${badge}${name ? `<span class="subch-name">${esc(name)}</span>` : ""}</span></button>
           ${mapButton({ id: section.id, map: section.map }, "section")}
           ${tools}
         </div>
         ${callout}
         <div class="subch-body"${closed ? " hidden" : ""}>${built.html || emptySection(section, chapterId)}</div>
+        ${kids ? `<div class="subch-kids">${kids}</div>` : ""}
       </section>`;
+    };
+    let ordinal = 0;
+    const html = tops.map(section => {
+      ordinal += 1;
+      return renderSection(section, ordinal);
     }).join("");
     return { html, visible, numbers: {} };
   }
@@ -697,13 +707,15 @@
     return `<p class="card-edit-chapter"><button type="button" data-catalog-add="${esc(catalogId)}">項目を追加</button></p>`;
   }
 
-  function cardTools(item) {
+  function cardTools(item, depth) {
     if (!cardEditing()) return "";
+    const grand = depth === 1 ? `<button type="button" data-card-add-child="${esc(item.id)}" title="${esc(L("addGrandCard"))}" aria-label="${esc(L("addGrandCard"))}">孫</button>` : "";
     return `<div class="card-edit-tools">
       <button type="button" data-card-up="${esc(item.id)}" title="${esc(L("up"))}" aria-label="${esc(L("up"))}">△</button>
       <button type="button" data-card-down="${esc(item.id)}" title="${esc(L("down"))}" aria-label="${esc(L("down"))}">▽</button>
       <button type="button" data-card-edit="${esc(item.id)}" title="${esc(L("edit"))}" aria-label="${esc(L("edit"))}">✎</button>
       <button type="button" data-card-add-after="${esc(item.id)}" title="${esc(L("add"))}" aria-label="${esc(L("add"))}">＋</button>
+      ${grand}
       <button type="button" data-card-delete="${esc(item.id)}" title="${esc(L("delete"))}" aria-label="${esc(L("delete"))}">✕</button>
     </div>`;
   }
