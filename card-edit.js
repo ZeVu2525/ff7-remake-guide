@@ -1257,10 +1257,20 @@
   }
 
   function sheetHostFromKey(event) {
-    const host = event.target.closest && event.target.closest(".blk-sheet-edit");
-    if (host) return host;
-    if (!sheetRange) return null;
-    return document.querySelector('.blk-sheet-edit[data-sheet-path="' + sheetRange.path + '"]');
+    const target = event.target;
+    if (!target || !target.closest) return null;
+    const grid = target.closest(".blk-sheet-edit table");
+    return grid ? grid.closest(".blk-sheet-edit") : null;
+  }
+
+  function clearSheetSelection() {
+    document.querySelectorAll("[data-sheet-cell].is-editing").forEach(node => {
+      commitSheetCell(node);
+      node.classList.remove("is-editing");
+      delete node.dataset.sheetBefore;
+    });
+    sheetRange = null;
+    document.querySelectorAll(".blk-sheet-edit td.on, .blk-sheet-edit th.on").forEach(node => node.classList.remove("on"));
   }
 
   function moveSheetSelection(host, dr, dc) {
@@ -1294,6 +1304,16 @@
     focusSheetCell(host, r, c, false);
   }
 
+  fields.addEventListener("focusin", event => {
+    const target = event.target;
+    if (!sheetRange || !target || !target.closest || target.closest(".blk-sheet-edit")) return;
+    clearSheetSelection();
+  });
+  fields.addEventListener("pointerdown", event => {
+    const target = event.target;
+    if (!sheetRange || !target || !target.closest || target.closest(".blk-sheet-edit")) return;
+    clearSheetSelection();
+  }, true);
   fields.addEventListener("compositionstart", event => {
     const node = event.target.closest && event.target.closest("[data-sheet-cell]");
     if (!node) return;
