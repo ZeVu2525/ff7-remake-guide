@@ -12,7 +12,7 @@ assert.deepStrictEqual(errors, [], errors.join("\n"));
 assert.strictEqual(guide.GAME.storage.state, "ff7r-guide-state-v1");
 assert.strictEqual(guide.GAME.storage.textEdits, "ff7r-text-edits-v1");
 assert.strictEqual(guide.GAME.storage.cardEdits, "ff7r-card-edits-v1");
-assert.strictEqual(guide.GAME.cache, "ff7r-guide-v53");
+assert.strictEqual(guide.GAME.cache, "ff7r-guide-v54");
 assert.strictEqual(progress.APP, "ff7r-guide");
 
 const fresh = progress.emptyState();
@@ -630,6 +630,41 @@ const listed = progress.normalizeBlocks([{
 assert.strictEqual(listed[0].heading, "第一段階で使用するアクション");
 assert.strictEqual(listed[0].columns, 2);
 assert.strictEqual(listed[0].items.length, 9);
+const longListItem = "あ".repeat(1000);
+const longList = progress.normalizeBlocks([{ type: "list", heading: "見".repeat(120), items: [longListItem, "短い"] }]);
+assert.strictEqual(longList[0].items[0], longListItem);
+assert.strictEqual(longList[0].heading.length, 120);
+assert.ok(progress.blockHtml(longList).includes(longListItem));
+const grandHeads = progress.templateHeadings(progress.displayItems([
+  { id: "p", template: "tpl-chest" },
+  { id: "c", parent: "p", template: "tpl-chest" },
+  { id: "g", parent: "c", template: "tpl-chest" }
+], [{ id: "" }]), progress.DEFAULT_TEMPLATES);
+assert.deepStrictEqual(grandHeads, { p: "宝箱①", c: "宝箱②", g: "宝箱③" });
+const routeGrand = progress.routeTemplateHeadings([
+  { id: "c1", items: [{ id: "p", template: "tpl-disc" }, { id: "c", parent: "p", template: "tpl-disc" }, { id: "g", parent: "c", template: "tpl-disc" }] },
+  { id: "c2", items: [{ id: "n", template: "tpl-disc" }] }
+], [{ id: "tpl-disc", label: "ディスク", scope: "route" }]);
+assert.strictEqual(routeGrand.g, "ディスク③");
+assert.strictEqual(routeGrand.n, "ディスク④");
+const grouped = progress.groupBlockRange([{ type: "text", html: "左" }, { type: "divider" }, { type: "text", html: "右" }], 0, 1);
+assert.strictEqual(grouped[0].type, "group");
+assert.strictEqual(grouped[0].children.length, 2);
+assert.strictEqual(grouped.length, 2);
+const ungrouped = progress.ungroupBlock(grouped, 0);
+assert.strictEqual(ungrouped[0].html, "左");
+assert.strictEqual(ungrouped[1].type, "divider");
+const groupHtml = progress.blockHtml(progress.normalizeBlocks([{ type: "group", children: [{ type: "text", html: "中の文章" }] }]));
+assert.ok(groupHtml.includes("中の文章"));
+assert.ok(!groupHtml.includes("blk-stack"));
+const savedTemplates = progress.normalizeCardBook({ blockTemplates: [{
+  id: "bt1",
+  name: "手順",
+  block: { type: "group", children: [{ type: "text", html: "残す" }, { type: "image", src: "data:image/png;base64,AAAA", caption: "埋込" }, { type: "image", src: "maps/photo.png", caption: "参照" }] }
+}] });
+assert.strictEqual(savedTemplates.blockTemplates[0].name, "手順");
+assert.strictEqual(savedTemplates.blockTemplates[0].block.children[1].src, "");
+assert.strictEqual(savedTemplates.blockTemplates[0].block.children[2].src, "maps/photo.png");
 assert.deepStrictEqual(progress.listColumns(listed[0].items, 2).map(col => col.length), [5, 4]);
 assert.deepStrictEqual(progress.listColumns(listed[0].items, 3).map(col => col.length), [3, 3, 3]);
 assert.deepStrictEqual(progress.listColumns(listed[0].items, 1).map(col => col.length), [9]);

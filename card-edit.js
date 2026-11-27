@@ -101,6 +101,10 @@
     ".blk-size input{width:3.2em;min-height:24px;padding:0 4px}",
     ".blk-tools{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
     ".blk-handle{touch-action:none;cursor:grab}",
+    ".blk-template-bar{margin:8px 0;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg2)}",
+    ".blk-template-bar ul{display:grid;gap:4px;margin:6px 0 0;padding:0;list-style:none}",
+    ".blk-template-bar li{display:flex;flex-wrap:wrap;gap:4px;align-items:center}",
+    ".blk-row.is-group{border-left-color:var(--accent)}",
     ".blk-tools button,.blk-add button,.rt-bar button{min-height:28px;padding:1px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg3);color:inherit;font-size:12px;line-height:1.3;cursor:pointer}",
     ".rt-bar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:6px}",
     ".rt-pop{position:relative;display:inline-flex}",
@@ -111,6 +115,7 @@
     ".rt-menu button.key{outline:2px solid var(--accent)}",
     ".rt-bar [data-rt=color]{width:22px;min-height:22px;padding:0}",
     ".rt-edit{min-height:72px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg2);font:16px/1.55 inherit;white-space:pre-wrap}",
+    "[data-list-heading],[data-list-items]{display:block;width:100%;box-sizing:border-box;min-height:40px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:inherit;font:inherit;line-height:1.45;overflow-wrap:anywhere;white-space:pre-wrap;resize:vertical}",
     ".rt-edit b{font-weight:700}.rt-edit i{font-style:italic}.rt-edit u{text-decoration:underline}.rt-edit s{text-decoration:line-through}",
     ".blk-file input{max-width:100%}",
     ".blk-preview{max-width:180px;max-height:120px;margin-top:6px;background:#fff}",
@@ -580,7 +585,7 @@
   function listField(block) {
     const columns = block.columns === 1 || block.columns === 3 ? block.columns : 2;
     return [
-      '<label>見出し<input data-list-heading value="' + escapeAttr(block.heading || "") + '" placeholder="第一段階で使用するアクション"></label>',
+      '<label>見出し<textarea data-list-heading rows="1" placeholder="第一段階で使用するアクション">' + escapeText(block.heading || "") + "</textarea></label>",
       '<label>列数<select data-list-cols><option value="1"' + (columns === 1 ? " selected" : "") + '>1列</option><option value="2"' + (columns === 2 ? " selected" : "") + '>2列</option><option value="3"' + (columns === 3 ? " selected" : "") + '>3列</option></select></label>',
       '<label>項目（1行に1つ）<textarea data-list-items rows="6">' + escapeText((block.items || []).join("\n")) + "</textarea></label>"
     ].join("");
@@ -601,6 +606,8 @@
   }
 
   const collapsedBlocks = {};
+  const blockPicks = new Set();
+  let lastBlockPick = "";
   let sheetRange = null;
   let sheetPointer = null;
   const sheetHist = {};
@@ -707,6 +714,7 @@
     if (block.type === "container") return "囲み";
     if (block.type === "row") return "横並び " + ((block.children || []).length);
     if (block.type === "column") return "縦並び " + ((block.children || []).length);
+    if (block.type === "group") return "まとまり " + ((block.children || []).length);
     if (block.type === "divider") return "区切り";
     if (block.type === "spacer") return "余白";
     return block.type;
@@ -736,33 +744,155 @@
   }
 
   function blockRow(block, path) {
-    const kinds = [["text", "文章"], ["image", "画像"], ["list", "リスト"], ["column", "縦並び"], ["row", "横並び"], ["table", "表"], ["container", "囲み"], ["divider", "区切り"], ["spacer", "余白"]];
+    const kinds = [["text", "文章"], ["image", "画像"], ["list", "リスト"], ["column", "縦並び"], ["row", "横並び"], ["table", "表"], ["container", "囲み"], ["group", "まとまり"], ["divider", "区切り"], ["spacer", "余白"]];
     const typeSelect = `<select data-block-type="${escapeAttr(path)}" aria-label="種類">${kinds.map(item => `<option value="${item[0]}"${block.type === item[0] ? " selected" : ""}>${item[1]}</option>`).join("")}</select>`;
     const depth = path ? path.split(".").length - 1 : 0;
-    const nest = block.type === "column" || block.type === "row" || block.type === "container" || block.type === "table";
+    const nest = block.type === "column" || block.type === "row" || block.type === "container" || block.type === "group" || block.type === "table";
     const collapsed = !!collapsedBlocks[path];
-    const tools = `<div class="blk-tools">${nest ? `<button type="button" data-collapse-block="${escapeAttr(path)}" aria-label="折りたたむ">${collapsed ? "▸" : "▾"}</button>` : ""}<button type="button" class="blk-handle" data-drag-block="${escapeAttr(path)}" aria-label="並べ替え">≡</button>${typeSelect}<button type="button" data-del-block="${escapeAttr(path)}" aria-label="消す">✕</button>${collapsed ? `<span class="blk-summary">${escapeText(blockSummary(block))}</span>` : ""}</div>`;
+    const picked = blockPicks.has(path) ? " checked" : "";
+    const tools = `<div class="blk-tools"><input type="checkbox" data-block-pick="${escapeAttr(path)}" aria-label="まとめる対象"${picked}><button type="button" data-block-up="${escapeAttr(path)}" aria-label="上へ">↑</button><button type="button" data-block-down="${escapeAttr(path)}" aria-label="下へ">↓</button>${nest ? `<button type="button" data-collapse-block="${escapeAttr(path)}" aria-label="折りたたむ">${collapsed ? "▸" : "▾"}</button>` : ""}<button type="button" class="blk-handle" data-drag-block="${escapeAttr(path)}" aria-label="並べ替え">≡</button>${typeSelect}${block.type === "group" ? `<button type="button" data-ungroup="${escapeAttr(path)}">解除</button>` : ""}<button type="button" data-save-template="${escapeAttr(path)}">テンプレートとして保存</button><button type="button" data-del-block="${escapeAttr(path)}" aria-label="消す">✕</button>${collapsed ? `<span class="blk-summary">${escapeText(blockSummary(block))}</span>` : ""}</div>`;
     let body = "";
     if (block.type === "text") body = richBox(block.html, block.type);
     else if (block.type === "list") body = listField(block);
     else if (block.type === "image") body = imageField(block, false);
     else if (block.type === "divider" || block.type === "spacer") body = block.type === "spacer" ? `<div class="blk-layout"><label>高さ<input data-gap type="number" min="4" max="80" value="${block.size || 16}"></label></div>` : "<hr class=\"blk-divider\">";
     else if (block.type === "table") body = sheetEditor(block, path);
-    else if (block.type === "column" || block.type === "row" || block.type === "container") {
+    else if (block.type === "column" || block.type === "row" || block.type === "container" || block.type === "group") {
       const children = block.children || [];
-      body = layoutFields(block) + children.map((child, index) => blockRow(child, path + "." + index)).join("") + `<p class="blk-add">${addButtons(path)}</p>`;
+      body = (block.type === "group" ? "" : layoutFields(block)) + children.map((child, index) => blockRow(child, path + "." + index)).join("") + `<p class="blk-add">${addButtons(path)}</p>`;
     }
-    return `<div class="blk-row${collapsed ? " is-collapsed" : ""}" data-block-path="${escapeAttr(path)}" style="margin-left:${depth * 10}px">${tools}${body}</div>`;
+    return `<div class="blk-row${block.type === "group" ? " is-group" : ""}${collapsed ? " is-collapsed" : ""}" data-block-path="${escapeAttr(path)}" style="margin-left:${depth * 10}px">${tools}${body}</div>`;
   }
 
   function paintBlocks() {
     const host = document.getElementById("block-editor");
     if (!host || !editing) return;
-    host.innerHTML = (editing.blocks || []).map((block, index) => blockRow(block, String(index))).join("") + `<p class="blk-add">${addButtons("")}</p>`;
+    host.innerHTML = (editing.blocks || []).map((block, index) => blockRow(block, String(index))).join("") + `<p class="blk-add">${addButtons("")}<button type="button" data-block-group>まとめる</button></p>` + templateBar();
     syncBlocks();
     fillLibrarySelects(host);
     if (globalThis.GuideImages) GuideImages.hydrate(host);
     markSheet();
+    growListFields(host);
+  }
+
+  function templateBar() {
+    const saved = book().blockTemplates || [];
+    const rows = saved.map(item => `<li><button type="button" data-insert-template="${escapeAttr(item.id)}">${escapeText(item.name)}</button><button type="button" data-rename-template="${escapeAttr(item.id)}">名前</button><button type="button" data-delete-template="${escapeAttr(item.id)}">削除</button></li>`).join("");
+    return `<div class="blk-template-bar"><p>テンプレートから追加</p><ul>${rows || "<li>保存されたテンプレートはありません。</li>"}</ul></div>`;
+  }
+
+  function blockListAt(path) {
+    if (!path || path.indexOf(".") < 0) return { list: editing.blocks, index: Number(path), parent: "" };
+    const parent = path.slice(0, path.lastIndexOf("."));
+    const block = blockAt(parent);
+    return { list: block && block.children, index: Number(path.slice(path.lastIndexOf(".") + 1)), parent: parent };
+  }
+
+  function selectBlockRange(from, to) {
+    const parentOf = path => path.indexOf(".") < 0 ? "" : path.slice(0, path.lastIndexOf("."));
+    if (parentOf(from) !== parentOf(to)) return;
+    const start = Number(from.slice(from.lastIndexOf(".") + 1));
+    const end = Number(to.slice(to.lastIndexOf(".") + 1));
+    const lo = Math.min(start, end);
+    const hi = Math.max(start, end);
+    blockPicks.clear();
+    for (let index = lo; index <= hi; index += 1) blockPicks.add(parentOf(from) ? parentOf(from) + "." + index : String(index));
+  }
+
+  function groupPickedBlocks() {
+    syncBlocks();
+    const paths = [...blockPicks];
+    if (paths.length < 2) return;
+    const parentOf = path => path.indexOf(".") < 0 ? "" : path.slice(0, path.lastIndexOf("."));
+    const parent = parentOf(paths[0]);
+    if (!paths.every(path => parentOf(path) === parent)) return;
+    const indexes = paths.map(path => Number(path.slice(path.lastIndexOf(".") + 1))).sort((a, b) => a - b);
+    for (let i = 1; i < indexes.length; i += 1) if (indexes[i] !== indexes[0] + i) return;
+    const spot = parent ? blockAt(parent) : null;
+    const list = parent ? spot && spot.children : editing.blocks;
+    const grouped = GuideProgress.groupBlockRange(list, indexes[0], indexes[indexes.length - 1]);
+    if (!grouped) return;
+    if (parent) spot.children = grouped;
+    else editing.blocks = grouped;
+    blockPicks.clear();
+    paintBlocks();
+  }
+
+  function ungroupAt(path) {
+    syncBlocks();
+    const spot = blockListAt(path);
+    if (!spot.list) return;
+    const next = GuideProgress.ungroupBlock(spot.list, spot.index);
+    if (!next) return;
+    if (spot.parent) blockAt(spot.parent).children = next;
+    else editing.blocks = next;
+    paintBlocks();
+  }
+
+  function shiftBlock(path, delta) {
+    syncBlocks();
+    const spot = blockListAt(path);
+    if (!spot.list) return;
+    const next = spot.index + delta;
+    if (next < 0 || next >= spot.list.length) return;
+    const moved = spot.list.splice(spot.index, 1)[0];
+    spot.list.splice(next, 0, moved);
+    blockPicks.clear();
+    paintBlocks();
+  }
+
+  function writeBlockTemplates(list, label) {
+    const next = JSON.parse(JSON.stringify(book()));
+    next.blockTemplates = list;
+    GuideApp.setCardBook(next, label);
+    paintBlocks();
+  }
+
+  function saveBlockTemplate(path) {
+    syncBlocks();
+    const block = blockAt(path);
+    if (!block) return;
+    const name = window.prompt("テンプレートの名前", blockSummary(block) || "まとまり");
+    if (!name || !String(name).trim()) return;
+    const saved = (book().blockTemplates || []).slice();
+    saved.push({ id: "bt-" + Date.now().toString(36), name: String(name).trim(), block: JSON.parse(JSON.stringify(block)) });
+    writeBlockTemplates(saved, "ブロックテンプレート");
+  }
+
+  function renameBlockTemplate(id) {
+    const saved = (book().blockTemplates || []).slice();
+    const item = saved.find(entry => entry.id === id);
+    if (!item) return;
+    const name = window.prompt("テンプレートの名前", item.name);
+    if (!name || !String(name).trim()) return;
+    item.name = String(name).trim();
+    writeBlockTemplates(saved, "ブロックテンプレート");
+  }
+
+  function deleteBlockTemplate(id) {
+    const saved = book().blockTemplates || [];
+    const item = saved.find(entry => entry.id === id);
+    if (!item) return;
+    if (!window.confirm("「" + item.name + "」を削除します。")) return;
+    writeBlockTemplates(saved.filter(entry => entry.id !== id), "ブロックテンプレート");
+  }
+
+  function insertBlockTemplate(id) {
+    const item = (book().blockTemplates || []).find(entry => entry.id === id);
+    if (!item) return;
+    const copy = GuideProgress.normalizeBlocks([JSON.parse(JSON.stringify(item.block))])[0];
+    if (!copy) return;
+    syncBlocks();
+    editing.blocks.push(copy);
+    paintBlocks();
+  }
+
+  function growListFields(root) {
+    if (!root) return;
+    root.querySelectorAll("[data-list-heading], [data-list-items]").forEach(node => {
+      node.style.height = "auto";
+      node.style.height = Math.max(40, node.scrollHeight) + "px";
+    });
   }
 
   async function fillLibrarySelects(root) {
@@ -1140,6 +1270,32 @@
     }
     const add = event.target.closest("[data-add-block]");
     if (add) { insertBlock(add.getAttribute("data-add-block"), add.getAttribute("data-add-path")); return; }
+    const pick = event.target.closest("[data-block-pick]");
+    if (pick) {
+      const path = pick.getAttribute("data-block-pick");
+      if (event.shiftKey && lastBlockPick) selectBlockRange(lastBlockPick, path);
+      else if (pick.checked) blockPicks.add(path);
+      else blockPicks.delete(path);
+      lastBlockPick = path;
+      if (event.shiftKey) paintBlocks();
+      return;
+    }
+    const groupButton = event.target.closest("[data-block-group]");
+    if (groupButton) { groupPickedBlocks(); return; }
+    const ungroup = event.target.closest("[data-ungroup]");
+    if (ungroup) { ungroupAt(ungroup.getAttribute("data-ungroup")); return; }
+    const up = event.target.closest("[data-block-up]");
+    if (up) { shiftBlock(up.getAttribute("data-block-up"), -1); return; }
+    const down = event.target.closest("[data-block-down]");
+    if (down) { shiftBlock(down.getAttribute("data-block-down"), 1); return; }
+    const saveTemplate = event.target.closest("[data-save-template]");
+    if (saveTemplate) { saveBlockTemplate(saveTemplate.getAttribute("data-save-template")); return; }
+    const insertTemplate = event.target.closest("[data-insert-template]");
+    if (insertTemplate) { insertBlockTemplate(insertTemplate.getAttribute("data-insert-template")); return; }
+    const renameTemplate = event.target.closest("[data-rename-template]");
+    if (renameTemplate) { renameBlockTemplate(renameTemplate.getAttribute("data-rename-template")); return; }
+    const deleteTemplate = event.target.closest("[data-delete-template]");
+    if (deleteTemplate) { deleteBlockTemplate(deleteTemplate.getAttribute("data-delete-template")); return; }
     const opener = event.target.closest("[data-sheet-open]");
     if (opener) {
       openSheetMenu(opener, opener.getAttribute("data-sheet-open"));
@@ -1396,7 +1552,13 @@
   fields.addEventListener("change", onBlockChange);
   fields.addEventListener("input", event => {
     if (event.isComposing || (event.target && event.target.isComposing)) return;
+    if (event.target && event.target.matches && event.target.matches("[data-list-heading], [data-list-items]")) growListFields(event.target.parentElement);
     if (event.target && event.target.closest && event.target.closest("#block-editor")) syncBlocks();
+  });
+  fields.addEventListener("keydown", event => {
+    if (event.key !== "Enter" || event.isComposing || event.keyCode === 229) return;
+    if (!event.target.matches || !event.target.matches("[data-list-heading]")) return;
+    event.preventDefault();
   });
   fields.addEventListener("focusout", event => {
     const editor = event.target.closest && event.target.closest(".rt-edit");
