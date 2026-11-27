@@ -116,7 +116,7 @@
   }
 
   function emptyCardBook() {
-    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, chapterLists: {}, templates: [], labels: {}, difficulty: "normal", enemyEdits: emptyEnemyEdits(), callout: {}, places: {} };
+    return { version: 1, deleted: {}, patches: {}, custom: {}, chapters: {}, chapterLists: {}, templates: [], blockTemplates: [], labels: {}, difficulty: "normal", enemyEdits: emptyEnemyEdits(), callout: {}, places: {} };
   }
 
   function placeKey(value) {
@@ -354,6 +354,7 @@
         return row;
       });
     }
+    book.blockTemplates = normalizeBlockTemplates(src.blockTemplates);
     const labels = asObject(src.labels);
     book.labels = {};
     Object.keys(labels).forEach(key => {
@@ -1247,10 +1248,14 @@
           kids[item.parent].push(item);
         } else tops.push(item);
       });
-      tops.forEach(item => {
+      const seen = new Set();
+      const append = item => {
+        if (!item || seen.has(item.id)) return;
+        seen.add(item.id);
         out.push(item);
-        (kids[item.id] || []).forEach(child => out.push(child));
-      });
+        (kids[item.id] || []).forEach(append);
+      };
+      tops.forEach(append);
     });
     return out;
   }
@@ -1572,6 +1577,7 @@
     if (Object.keys(b.custom || {}).some(id => !(a.custom || {})[id])) return "カード追加";
     if (JSON.stringify(a.chapterLists || {}) !== JSON.stringify(b.chapterLists || {})) return "チャプター";
     if (JSON.stringify(a.templates || []) !== JSON.stringify(b.templates || [])) return "定型文";
+    if (JSON.stringify(a.blockTemplates || []) !== JSON.stringify(b.blockTemplates || [])) return "ブロックテンプレート";
     if (JSON.stringify(a.labels || {}) !== JSON.stringify(b.labels || {})) return "ボタン名";
     if (JSON.stringify(a.achieveTags || null) !== JSON.stringify(b.achieveTags || null)) return "達成表示するタグ";
     if ((a.difficulty || "normal") !== (b.difficulty || "normal")) return "難易度";
@@ -1691,6 +1697,45 @@
   function validImageValue(src) {
     const value = String(src || "").trim();
     return /^https:\/\//i.test(value) || /^data:image\/(?:png|jpeg|gif|webp);base64,/i.test(value) || /^(?:maps|images)\/[a-z0-9][a-z0-9._-]*\.(?:png|jpe?g|gif|webp)$/i.test(value) || isLibraryKey(value);
+  }
+
+  function groupBlockRange(blocks, start, end) {
+    const list = (blocks || []).slice();
+    const lo = Math.min(start, end);
+    const hi = Math.max(start, end);
+    if (lo < 0 || hi >= list.length || hi <= lo) return null;
+    const children = list.slice(lo, hi + 1);
+    const next = list.slice();
+    next.splice(lo, children.length, { type: "group", children: children });
+    return next;
+  }
+
+  function ungroupBlock(blocks, index) {
+    const list = (blocks || []).slice();
+    const block = list[index];
+    if (!block || block.type !== "group") return null;
+    const next = list.slice();
+    next.splice(index, 1, ...(block.children || []));
+    return next;
+  }
+
+  function sanitizeTemplateBlock(block) {
+    const copy = JSON.parse(JSON.stringify(block || null));
+    const walk = node => {
+      if (!node || typeof node !== "object") return;
+      if (node.type === "image" && /^data:/i.test(String(node.src || ""))) node.src = "";
+      (node.children || []).forEach(walk);
+    };
+    walk(copy);
+    return copy;
+  }
+
+  function normalizeBlockTemplates(list) {
+    return (Array.isArray(list) ? list : []).filter(item => item && item.id && item.name && item.block).map(item => {
+      const block = normalizeBlock(sanitizeTemplateBlock(item.block));
+      if (!block) return null;
+      return { id: String(item.id), name: String(item.name).trim().slice(0, 40), block: block };
+    }).filter(item => item && item.name);
   }
 
   function normalizeBlocks(value) {
@@ -2138,13 +2183,14 @@
       return image;
     }
     if (type === "list") {
-      const heading = String(block.heading || "").replace(/\s+/g, " ").trim().slice(0, 80);
+      const heading = String(block.heading || "").replace(/\s+/g, " ").trim();
       const source = Array.isArray(block.items) ? block.items : String(block.items || "").split("\n");
-      const items = source.map(item => String(item || "").replace(/\s+/g, " ").trim().slice(0, 80)).filter(Boolean).slice(0, 24);
+      const items = source.map(item => String(item || "").replace(/\s+/g, " ").trim()).filter(Boolean).slice(0, 24);
       const columns = block.columns === 1 || block.columns === 3 ? block.columns : 2;
       if (!heading && !items.length) return null;
       return { type: "list", heading, items, columns };
     }
+    if (type === "group") return { type: "group", children: layoutChildren(block.children, level) };
     if (type === "column" || type === "container") {
       const next = { type, children: layoutChildren(block.children, level) };
       const gap = Math.max(0, Math.min(48, Math.round(Number(block.gap) || (type === "column" ? 8 : 0))));
@@ -2179,7 +2225,7 @@
     if (block.type === "text") return plainFromHtml(block.html);
     if (block.type === "list") return [block.heading].concat(block.items || []).filter(Boolean).join("\n");
     if (block.type === "image") return block.caption || "";
-    if (block.type === "column" || block.type === "row" || block.type === "container") {
+    if (block.type === "column" || block.type === "row" || block.type === "container" || block.type === "group") {
       return (block.children || []).map(blockPlain).filter(Boolean).join("\n");
     }
     if (block.type === "table") {
@@ -2189,7 +2235,7 @@
   }
 
   function convertBlock(block, type) {
-    const allowed = ["text", "image", "list", "column", "row", "table", "container", "divider", "spacer"];
+    const allowed = ["text", "image", "list", "column", "row", "table", "container", "group", "divider", "spacer"];
     const nextType = allowed.indexOf(type) >= 0 ? type : "text";
     const current = block && (block.type === "callout" || block.type === "columns" || block.type === "tiles") ? normalizeBlock(block) : block;
     if (!current || current.type === nextType) return { block: current, loss: false };
@@ -2203,6 +2249,7 @@
     else if (nextType === "column") next = { type: "column", gap: 8, children: [{ type: "text", html }] };
     else if (nextType === "row") next = { type: "row", gap: 12, align: "start", justify: "start", wrap: true, children: [{ type: "text", html }, { type: "text", html: "" }] };
     else if (nextType === "container") next = { type: "container", bg: "#fff6d8", border: "#e0b000", pad: 12, children: [{ type: "text", html }] };
+    else if (nextType === "group") next = { type: "group", children: current && current.type === "group" ? (current.children || []) : [{ type: "text", html }] };
     else if (nextType === "table") next = { type: "table", rows: [{ cells: [{ text: lines[0] || "" }, { text: "" }] }] };
     else if (nextType === "divider") next = { type: "divider" };
     else next = { type: "spacer", size: 16 };
@@ -2398,7 +2445,7 @@
     normalizeBlocks(blocks).forEach(block => {
       if (block.type === "text") parts.push(plainFromHtml(block.html));
       if (block.type === "image" && block.caption) parts.push(block.caption);
-      if (block.type === "column" || block.type === "row" || block.type === "container") parts.push(plainFromBlocks(block.children));
+      if (block.type === "column" || block.type === "row" || block.type === "container" || block.type === "group") parts.push(plainFromBlocks(block.children));
       if (block.type === "table") parts.push(blockPlain(block));
       if (block.type === "list") {
         if (block.heading) parts.push(block.heading);
@@ -2460,6 +2507,7 @@
     if (block.type === "divider") return '<hr class="blk-divider"' + attr + ">";
     if (block.type === "spacer") return '<div class="blk-spacer"' + attr + ' style="height:' + (block.size || 16) + 'px"></div>';
     const kids = (block.children || []).map((child, index) => renderBlock(child, path + "." + index)).join("");
+    if (block.type === "group") return kids;
     if (block.type === "column") return '<div class="blk-stack"' + attr + ' style="gap:' + (block.gap || 0) + 'px">' + kids + "</div>";
     if (block.type === "container") {
       const style = "background:" + (block.bg || "transparent") + ";border:1px solid " + (block.border || "transparent") + ";padding:" + (block.pad || 0) + "px";
@@ -2948,6 +2996,9 @@
     circledNumber,
     templateHeadings,
     routeTemplateHeadings,
+    groupBlockRange,
+    ungroupBlock,
+    normalizeBlockTemplates,
     sheetTableWidth,
     absorbSheetEdge,
     fitSheetEdge,
